@@ -35,10 +35,31 @@ Two rules decide what gets reported as `next`:
 - **A corrupt artifact reads as absent.** Status is what a stuck session runs
   first; it must never be the thing that fails.
 
-`--stats` aggregates across tickets. It is a snapshot and says so: artifacts are
-overwritten in place, so it reports where work is stuck now, not how often it
-got stuck. Three tickets blocked at one stage says more about the stage than
-about the tickets.
+`--stats` has two halves that answer different questions.
+
+The **snapshot** aggregates the pipeline across tickets: where work is stuck
+now. Three tickets blocked at one stage says more about the stage than about
+the tickets.
+
+The **history** comes from `lib/workbench/events.py`, one appended line per
+tracked invocation under `.workflow/.events.jsonl`. The snapshot cannot tell a
+plan that passed its audit first time from one that passed on the fifth,
+because artifacts are overwritten in place -- and a stage that always passes on
+the second attempt is invisible in the snapshot and the most expensive thing in
+the log.
+
+The log is held to three rules:
+
+- **Outcomes, never arguments.** Group, action, exit code, duration, and a key
+  if one was given. No arguments and no output: those are where a secret or a
+  customer name would end up.
+- **Local and capped.** It lives under the ignored `.workflow/`, is trimmed by
+  rewriting at `MAX_EVENTS`, and goes nowhere. `WORKBENCH_NO_EVENTS=1` disables it.
+- **Never load-bearing.** Every failure is swallowed. A log that cannot be
+  written is a lost statistic, never a failed command.
+
+Pure inspection commands are not tracked: logging every `status` would drown
+the signal in the command run to look at the signal.
 
 ## doctor
 

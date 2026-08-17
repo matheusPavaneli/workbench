@@ -10,8 +10,20 @@ read-only git façade.
 - **In plan** — reported as `ok`.
 - **Planned but untouched** — reported as `pending`, not an error. A plan is
   allowed to be half done.
+- **Claimed by another audited plan** — reported as `other`, naming the ticket.
+  Not this ticket's work, but not unexplained either, and those are different
+  findings. Without this, a second ticket open in the same checkout — the
+  ordinary state of a working day — read as scope creep on the first, and a
+  guard that fails on ordinary work is one people learn to ignore.
+- **Claimed by this plan and another** — reported as `overlap`. Two plans
+  editing one file is worth knowing before either lands.
 - **Changed but unplanned** — a deviation. Exit 7, and any critical zone the
   stray paths touch is named alongside them.
+
+Only an **audited** plan may account for a path. An unaudited plan is a file
+somebody wrote, and letting one excuse a change would leave a hole straight
+through the guard: anyone could silence the scope check by listing a path in a
+document nothing verified. Attribution lives in `lib/workbench/scope.py`.
 
 `.workflow/` and generated output — bytecode, `node_modules/`, `dist/`,
 coverage — are excluded from the comparison everywhere. A repo with a proper

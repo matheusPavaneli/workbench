@@ -11,7 +11,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from .. import artifacts, gitctx, profile as profile_lib, verify as verify_lib
+from .. import artifacts, gitctx, profile as profile_lib, scope as scope_lib, verify as verify_lib
 from ..errors import EXIT_AUDIT, UsageError, WbError
 
 ACTIONS = ["check", "verify"]
@@ -44,16 +44,31 @@ def _check(args: argparse.Namespace) -> int:
     planned.discard("")
     changed = set(gitctx.changed_files(root, staged=args.staged))
 
-    unplanned = sorted(changed - planned)
+    # A file another audited plan lists is accounted for -- elsewhere, but
+    # accounted for. Without this, a second ticket in the same checkout read as
+    # scope creep on the first, which is the ordinary state of a working day.
+    claimed = scope_lib.claims(key)
+    elsewhere = sorted((changed - planned) & set(claimed))
+    unplanned = sorted(changed - planned - set(claimed))
     untouched = sorted(planned - changed)
+    overlap = sorted(planned & set(claimed))
 
     for path in sorted(changed & planned):
         print(f"  ok        {path}")
     for path in untouched:
         print(f"  pending   {path}  (planned, not changed yet)")
+    for path in elsewhere:
+        print(f"  other     {path}  (claimed by {', '.join(claimed[path])})")
+    for path in overlap:
+        # Two plans editing one file is worth knowing before either lands.
+        print(f"  overlap   {path}  (also planned by {', '.join(claimed[path])})")
 
     if not unplanned:
-        print(f"\nin plan: {len(changed & planned)} of {len(planned)} planned file(s) changed, nothing outside")
+        carried = f", {len(elsewhere)} carried by another ticket" if elsewhere else ""
+        print(
+            f"\nin plan: {len(changed & planned)} of {len(planned)} planned file(s) changed, "
+            f"nothing outside{carried}"
+        )
         return 0
 
     sys.stdout.flush()  # keep the file list above the failure that explains it

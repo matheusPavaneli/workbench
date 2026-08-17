@@ -59,7 +59,10 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
 - **List every file before touching any.** `implement-change` stops on a file
   that is not in the list, so an incomplete list is a plan that fails to run.
 - **Verification is commands, not intentions.** `verify` holds the exact lines
-  that will be executed, using this repo's runner.
+  that will be executed, using this repo's runner. Shell is refused, so a
+  command needing a variable declares it in `verify_env` (`{"PYTHONPATH": "lib"}`)
+  rather than inlining `VAR=x`. Variables that change how a process loads code
+  are refused there.
 - **An open question is output.** A plan that guesses reads the same as a plan
   that knows; say which one it is.
 

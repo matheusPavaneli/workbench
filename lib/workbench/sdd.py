@@ -25,6 +25,7 @@ SECTIONS = [
     "steps",
     "tests",
     "verify",
+    "verify_env",
     "rollback",
     "product",
     "handover",
@@ -90,6 +91,7 @@ def blank(key: str, preset: str, persona: str) -> dict:
         "steps": [],
         "tests": [],
         "verify": [],
+        "verify_env": {},
         "rollback": "",
         "product": {},
         "handover": {},
@@ -175,6 +177,16 @@ def validate(doc: dict) -> list[str]:
 
     if not str(doc.get("rollback", "")).strip():
         problems.append("rollback is empty: state how to undo this before doing it")
+
+    env = doc.get("verify_env")
+    if env is not None:
+        if not isinstance(env, dict):
+            problems.append("verify_env must be an object of NAME: value pairs")
+        else:
+            from .verify import resolve_env
+
+            for name, reason in resolve_env(env)[1]:
+                problems.append(f"{name}: {reason}")
 
     preset = str(doc.get("preset", ""))
     if preset in PRODUCT_REQUIRED and "product" not in waived:

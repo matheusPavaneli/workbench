@@ -82,7 +82,9 @@ def _verify(args: argparse.Namespace) -> int:
     for command in commands:
         print(f"running: {command}", flush=True)
 
-    evidence = verify_lib.run(key, commands, root)
+    evidence = verify_lib.run(key, commands, root, doc.get("verify_env"))
+    if evidence.env:
+        print(f"environment: {', '.join(sorted(evidence.env))}", flush=True)
     artifacts.write_json(key, "evidence.json", evidence.to_dict())
     path = artifacts.write_text(key, "evidence.md", verify_lib.render(evidence))
 

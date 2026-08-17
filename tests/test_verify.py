@@ -98,3 +98,59 @@ class Rendering(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Environment(unittest.TestCase):
+    """Shell is refused, so `VAR=x cmd` cannot be expressed as a command.
+
+    Without a declared env block a repo whose tests need PYTHONPATH could not
+    be verified at all -- this repo included. The variables are data in the
+    audited plan, reviewed alongside the commands.
+    """
+
+    def test_no_env_block_is_not_an_error(self) -> None:
+        self.assertEqual(({}, []), verify.resolve_env(None))
+        self.assertEqual(({}, []), verify.resolve_env({}))
+
+    def test_a_plain_variable_is_applied(self) -> None:
+        applied, rejected = verify.resolve_env({"PYTHONPATH": "lib"})
+        self.assertEqual({"PYTHONPATH": "lib"}, applied)
+        self.assertEqual([], rejected)
+
+    def test_a_loader_variable_is_refused(self) -> None:
+        """These run code the command allowlist never sees."""
+        for name in ("LD_PRELOAD", "PATH", "NODE_OPTIONS", "PYTHONSTARTUP", "BASH_ENV"):
+            with self.subTest(name=name):
+                applied, rejected = verify.resolve_env({name: "anything"})
+                self.assertEqual({}, applied)
+                self.assertEqual(1, len(rejected))
+
+    def test_the_refusal_is_case_insensitive(self) -> None:
+        self.assertEqual({}, verify.resolve_env({"ld_preload": "x"})[0])
+
+    def test_a_malformed_name_is_refused(self) -> None:
+        self.assertEqual({}, verify.resolve_env({"NOT A NAME": "x"})[0])
+
+    def test_a_structured_value_is_refused(self) -> None:
+        self.assertEqual({}, verify.resolve_env({"A": {"b": 1}})[0])
+
+    def test_an_oversized_value_is_refused(self) -> None:
+        self.assertEqual({}, verify.resolve_env({"A": "x" * (verify.MAX_ENV_VALUE + 1)})[0])
+
+    def test_a_non_object_block_is_refused_rather_than_ignored(self) -> None:
+        applied, rejected = verify.resolve_env(["PYTHONPATH=lib"])
+        self.assertEqual({}, applied)
+        self.assertTrue(rejected)
+
+    def test_a_refused_variable_blocks_the_verdict(self) -> None:
+        """Refusing quietly would let a plan claim verification it did not get."""
+        evidence = verify.Evidence(key="ABC-1")
+        evidence.refused.append(("env LD_PRELOAD", "changes how the process loads code; not applied"))
+        evidence.results.append(verify.Result(command="pytest", exit_code=0, duration_ms=1, output=""))
+        self.assertFalse(evidence.passed)
+
+    def test_only_names_reach_the_evidence_file(self) -> None:
+        """A value is as likely to be a connection string as a search path."""
+        evidence = verify.Evidence(key="ABC-1", env={"DATABASE_URL": "postgres://user:pw@host/db"})
+        self.assertEqual(["DATABASE_URL"], evidence.to_dict()["env"])
+        self.assertNotIn("postgres://", verify.render(evidence))

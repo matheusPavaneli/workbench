@@ -20,16 +20,22 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
    the index who calls it:
    `${CLAUDE_PLUGIN_ROOT}/shared/code-search.md`.
 
-3. **Check the gates.** Every gate `review context` printed is a question with a
-   yes or no answer for this diff. The floor is not negotiable at any preset:
-   unit test for changed logic, regression test with a bug fix, no swallowed
-   error, no secret, a stated rollback.
+3. **Settle the mechanical gates first.** `review gates` (add `--key <KEY>` so
+   the bug-fix regression rule knows the ticket type). It reads the added lines
+   and reports secrets and swallowed errors as `file:line` findings. Exit 7
+   means it found some; report them as findings, do not re-derive them.
 
-4. **Go deeper in critical zones.** Billing, auth, user data, migrations and
+4. **Check the rest of the gates yourself.** Every gate `review context` printed
+   that `review gates` did not settle is a question with a yes or no answer for
+   this diff. The floor is not negotiable at any preset: unit test for changed
+   logic, regression test with a bug fix, no swallowed error, no secret, a
+   stated rollback.
+
+5. **Go deeper in critical zones.** Billing, auth, user data, migrations and
    secrets are held to a higher standard than the preset otherwise sets. In
    those files, read every changed line and its error path.
 
-5. **Report findings**, most severe first:
+6. **Report findings**, most severe first:
 
    ```
    path/to/file.py:42  high  Coupon is validated after the charge is created.
@@ -40,7 +46,7 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
    **medium** — will break under a plausible input or state. **low** — real but
    contained. Skip formatting and taste unless it changes meaning.
 
-6. **Say when it is clean.** "No findings" is a result. Do not manufacture a
+7. **Say when it is clean.** "No findings" is a result. Do not manufacture a
    finding to look thorough.
 
 ## Rules

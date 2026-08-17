@@ -49,6 +49,22 @@ def _git(args: list[str], cwd: Path) -> str | None:
     return completed.stdout.strip() or None
 
 
+def _git_raw(args: list[str], cwd: Path) -> str | None:
+    """As ``_git``, but without stripping: file contents must survive verbatim.
+
+    Stripping is right for a branch name and wrong for a blob -- a file that
+    opens with a blank line would come back shifted by one, and every line
+    number checked against it would be off.
+    """
+    try:
+        completed = subprocess.run(
+            ["git", *args], cwd=str(cwd), capture_output=True, text=True, timeout=15, check=False
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return completed.stdout if completed.returncode == 0 else None
+
+
 def repo_root(cwd: Path) -> Path | None:
     root = _git(["rev-parse", "--show-toplevel"], cwd)
     return Path(root) if root else None
@@ -143,6 +159,23 @@ def default_branch(cwd: Path) -> str:
         if _git(["rev-parse", "--verify", "--quiet", candidate], cwd):
             return candidate
     return "main"
+
+
+def head(cwd: Path) -> str | None:
+    """The commit the working tree is built on, or ``None`` outside a checkout."""
+    return _git(["rev-parse", "HEAD"], cwd)
+
+
+def file_at(cwd: Path, ref: str, path: str) -> str | None:
+    """A file's contents at a commit, or ``None`` if it was not there.
+
+    Used to check a citation against the tree a plan was written against, so
+    implementing the plan does not invalidate the claims that justified it.
+    A missing answer is never an error: the caller falls back to the tree.
+    """
+    if not ref or not path:
+        return None
+    return _git_raw(["show", f"{ref}:{path.replace(chr(92), '/')}"], cwd)
 
 
 def merge_base(cwd: Path, base: str) -> str | None:

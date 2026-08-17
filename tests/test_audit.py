@@ -1,8 +1,9 @@
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
-from workbench import audit, sdd
+from workbench import audit, gitctx, sdd
 
 
 def _doc(**overrides) -> dict:
@@ -191,6 +192,105 @@ class Sections(unittest.TestCase):
         self.assertIn("# ABC-1", text)
         self.assertIn("src/checkout.py:2", text)
 
+
+
+class Baseline(unittest.TestCase):
+    """Correcting a plan while implementing it.
+
+    The audit reads the working tree, so once code has changed, every citation
+    written before the change fails -- and plan-change tells the author to fix
+    the plan exactly when the tree has already moved. The first audit records
+    the commit it ran against; every audit after it is anchored there.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name).resolve()
+        self._git(["init", "-q", "."])
+        self._git(["config", "user.email", "t@example.com"])
+        self._git(["config", "user.name", "T"])
+        (self.root / "src").mkdir()
+        self.write("src/checkout.py", "def pay(total):\n    charge = create_charge(total)\n    validate()\n")
+        self._git(["add", "-A"])
+        self._git(["commit", "-qm", "init"])
+        self.baseline = gitctx.head(self.root)
+
+    def _git(self, args: list[str]) -> None:
+        subprocess.run(["git", *args], cwd=str(self.root), capture_output=True, text=True, check=False)
+
+    def write(self, relative: str, content: str) -> None:
+        (self.root / relative).write_text(content, encoding="utf-8")
+
+    def test_the_first_audit_is_strict_about_line_numbers(self) -> None:
+        """A wrong number is a defect while the plan is still cheap to change."""
+        self.write("src/checkout.py", "# a new first line\ndef pay(total):\n    charge = create_charge(total)\n")
+        report = audit.run(_doc(), self.root)
+        self.assertFalse(report.passed)
+        self.assertEqual(audit.MOVED, report.findings[0].verdict)
+
+    def test_a_plan_under_way_is_not_failed_for_a_shifted_line(self) -> None:
+        self.write("src/checkout.py", "# a new first line\ndef pay(total):\n    charge = create_charge(total)\n")
+        report = audit.run(_doc(), self.root, self.baseline)
+        self.assertTrue(report.passed)
+        self.assertEqual(audit.MOVED, report.findings[0].verdict)
+
+    def test_a_line_rewritten_during_implementation_verifies_at_the_baseline(self) -> None:
+        self.write("src/checkout.py", "def pay(total):\n    validate()\n    charge = bill(total)\n")
+        report = audit.run(_doc(), self.root, self.baseline)
+        self.assertTrue(report.passed)
+        self.assertEqual(audit.BASELINE, report.findings[0].verdict)
+
+    def test_a_cited_file_deleted_during_implementation_still_verifies(self) -> None:
+        (self.root / "src" / "checkout.py").unlink()
+        doc = _doc(files=[{"path": "src/new.py", "change": "add", "why": "replacement"}])
+        report = audit.run(doc, self.root, self.baseline)
+        self.assertEqual(audit.BASELINE, report.findings[0].verdict)
+
+    def test_a_claim_that_was_never_true_is_still_a_mismatch(self) -> None:
+        """The fallback must not become a way to pass an invented citation."""
+        doc = _doc(evidence=[{"claim": "c", "file": "src/checkout.py", "line": 2, "quote": "refund_everything()"}])
+        report = audit.run(doc, self.root, self.baseline)
+        self.assertFalse(report.passed)
+        self.assertEqual(audit.MISMATCH, report.findings[0].verdict)
+
+    def test_the_first_audit_records_the_commit_for_the_ones_after_it(self) -> None:
+        report = audit.run(_doc(), self.root)
+        self.assertEqual(self.baseline, report.baseline)
+        self.assertFalse(report.under_way)
+
+    def test_a_re_audit_reports_itself_as_under_way(self) -> None:
+        report = audit.run(_doc(), self.root, self.baseline)
+        self.assertTrue(report.under_way)
+        self.assertEqual(self.baseline, report.baseline)
+
+    def test_a_drifted_citation_is_never_folded_into_a_plain_ok(self) -> None:
+        """A reader has to be able to tell which claims describe old code."""
+        self.write("src/checkout.py", "def pay(total):\n    validate()\n    charge = bill(total)\n")
+        report = audit.run(_doc(), self.root, self.baseline)
+        self.assertNotEqual(audit.OK, report.findings[0].verdict)
+        self.assertIn(report.findings[0].verdict, report.passing)
+
+    def test_an_unchanged_tree_still_verifies_at_the_cited_line(self) -> None:
+        report = audit.run(_doc(), self.root, self.baseline)
+        self.assertEqual(audit.OK, report.findings[0].verdict)
+
+
+class OutsideGit(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name).resolve()
+        (self.root / "src").mkdir()
+        (self.root / "src" / "checkout.py").write_text(
+            "def pay(total):\n    charge = create_charge(total)\n", encoding="utf-8"
+        )
+
+    def test_an_audit_with_no_commit_to_anchor_to_still_runs(self) -> None:
+        """A folder that is not a checkout has no baseline, and must not need one."""
+        report = audit.run(_doc(), self.root)
+        self.assertTrue(report.passed)
+        self.assertEqual("", report.baseline)
 
 if __name__ == "__main__":
     unittest.main()

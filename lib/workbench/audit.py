@@ -16,6 +16,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import gitctx
+
 MAX_FILE_BYTES = 5 * 1024 * 1024
 CONTEXT_LINES = 2
 # A line shorter than this cannot, on its own, support a longer quotation.
@@ -23,13 +25,23 @@ CONTEXT_LINES = 2
 MIN_LINE_FOR_REVERSE_MATCH = 10
 
 OK = "ok"
+# The claim was true of the tree the plan was written against, but the working
+# tree has since moved -- almost always because the plan is being implemented.
+# A separate verdict rather than a silent "ok": a reader has to be able to tell
+# which citations no longer describe the current code.
+BASELINE = "baseline"
 MOVED = "moved"
 MISMATCH = "mismatch"
 MISSING_FILE = "missing_file"
 OUT_OF_RANGE = "out_of_range"
 UNREADABLE = "unreadable"
 
-PASSING = {OK}
+PASSING = {OK, BASELINE}
+# Passing only once a plan is under way. On the first audit a wrong line number
+# is a defect the author should fix while the plan is cheap to change; after
+# that, every edit shifts the lines below it and chasing the numbers is the
+# churn this baseline exists to remove.
+PASSING_WHEN_UNDER_WAY = {MOVED}
 
 
 @dataclass
@@ -57,6 +69,13 @@ class Finding:
 @dataclass
 class Report:
     key: str
+    # The commit citations fall back to. Recorded so a re-audit anchors to the
+    # same point for the whole life of a plan, however far implementation has
+    # gone.
+    baseline: str = ""
+    # True once this plan has been audited before, which is the signal that
+    # implementation may have started.
+    under_way: bool = False
     # The rigour tier the plan qualified for, and why. Recorded rather than
     # applied silently: a waived section must be visible in the artifact, or
     # "this plan has no steps" reads as an omission instead of a decision.
@@ -67,8 +86,12 @@ class Report:
     missing_paths: list[str] = field(default_factory=list)
 
     @property
+    def passing(self) -> set:
+        return PASSING | PASSING_WHEN_UNDER_WAY if self.under_way else PASSING
+
+    @property
     def failures(self) -> list[Finding]:
-        return [f for f in self.findings if f.verdict not in PASSING]
+        return [f for f in self.findings if f.verdict not in self.passing]
 
     @property
     def passed(self) -> bool:
@@ -81,23 +104,37 @@ class Report:
             "verdict": "pass" if self.passed else "fail",
             "tier": self.tier,
             "tier_reason": self.tier_reason,
+            "baseline": self.baseline,
+            "under_way": self.under_way,
             "citations_checked": len(self.findings),
             "citations_failed": len(self.failures),
-            "findings": [f.to_dict() for f in self.findings if f.verdict not in PASSING],
+            "findings": [f.to_dict() for f in self.findings if f.verdict not in self.passing],
             "structure": self.structure,
             "missing_paths": self.missing_paths,
         }
 
 
-def run(doc: dict, root: Path) -> Report:
+def run(doc: dict, root: Path, baseline: str | None = None) -> Report:
+    """Audit a plan. ``baseline`` is the commit the plan was written against.
+
+    It is passed only on a re-audit: the first audit of a plan is strict, and
+    records the commit for the ones that follow. From then on the plan is
+    treated as under way, so a citation the working tree no longer supports at
+    the cited line is retried -- elsewhere in the file, then at that commit.
+
+    That is what lets a plan be corrected while it is being implemented rather
+    than only before, without loosening the check on a plan still being written.
+    """
     from . import sdd
 
     report = Report(key=str(doc.get("key", "")))
+    report.baseline = baseline or gitctx.head(root) or ""
+    report.under_way = bool(baseline)
     report.tier, report.tier_reason = sdd.tier(doc)
     report.structure = sdd.validate(doc)
 
     for index, item in enumerate(doc.get("evidence") or []):
-        report.findings.append(_check(index, item, root))
+        report.findings.append(_check(index, item, root, baseline))
 
     # A plan may only claim to edit files that exist. Claiming to edit a file
     # that is not there is the same class of error as a false citation.
@@ -111,7 +148,7 @@ def run(doc: dict, root: Path) -> Report:
     return report
 
 
-def _check(index: int, item: dict, root: Path) -> Finding:
+def _check(index: int, item: dict, root: Path, baseline: str | None = None) -> Finding:
     raw_path = str(item.get("file", ""))
     claim = str(item.get("claim", ""))
     quote = " ".join(str(item.get("quote", "")).split())
@@ -124,6 +161,12 @@ def _check(index: int, item: dict, root: Path) -> Finding:
     path = _resolve(root, raw_path)
 
     if not path.is_file():
+        # A plan that deletes or renames a file it cited leaves the citation
+        # pointing at nothing. The claim was still true when it was written.
+        if baseline and _at_baseline(root, baseline, raw_path, quote):
+            finding.verdict = BASELINE
+            finding.detail = f"verified at baseline {baseline[:8]}; the file is gone from the working tree"
+            return finding
         finding.verdict = MISSING_FILE
         finding.detail = "no such file; the path in the citation does not exist"
         return finding
@@ -167,9 +210,32 @@ def _check(index: int, item: dict, root: Path) -> Finding:
             finding.detail = f"quote found at line {number}; update the citation"
             return finding
 
+    # Only now: the working tree is always tried first, so a plan audited
+    # before any change behaves exactly as it did. Reaching here means the
+    # quote is nowhere in the current file, and the usual reason is that this
+    # plan is being implemented and the line has already been rewritten.
+    if baseline and _at_baseline(root, baseline, raw_path, quote):
+        finding.verdict = BASELINE
+        finding.detail = f"verified at baseline {baseline[:8]}; the working tree has moved since"
+        return finding
+
     finding.verdict = MISMATCH
     finding.detail = f"line {line_number} reads: {' '.join(lines[line_number - 1].split())[:120]!r}"
     return finding
+
+
+def _at_baseline(root: Path, baseline: str, raw_path: str, quote: str) -> bool:
+    """Was this quote in the file at the baseline commit?
+
+    The line number is deliberately not checked. A citation that has survived
+    into implementation has almost certainly shifted, and the question worth
+    answering is whether the claim was ever true -- not whether the author kept
+    the numbering up to date while working.
+    """
+    content = gitctx.file_at(root, baseline, raw_path.replace("\\", "/"))
+    if content is None:
+        return False
+    return any(_matches(quote, line) for line in content.splitlines())
 
 
 def _matches(quote: str, line: str) -> bool:

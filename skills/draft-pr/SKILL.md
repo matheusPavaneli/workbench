@@ -57,6 +57,10 @@ This skill writes the description. Opening the PR is the user's call.
    sections, placeholders, unticked boxes and filler. Then save to
    `.workflow/<KEY>/pr.md` and show it.
 
+6. **Close the ticket** if the backlog is local: `task done <KEY>`. A real
+   tracker owns its own state, and `wb` refuses there rather than recording a
+   status only this checkout believes. Say the PR is open, not that it merged.
+
 ## Rules
 
 - **Only claim what was verified.** `pr context` gives the real verdict and exit

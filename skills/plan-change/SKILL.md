@@ -45,10 +45,11 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
    needs and let the audit compute it. Citations, the file list, `verify` and
    `rollback` are required at every tier.
 
-   The audit checks the plan against the code **as it is now**, before any of it
-   changes. Once implemented, the cited lines have moved and re-running it will
-   report `moved` — that is expected, not a regression. Re-audit only after
-   editing the plan.
+   The first audit is strict and reads the working tree, so get the line
+   numbers right while the plan is still cheap to change. It records the commit
+   it ran against; every later audit is anchored there, so **a plan can be
+   corrected while it is being implemented**. Drifted citations are reported,
+   not failed. A quote that was never in the code fails at every stage.
 
 ## Rules
 

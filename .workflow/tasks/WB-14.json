@@ -1,0 +1,11 @@
+{
+  "key": "WB-14",
+  "title": "the skills still describe the old audit and scope behaviour",
+  "type": "bug",
+  "status": "done",
+  "desc": "plan-change tells the author to re-audit only after editing the plan and that moved is expected; implement-change says impl check fails on anything outside the plan and gives stale reasoning for not re-auditing. Both predate the baseline (WB-12) and the scope attribution (WB-10). Nothing mentions wb task done at all, so no skill closes a ticket. SKILL.md is what steers behaviour, so stale text here outranks a stale README.",
+  "created": "2026-08-17T19:40:34Z",
+  "updated": "2026-08-17T19:42:31Z",
+  "comments": [],
+  "linked": []
+}

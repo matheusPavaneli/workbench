@@ -56,6 +56,26 @@ HANDOVER_REQUIRED = ("symptom_plain", "qa_steps")
 CHANGE_KINDS = ["edit", "add", "delete", "rename"]
 TEST_KINDS = ["unit", "regression", "integration", "e2e", "property"]
 
+# ---- rigour tiers -------------------------------------------------------
+#
+# A seven-section plan for a one-line change costs more than the change, and a
+# gate that does not pay for itself is a gate people route around. So the bar
+# scales with the risk of the change -- but the scaling is computed here, from
+# the plan's own file list, and never chosen by whoever is writing the plan.
+#
+# What LIGHT waives is deliberately narrow. It never touches the citations, the
+# file list, the verification commands or the rollback: those are what make a
+# plan checkable at all, and a small change is not a less checkable one. It
+# waives only the two sections whose value genuinely comes from size -- an
+# ordered step list for a change that is one step, and a product justification
+# for a change with no user-visible surface.
+
+LIGHT = "light"
+STANDARD = "standard"
+
+LIGHT_MAX_FILES = 2
+LIGHT_WAIVES = ("steps", "product")
+
 
 def blank(key: str, preset: str, persona: str) -> dict:
     return {
@@ -77,6 +97,34 @@ def blank(key: str, preset: str, persona: str) -> dict:
     }
 
 
+def tier(doc: dict) -> tuple[str, str]:
+    """The rigour tier this plan qualifies for, and the reason it got it.
+
+    Computed from the plan, so the same plan always lands on the same tier and
+    a session cannot argue its way down to a lower bar.
+    """
+    from .profile import critical_zones
+
+    paths = [str(item.get("path", "")) for item in doc.get("files") or [] if item.get("path")]
+
+    if len(paths) > LIGHT_MAX_FILES:
+        return STANDARD, f"{len(paths)} files (light is up to {LIGHT_MAX_FILES})"
+
+    zones = critical_zones(paths)
+    if zones:
+        return STANDARD, f"touches {', '.join(sorted(zones))}"
+
+    if needs_handover(doc):
+        # Bug, support and incident work is read by people outside engineering
+        # whatever its size, and the sections that serve them are not optional.
+        return STANDARD, f"{doc.get('ticket_type', 'support')} work has a non-engineering audience"
+
+    if not paths:
+        return STANDARD, "no files listed"
+
+    return LIGHT, f"{len(paths)} file(s), no critical zone"
+
+
 def validate(doc: dict) -> list[str]:
     """Return structural problems. Empty means the shape is sound.
 
@@ -84,6 +132,7 @@ def validate(doc: dict) -> list[str]:
     citations are what make it checkable, and those are audited separately.
     """
     problems: list[str] = []
+    waived = LIGHT_WAIVES if tier(doc)[0] == LIGHT else ()
 
     if doc.get("schema") != SCHEMA_VERSION:
         problems.append(f"schema must be {SCHEMA_VERSION}")
@@ -110,7 +159,7 @@ def validate(doc: dict) -> list[str]:
         if not str(item.get("why", "")).strip():
             problems.append(f"files[{index}] has no why: an untouched-for-no-reason file is scope creep")
 
-    if not doc.get("steps"):
+    if not doc.get("steps") and "steps" not in waived:
         problems.append("steps is empty: an unordered plan cannot be executed or reviewed")
 
     if not doc.get("tests"):
@@ -128,7 +177,7 @@ def validate(doc: dict) -> list[str]:
         problems.append("rollback is empty: state how to undo this before doing it")
 
     preset = str(doc.get("preset", ""))
-    if preset in PRODUCT_REQUIRED:
+    if preset in PRODUCT_REQUIRED and "product" not in waived:
         product = doc.get("product") or {}
         missing = [k for k in ("metric", "who_asked") if not str(product.get(k, "")).strip()]
         if missing:

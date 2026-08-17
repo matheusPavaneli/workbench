@@ -59,11 +59,15 @@ def _audit(args: argparse.Namespace) -> int:
         return 0 if report.passed else EXIT_AUDIT
 
     checked = len(report.findings)
+    tier = f"{report.tier} tier ({report.tier_reason})"
     if report.passed:
         print(f"pass  {checked} citation(s) verified, structure complete")
+        print(f"      {tier}")
+        if report.tier == sdd_lib.LIGHT:
+            print(f"      waived: {', '.join(sdd_lib.LIGHT_WAIVES)}; citations, files, verify and rollback still apply")
         return 0
 
-    print(f"FAIL  {len(report.failures)}/{checked} citation(s) unverified", file=sys.stderr)
+    print(f"FAIL  {len(report.failures)}/{checked} citation(s) unverified  [{tier}]", file=sys.stderr)
     for finding in report.failures:
         print(f"  {finding.verdict:<13} {finding.file}:{finding.line}  {finding.detail}", file=sys.stderr)
     for path in report.missing_paths:

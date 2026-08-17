@@ -1,0 +1,13 @@
+{
+  "number": 42,
+  "title": "Coupon applied after the charge is created",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/acme/widgets/issues/42",
+  "updated_at": "2026-08-10T09:15:00Z",
+  "assignee": { "login": "ana" },
+  "labels": [{ "name": "bug" }, { "name": "billing" }],
+  "body": "Applying a coupon after `createCharge` means an expired coupon still charges the card.\n\nRelated to #17 and acme/billing#8.\nIgnore this one: `#999` inside code.",
+  "parent": { "number": 12, "title": "Checkout correctness", "state": "open" },
+  "sub_issues_summary": { "total": 3, "completed": 1 }
+}

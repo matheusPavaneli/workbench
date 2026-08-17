@@ -18,8 +18,13 @@ COMMENTS_ALL = "comments:all"
 HISTORY = "history"
 
 
-def offer(task: Task) -> list[str]:
-    """Build the handle list for a task, from what is genuinely there."""
+def offer(task: Task, *, history: bool = True) -> list[str]:
+    """Build the handle list for a task, from what is genuinely there.
+
+    ``history`` is a provider capability, not a property of the task: a
+    file-backed backlog keeps no changelog, and offering a handle that can only
+    ever return an empty list costs a round trip to learn nothing.
+    """
     handles: list[str] = []
     if task.desc_truncated:
         handles.append(DESC_FULL)
@@ -28,7 +33,8 @@ def offer(task: Task) -> list[str]:
     for link in task.linked:
         if link.type in DEEP_LINK_TYPES and not link.desc:
             handles.append(f"linked:{link.key}:full")
-    handles.append(HISTORY)
+    if history:
+        handles.append(HISTORY)
     return handles
 
 

@@ -30,6 +30,11 @@ class Remote:
     url: str
     host: str
     org: str
+    repo: str = ""  # last path segment, so a provider can address owner/repo
+
+    @property
+    def slug(self) -> str:
+        return f"{self.org}/{self.repo}" if self.org and self.repo else ""
 
 
 def _git(args: list[str], cwd: Path) -> str | None:
@@ -88,6 +93,45 @@ def _is_noise(path: str) -> bool:
 def diff_stat(cwd: Path, *, staged: bool = False) -> str:
     args = ["diff", "--stat", "--cached"] if staged else ["diff", "--stat", "HEAD"]
     return _git(args, cwd) or ""
+
+
+def added_lines(cwd: Path, *, staged: bool = False) -> list[tuple[str, int, str]]:
+    """Every line this diff adds, as ``(path, line number, text)``.
+
+    Line numbers are the ones in the *new* file, so a finding can be reported
+    at a location the author can open. Untracked files are included whole: a
+    newly added file is entirely added lines, and git's diff will not say so.
+    """
+    args = ["diff", "--unified=0", "--no-color", "--cached"] if staged else ["diff", "--unified=0", "--no-color", "HEAD"]
+    added: list[tuple[str, int, str]] = []
+    path = ""
+    line_number = 0
+
+    for raw in (_git(args, cwd) or "").splitlines():
+        if raw.startswith("+++ "):
+            candidate = raw[4:].strip()
+            path = "" if candidate == "/dev/null" else candidate[2:] if candidate.startswith("b/") else candidate
+            path = path.replace("\\", "/")
+        elif raw.startswith("@@"):
+            match = re.search(r"\+(\d+)", raw)
+            line_number = int(match.group(1)) if match else 0
+        elif raw.startswith("+") and not raw.startswith("+++"):
+            if path and not _is_noise(path):
+                added.append((path, line_number, raw[1:]))
+            line_number += 1
+
+    if not staged:
+        for name in (_git(["ls-files", "--others", "--exclude-standard"], cwd) or "").splitlines():
+            name = name.strip().replace("\\", "/")
+            if not name or _is_noise(name):
+                continue
+            try:
+                text = (cwd / name).read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            added.extend((name, index, line) for index, line in enumerate(text.splitlines(), start=1))
+
+    return added
 
 
 def default_branch(cwd: Path) -> str:
@@ -166,4 +210,8 @@ def parse_remote(url: str) -> Remote | None:
     else:
         org = parts[0]
 
-    return Remote(url=cleaned, host=host, org=org.lower())
+    # The repo is the last segment on every shape above, including the Azure
+    # one, where the project sits between the org and "_git".
+    repo = parts[-1] if len(parts) > 1 else ""
+
+    return Remote(url=cleaned, host=host, org=org.lower(), repo=repo)

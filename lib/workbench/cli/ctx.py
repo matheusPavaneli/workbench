@@ -27,8 +27,8 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     add = actions.add_parser("add", help="define a context")
     add.add_argument("name")
     add.add_argument("--provider", required=True, choices=providers.names())
-    add.add_argument("--base-url", required=True, help="Jira site root, or https://dev.azure.com/<org>")
-    add.add_argument("--project", required=True, help="Jira project key, or Azure DevOps project name")
+    add.add_argument("--base-url", help="Jira site root, or https://dev.azure.com/<org>; not used by github/local")
+    add.add_argument("--project", help="Jira project key, Azure project name, or GitHub owner/repo")
     add.add_argument("--pat-env", help="name of the environment variable holding the token")
     add.add_argument("--pat-keychain", help="OS keychain account name (macOS/Linux only)")
     add.add_argument("--email", help="Jira account email; Jira authenticates as email:api_token")
@@ -87,11 +87,31 @@ def _list(_: argparse.Namespace) -> int:
 
 
 def _add(args: argparse.Namespace) -> int:
-    if bool(args.pat_env) == bool(args.pat_keychain):
+    required = contexts.REQUIRED_FIELDS[args.provider]
+    missing = [f"--{field.replace('_', '-')}" for field in required if not getattr(args, field, None)]
+    if missing:
+        raise UsageError(
+            f"a {args.provider} context needs {', '.join(missing)}",
+            fix=[f"required for {args.provider}: {', '.join('--' + f.replace('_', '-') for f in required)}"],
+        )
+
+    # A local backlog has no credential, and github can borrow gh's. Everything
+    # else must say where its token lives before it is written down.
+    if args.provider == "local":
+        if args.pat_env or args.pat_keychain:
+            raise UsageError(
+                "a local context has no credential to resolve",
+                fix=["drop --pat-env / --pat-keychain; the local provider makes no requests"],
+            )
+    elif args.provider == "github":
+        if args.pat_env and args.pat_keychain:
+            raise UsageError("give at most one of --pat-env / --pat-keychain", fix=["or neither, to use gh's token"])
+    elif bool(args.pat_env) == bool(args.pat_keychain):
         raise UsageError(
             "give exactly one of --pat-env / --pat-keychain",
             fix=["--pat-env NAME is the portable choice; the token stays in the environment"],
         )
+
     if args.provider == "jira" and not args.email:
         raise UsageError(
             "Jira contexts need --email",
@@ -112,8 +132,8 @@ def _add(args: argparse.Namespace) -> int:
 
     data: dict[str, object] = {
         "provider": args.provider,
-        "base_url": args.base_url.rstrip("/"),
-        "project": args.project,
+        "base_url": (args.base_url or contexts.DEFAULT_BASE_URL.get(args.provider, "")).rstrip("/"),
+        "project": args.project or "",
         "preset": args.preset,
         "auth": auth,
     }
@@ -127,6 +147,10 @@ def _add(args: argparse.Namespace) -> int:
     print(f"wrote {path}")
     if args.pat_env:
         print(f"next: set {args.pat_env} in the environment, then run: wb ctx test")
+    elif args.provider == "github":
+        print("next: gh auth login (its token is used when the context names none), then: wb ctx test")
+    elif args.provider == "local":
+        print('next: wb ctx use ' + args.name + ' && wb task new "the first thing to do"')
     return 0
 
 

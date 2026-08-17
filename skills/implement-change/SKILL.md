@@ -16,6 +16,9 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
    No `sdd.json`? Run `plan-change` first. A failed audit blocks every command
    here by design — fix the plan, do not work around it.
 
+   Picking work back up mid-way? `status <KEY>` says which planned files are
+   already changed and what is left, without re-reading the plan.
+
 2. **Check where you are.** `flow show` reports the branch this work starts
    from, whether the current branch is protected, and any validation branch the
    commits will later be carried onto. `flow start <KEY> --title "..."` prints

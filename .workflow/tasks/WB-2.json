@@ -1,0 +1,11 @@
+{
+  "key": "WB-2",
+  "title": "Local and GitHub providers",
+  "type": "feature",
+  "status": "open",
+  "desc": "Reach repos with no Jira. See docs/providers.md.",
+  "created": "2026-08-17T18:37:26Z",
+  "updated": "2026-08-17T18:37:26Z",
+  "comments": [],
+  "linked": []
+}

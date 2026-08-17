@@ -1,0 +1,9 @@
+{
+  "provider": "local",
+  "preset": "solo-saas",
+  "flow": {
+    "strategy": "trunk",
+    "source": "main",
+    "branch_pattern": "{key}-{slug}"
+  }
+}

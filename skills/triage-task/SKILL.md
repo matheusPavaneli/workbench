@@ -14,8 +14,16 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
 
 ## Steps
 
+0. **Resuming?** `status` first. It lists every ticket with work in flight and
+   the one command that moves each on, read off the artifacts on disk. If the
+   ticket already has a `triage.json`, do not re-fetch it.
+
 1. **No key given** — `task list`. Four columns, newest first. Show them and ask
    which one, unless the request already names one.
+
+   No tracker in this repo? `task new "title" --type bug|feature|chore|support`
+   records it in the local backlog and everything downstream works unchanged.
+   Only local contexts accept it; `wb` says so if the repo has a real tracker.
 
 2. **Read it** — `task get <KEY>`. Writes `.workflow/<KEY>/triage.json` and
    prints it. Depth defaults to 1: the task, plus one line per linked item.

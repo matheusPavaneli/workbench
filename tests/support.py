@@ -16,12 +16,13 @@ from pathlib import Path
 
 from workbench.contexts import Context
 from workbench.providers.azure import AzureProvider
+from workbench.providers.github import GithubProvider
 from workbench.providers.jira import JiraProvider
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
-def load(provider: str, name: str) -> dict:
+def load(provider: str, name: str):
     return json.loads((FIXTURES / provider / f"{name}.json").read_text(encoding="utf-8"))
 
 
@@ -46,6 +47,32 @@ def azure_context(**overrides) -> Context:
         "project": "Platform",
         "auth": {"pat_env": "T"},
         "preset": "scaleup",
+    }
+    data.update(overrides)
+    return Context(**data)
+
+
+def github_context(**overrides) -> Context:
+    data = {
+        "name": "test-github",
+        "provider": "github",
+        "base_url": "https://api.github.com",
+        "project": "acme/widgets",
+        "auth": {},
+        "preset": "startup",
+    }
+    data.update(overrides)
+    return Context(**data)
+
+
+def local_context(**overrides) -> Context:
+    data = {
+        "name": "test-local",
+        "provider": "local",
+        "base_url": "file://.workflow/tasks",
+        "project": "",
+        "auth": {},
+        "preset": "solo-saas",
     }
     data.update(overrides)
     return Context(**data)
@@ -138,3 +165,33 @@ class FakeAzure(AzureProvider, _Recorder):
             self.last_wiql = body.get("query", "") if isinstance(body, dict) else ""
             return self._fixture("wiql")
         raise AssertionError(f"unexpected POST {path}")
+
+
+class FakeGithub(GithubProvider, _Recorder):
+    """The transport is a fixture; the mapping under test is the real one."""
+
+    def __init__(self, context: Context | None = None, **fixtures) -> None:
+        GithubProvider.__init__(self, context or github_context())
+        _Recorder.__init__(self)
+        self._auth = "Bearer test"
+        self.fixtures = fixtures
+
+    def _fixture(self, name: str):
+        loaded = self.fixtures.get(name)
+        return loaded if loaded is not None else load("github", name)
+
+    def get(self, path: str, **query) -> object:
+        self.record(path)
+        if path == "/user":
+            return {"login": "ana"}
+        if path.endswith("/timeline"):
+            return self._fixture("timeline")
+        if path.endswith("/comments"):
+            # One page only. A second page must come back empty, the way a real
+            # two-comment issue does, or paging never terminates.
+            return self._fixture("comments") if int(query.get("page", 1)) == 1 else []
+        if path.endswith("/issues"):
+            return self._fixture("list")
+        if "/issues/" in path:
+            return self._fixture("issue")
+        raise AssertionError(f"unexpected GET {path}")

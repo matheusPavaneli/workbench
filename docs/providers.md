@@ -93,3 +93,45 @@ Sources: [Jira issue search](https://developer.atlassian.com/cloud/jira/platform
 [Azure link types](https://learn.microsoft.com/en-us/azure/devops/boards/queries/link-type-reference?view=azure-devops),
 [Azure comments](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/comments/get-comments?view=azure-devops-rest-7.1),
 [Azure work items list](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/list?view=azure-devops-rest-7.1).
+
+## GitHub Issues
+
+Chosen for reach rather than depth. A GitHub context costs nothing on a machine
+that already has `gh` logged in, which is most personal and open-source work.
+
+Three gaps, none of them papered over:
+
+| GitHub has no | What the provider does |
+|---|---|
+| typed links | body references (`#123`, `owner/repo#123`) map to `relates`, never to `blocks`. Real hierarchy comes from the `parent` and `sub_issues_summary` fields |
+| an issue type | the label set is the only signal; unrecognised labels land in `_unmapped` rather than being guessed at |
+| a field-limited read | every read returns the whole issue, so revalidation costs what a refetch costs. Caching is skipped rather than pretended |
+
+Comments arrive oldest-first with no total, so the provider pages and reverses,
+capped like every other provider. Code spans are stripped before references are
+extracted: `` `#999` `` is a colour far more often than an issue.
+
+Auth prefers a configured `pat_env`/`pat_keychain` and falls back to
+`gh auth token`. The fallback is what makes the provider cheap to adopt; it is
+a fallback and not the default so a context that names its credential keeps
+working on a machine with no `gh`.
+
+## Local
+
+A backlog with no tracker, no network and no credential: one JSON file per task
+under `.workflow/tasks/`. It exists because nine of the ten skills are
+tracker-agnostic, and requiring a Jira site to reach them was a cost with
+nothing behind it.
+
+- Keys are `WB-<n>` and only ever count up. Reusing a freed number would point
+  two `.workflow/<KEY>/` directories at one task.
+- Keys mentioned in a body become `relates` links and never more; a reference
+  to a task the backlog does not hold is reported with status `unknown` rather
+  than dropped.
+- `has_history = False`: a JSON file keeps no changelog, so the `history`
+  expand handle is not offered. Offering it would cost a round trip to learn
+  nothing.
+
+Because a local context holds no secret, it is the one provider that may be
+defined inline in the committable `.workflow/config.json`, which is what makes
+a fresh clone work with no setup.

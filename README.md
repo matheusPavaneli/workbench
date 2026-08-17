@@ -3,7 +3,7 @@
 Ticket-to-PR development workflow skills for Claude Code, with pluggable issue
 trackers (Jira Cloud, Azure DevOps, GitHub Issues, or a backlog in the repo).
 
-Ten skills, one CLI, 293 tests, no third-party dependencies.
+Ten skills, one CLI, 353 tests, no third-party dependencies.
 
 ## Two design rules
 
@@ -104,8 +104,10 @@ ABC-123  Coupon applied after the charge  [bug, jira]
   next: wb impl verify ABC-123
 ```
 
-`wb status` with no key lists everything in flight; `--stats` aggregates across
-tickets to show which stage work is piling up at.
+`wb status` with no key lists everything in flight. `--stats` has two halves:
+a snapshot of where work is stuck now, and a history from a local command log
+of where this repo keeps losing time — a stage that always passes on the second
+attempt is invisible in the snapshot and the most expensive thing in the log.
 
 ### Rigour proportional to risk
 
@@ -188,13 +190,15 @@ on a plan whose audit did not pass.
 ## Command surface
 
 ```
+wb doctor  everything that has to be true, in one pass
+wb status  [KEY] | --stats     where work stands, and what to run next
 wb ctx     show | list | add | use | test
-wb task    list | get
+wb task    list | get | new
 wb repo    profile | zones
 wb sdd     audit | get | render | handover | gates
 wb flow    show | start | carry | set
 wb impl    check | verify
-wb review  context
+wb review  context | gates
 wb commit  convention | check
 wb pr      context | check
 wb git     ctx | diff
@@ -207,7 +211,8 @@ Exit codes: 2 usage, 3 config, 4 auth, 5 provider, 6 not found, 7 audit failed.
 - [configuration.md](docs/configuration.md) — contexts, matching rules, keychain, exit codes
 - [providers.md](docs/providers.md) — internal schema, tracker quirks, adding a provider
 - [depth-policy.md](docs/depth-policy.md) — depth, expansion handles, output caps
-- [execution.md](docs/execution.md) — scope guard, verification boundary, git façade
+- [execution.md](docs/execution.md) — scope guard, verification boundary, declared environment, git façade
+- [status.md](docs/status.md) — the pipeline, the command history, rigour tiers, settled gates
 - [flow.md](docs/flow.md) — source and validation branches, cherry-pick carrying, branch naming
 
 These are for maintainers. Agents do not read them: the behaviour they describe

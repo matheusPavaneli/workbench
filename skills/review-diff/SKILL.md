@@ -22,8 +22,10 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
 
 3. **Settle the mechanical gates first.** `review gates` (add `--key <KEY>` so
    the bug-fix regression rule knows the ticket type). It reads the added lines
-   and reports secrets and swallowed errors as `file:line` findings. Exit 7
-   means it found some; report them as findings, do not re-derive them.
+   and reports secrets, swallowed errors and added dependencies as `file:line`
+   findings. Exit 7 means it found some; report them, do not re-derive them.
+   A dependency finding is a question to answer, not a defect: say who owns it
+   and why nothing already in the repo does the job.
 
 4. **Check the rest of the gates yourself.** Every gate `review context` printed
    that `review gates` did not settle is a question with a yes or no answer for

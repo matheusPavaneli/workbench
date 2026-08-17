@@ -44,7 +44,8 @@ def _gates(args: argparse.Namespace) -> int:
         raise UsageError("not a git repository", fix=["run this inside a checkout"])
 
     changed = gitctx.changed_files(root, staged=args.staged)
-    findings = review_lib.gate_findings(gitctx.added_lines(root, staged=args.staged))
+    added = gitctx.added_lines(root, staged=args.staged)
+    findings = review_lib.gate_findings(added) + review_lib.dependency_findings(added)
 
     ticket_type = ""
     if args.key:

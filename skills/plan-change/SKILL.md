@@ -39,6 +39,12 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
    the citation to match a wrong claim, and never proceed to implementation.
    Then `sdd render <KEY>` for the human-readable copy.
 
+   The audit reports a **tier**. A plan touching at most two files, no critical
+   zone and no bug/support ticket qualifies as `light`, which waives `steps` and
+   `product` — nothing else. Do not aim for a tier: write the plan the change
+   needs and let the audit compute it. Citations, the file list, `verify` and
+   `rollback` are required at every tier.
+
    The audit checks the plan against the code **as it is now**, before any of it
    changes. Once implemented, the cited lines have moved and re-running it will
    report `moved` — that is expected, not a regression. Re-audit only after

@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from workbench import redact  # noqa: E402
 from workbench.cli import ctx as ctx_cli  # noqa: E402
 from workbench.cli import commit as commit_cli  # noqa: E402
+from workbench.cli import doctor as doctor_cli  # noqa: E402
 from workbench.cli import flow as flow_cli  # noqa: E402
 from workbench.cli import git as git_cli  # noqa: E402
 from workbench.cli import impl as impl_cli  # noqa: E402
@@ -30,11 +31,14 @@ from workbench.cli import pr as pr_cli  # noqa: E402
 from workbench.cli import repo as repo_cli  # noqa: E402
 from workbench.cli import review as review_cli  # noqa: E402
 from workbench.cli import sdd as sdd_cli  # noqa: E402
+from workbench.cli import status as status_cli  # noqa: E402
 from workbench.cli import task as task_cli  # noqa: E402
 from workbench.errors import EXIT_USAGE, UsageError, WbError  # noqa: E402
 
 GROUPS = {
     "ctx": ctx_cli,
+    "doctor": doctor_cli,
+    "status": status_cli,
     "task": task_cli,
     "repo": repo_cli,
     "sdd": sdd_cli,

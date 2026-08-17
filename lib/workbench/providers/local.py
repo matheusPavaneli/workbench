@@ -110,6 +110,41 @@ def create(
     return data
 
 
+def set_status(key: str, status: str, cwd: Path | None = None) -> tuple[str, dict]:
+    """Move a task to ``status``. Returns (previous status, the task).
+
+    Everything else in the file is preserved: closing a ticket must not be a
+    way to lose its description or its comments. The stamp moves so the listing
+    order reflects the change.
+    """
+    if status not in STATUSES:
+        from ..errors import unknown_choice
+
+        raise unknown_choice("status", status, STATUSES)
+
+    key = artifacts.validate_key(key)
+    path = task_path(key, cwd)
+    if not path.is_file():
+        known = [p.stem for p in sorted(tasks_dir(cwd).glob("*.json"))][:10]
+        raise NotFoundError(
+            f"no local task {key}",
+            fix=[f"tasks here: {', '.join(known)}" if known else "this backlog is empty"],
+        )
+
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        from ..errors import ConfigError
+
+        raise ConfigError(f"{path} is not valid JSON: {exc}", fix=["fix the syntax, or delete the file"]) from exc
+
+    previous = str(data.get("status", OPEN))
+    data["status"] = status
+    data["updated"] = now()
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return previous, data
+
+
 class LocalProvider(Provider):
     name = "local"
     has_history = False  # a JSON file has no changelog; see fetch_history

@@ -17,7 +17,7 @@ from .. import artifacts, contexts, providers
 from ..errors import UsageError
 from ..providers import local
 
-ACTIONS = ["list", "get", "new"]
+ACTIONS = ["list", "get", "new", "done"]
 DEFAULT_LIST_LIMIT = 20
 
 
@@ -53,11 +53,20 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     new.add_argument("--key", help="an explicit key; defaults to the next free WB-<n>")
     new.add_argument("--link", action="append", default=[], metavar="KEY", help="a related task; repeatable")
 
+    done = actions.add_parser("done", help="close a task in the local backlog, or move it to another status")
+    done.add_argument("key")
+    done.add_argument(
+        "--status",
+        default=local.DONE,
+        choices=local.STATUSES,
+        help="the status to move to; defaults to done",
+    )
+
 
 def run(args: argparse.Namespace) -> int:
     if not args.action:
         raise UsageError("wb task needs an action", fix=[f"actions: {', '.join(ACTIONS)}"])
-    return {"list": _list, "get": _get, "new": _new}[args.action](args)
+    return {"list": _list, "get": _get, "new": _new, "done": _done}[args.action](args)
 
 
 def _list(args: argparse.Namespace) -> int:
@@ -77,16 +86,7 @@ def _list(args: argparse.Namespace) -> int:
 
 
 def _new(args: argparse.Namespace) -> int:
-    context = contexts.resolve().context
-    if context.provider != local.LocalProvider.name:
-        raise UsageError(
-            f"this repo resolves to a {context.provider} context, which owns its own tasks",
-            fix=[
-                f"create the task in {context.provider} and run: wb task get <KEY>",
-                "or bind this repo to a local backlog: wb ctx use <local-context>",
-            ],
-        )
-
+    _require_local("create the task")
     data = local.create(
         args.title, kind=args.kind, desc=args.desc, key=args.key, links=args.link
     )
@@ -94,6 +94,29 @@ def _new(args: argparse.Namespace) -> int:
     print(f"wrote {local.task_path(data['key'])}")
     print(f"next: wb task get {data['key']}")
     return 0
+
+
+def _done(args: argparse.Namespace) -> int:
+    _require_local("close a task")
+    previous, data = local.set_status(args.key, args.status)
+    if previous == data["status"]:
+        print(f"{data['key']}  already {data['status']}")
+        return 0
+    print(f"{data['key']}  {previous} -> {data['status']}  {data['title']}")
+    return 0
+
+
+def _require_local(what: str) -> None:
+    """A tracker owns its own state; writing it here would only lie locally."""
+    context = contexts.resolve().context
+    if context.provider != local.LocalProvider.name:
+        raise UsageError(
+            f"this repo resolves to a {context.provider} context, which owns its own tasks",
+            fix=[
+                f"{what} in {context.provider} itself",
+                "or bind this repo to a local backlog: wb ctx use <local-context>",
+            ],
+        )
 
 
 def _get(args: argparse.Namespace) -> int:

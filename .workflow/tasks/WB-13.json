@@ -1,0 +1,11 @@
+{
+  "key": "WB-13",
+  "title": "the local backlog can be opened but never closed",
+  "type": "feature",
+  "status": "done",
+  "desc": "wb task new creates a task and local.STATUSES lists open, in-progress, blocked and done, but nothing writes status after creation. Every finished ticket still reads open, so wb task list and wb status --stats count work that shipped. Closing one means hand-editing JSON.",
+  "created": "2026-08-17T19:21:46Z",
+  "updated": "2026-08-17T19:30:37Z",
+  "comments": [],
+  "linked": []
+}

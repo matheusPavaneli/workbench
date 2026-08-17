@@ -2,10 +2,10 @@
   "key": "WB-9",
   "title": "impl verify cannot pass environment to a command",
   "type": "bug",
-  "status": "open",
+  "status": "done",
   "desc": "The verify runner refuses shell, so VAR=x cmd is impossible, and it passes the ambient environment unchanged. A repo whose tests need PYTHONPATH, NODE_ENV or a DATABASE_URL cannot be verified at all. This repo is one: its suite needs PYTHONPATH=lib;tests, which CI sets in the workflow env. Blocks WB-7.",
   "created": "2026-08-17T18:47:39Z",
-  "updated": "2026-08-17T18:47:39Z",
+  "updated": "2026-08-17T19:30:36Z",
   "comments": [],
   "linked": []
 }

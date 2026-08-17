@@ -6,11 +6,15 @@ from ..contexts import Context
 from ..errors import unknown_choice
 from .azure import AzureProvider
 from .base import Identity, Provider
+from .github import GithubProvider
 from .jira import JiraProvider
+from .local import LocalProvider
 
 _REGISTRY: dict[str, type[Provider]] = {
     JiraProvider.name: JiraProvider,
     AzureProvider.name: AzureProvider,
+    GithubProvider.name: GithubProvider,
+    LocalProvider.name: LocalProvider,
 }
 
 __all__ = ["Identity", "Provider", "for_context", "names"]

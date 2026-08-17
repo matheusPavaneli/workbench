@@ -1,6 +1,8 @@
-# Workflow artifacts are per-checkout scratch, except the context binding.
+# Workflow artifacts are per-checkout scratch, except the context binding and a
+# local backlog -- a backlog only one person can see is not a backlog.
 .workflow/*
 !.workflow/config.json
+!.workflow/tasks/
 
 __pycache__/
 *.py[cod]

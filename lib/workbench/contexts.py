@@ -25,8 +25,27 @@ from typing import Any
 from . import gitctx
 from .errors import ConfigError, unknown_choice
 
-PROVIDERS = ["jira", "azure"]
+PROVIDERS = ["jira", "azure", "github", "local"]
 PRESETS = ["prototype", "solo-saas", "startup", "scaleup", "enterprise"]
+
+# What a provider cannot work without. A hosted tracker needs a site and a
+# project; GitHub derives its site and can read the repo from the remote; a
+# local backlog needs neither. Keeping this here rather than on the provider
+# classes avoids a config -> providers -> config import cycle, and it is the
+# same closed set the CLI validates against.
+REQUIRED_FIELDS = {
+    "jira": ("base_url", "project"),
+    "azure": ("base_url", "project"),
+    "github": (),
+    "local": (),
+}
+
+# Providers that reach a network. A local backlog has no URL to check and no
+# credential to leak, so the transport rules below do not apply to it.
+DEFAULT_BASE_URL = {
+    "github": "https://api.github.com",
+    "local": "file://.workflow/tasks",
+}
 
 REPO_CONFIG = Path(".workflow") / "config.json"
 
@@ -121,14 +140,18 @@ def _build(name: str, data: dict[str, Any], path: Path) -> Context:
     if preset not in PRESETS:
         raise unknown_choice("preset", preset, PRESETS)
 
-    missing = [key for key in ("base_url", "project") if not data.get(key)]
+    missing = [key for key in REQUIRED_FIELDS[provider] if not data.get(key)]
     if missing:
         raise ConfigError(
             f"context {name!r} is missing: {', '.join(missing)}",
             fix=[f"add the missing keys to {path}"],
         )
 
-    base_url = str(data["base_url"]).rstrip("/")
+    base_url = str(data.get("base_url") or DEFAULT_BASE_URL.get(provider, "")).rstrip("/")
+    if provider == "local":
+        # No transport, so no URL and no credential to check.
+        return _assemble(name, data, provider, base_url, preset)
+
     if not base_url.lower().startswith("https://") and not data.get("allow_insecure"):
         # Every request carries an Authorization header. Over http it is readable
         # by anything on the path.
@@ -140,19 +163,23 @@ def _build(name: str, data: dict[str, Any], path: Path) -> Context:
             ],
         )
 
+    return _assemble(name, data, provider, base_url, preset)
+
+
+def _assemble(name: str, data: dict[str, Any], provider: str, base_url: str, preset: str) -> Context:
     auth = data.get("auth") or {}
     if not isinstance(auth, dict):
-        raise ConfigError(f"context {name!r}: auth must be an object", fix=[f"see {path}"])
+        raise ConfigError(f"context {name!r}: auth must be an object", fix=["auth must be a JSON object"])
 
     git = data.get("git") or {}
     if not isinstance(git, dict):
-        raise ConfigError(f"context {name!r}: git must be an object", fix=[f"see {path}"])
+        raise ConfigError(f"context {name!r}: git must be an object", fix=["git must be a JSON object"])
 
     return Context(
         name=name,
         provider=provider,
         base_url=base_url,
-        project=str(data["project"]),
+        project=str(data.get("project") or ""),
         auth={str(k): str(v) for k, v in auth.items()},
         preset=preset,
         git={str(k): str(v) for k, v in git.items()},
@@ -172,9 +199,20 @@ def _from_repo_config(cwd: Path) -> Resolution | None:
 
     name = data.get("context")
     if not name:
+        # A local backlog has no credential and no site, so the whole context
+        # fits in the committed file. That makes a clone work with no setup at
+        # all -- the case where per-machine configuration is pure friction.
+        if str(data.get("provider", "")).lower() == "local":
+            return Resolution(
+                _build("repo", data, path),
+                source=f"repo config ({path}), defined inline",
+            )
         raise ConfigError(
             f"{path} has no \"context\" key",
-            fix=['add {"context": "<name>"}, naming a context in ~/.workbench/contexts'],
+            fix=[
+                'add {"context": "<name>"}, naming a context in ~/.workbench/contexts',
+                'or define a local backlog inline: {"provider": "local", "preset": "..."}',
+            ],
         )
 
     overrides = {k: v for k, v in data.items() if k in {"project", "preset", "board", "flow"}}

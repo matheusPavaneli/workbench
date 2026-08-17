@@ -30,6 +30,9 @@ class Identity:
 class Provider:
     name = "base"
 
+    # Whether the tracker keeps a changelog worth offering as an expand handle.
+    has_history = True
+
     def __init__(self, context: Context) -> None:
         self.context = context
         self._auth: str | None = None
@@ -98,7 +101,7 @@ class Provider:
         full_desc = task.desc
         task.desc, task.desc_chars, task.desc_truncated = schema.make_desc(full_desc)
 
-        offered = expand.offer(task)
+        offered = expand.offer(task, history=self.has_history)
         expand.validate(requested, offered)
 
         extra: dict[str, object] = {}
@@ -134,7 +137,7 @@ class Provider:
                     if cut:
                         notes.append(f"linked {link.key} desc")
 
-        payload = task.to_dict(expand.offer(task), truncations=notes)
+        payload = task.to_dict(expand.offer(task, history=self.has_history), truncations=notes)
         payload.update(extra)
         return schema.fit(payload)
 

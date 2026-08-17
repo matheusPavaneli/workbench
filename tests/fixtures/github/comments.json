@@ -1,0 +1,4 @@
+[
+  { "user": { "login": "ana" }, "created_at": "2026-08-09T10:00:00Z", "body": "Reproduced on staging." },
+  { "user": { "login": "bo" }, "created_at": "2026-08-10T08:00:00Z", "body": "Order of operations in charge.ts." }
+]

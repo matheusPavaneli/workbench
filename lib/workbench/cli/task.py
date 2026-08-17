@@ -15,8 +15,9 @@ import json
 
 from .. import artifacts, contexts, providers
 from ..errors import UsageError
+from ..providers import local
 
-ACTIONS = ["list", "get"]
+ACTIONS = ["list", "get", "new"]
 DEFAULT_LIST_LIMIT = 20
 
 
@@ -45,11 +46,18 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     )
     get.add_argument("--no-cache", action="store_true", help="ignore the 15 minute cache")
 
+    new = actions.add_parser("new", help="record a task in the local backlog (local contexts only)")
+    new.add_argument("title", help="what needs doing, in one line")
+    new.add_argument("--type", dest="kind", default="feature", choices=local.TYPES)
+    new.add_argument("--desc", default="", help="the detail: acceptance criteria, a reproduction, constraints")
+    new.add_argument("--key", help="an explicit key; defaults to the next free WB-<n>")
+    new.add_argument("--link", action="append", default=[], metavar="KEY", help="a related task; repeatable")
+
 
 def run(args: argparse.Namespace) -> int:
     if not args.action:
         raise UsageError("wb task needs an action", fix=[f"actions: {', '.join(ACTIONS)}"])
-    return {"list": _list, "get": _get}[args.action](args)
+    return {"list": _list, "get": _get, "new": _new}[args.action](args)
 
 
 def _list(args: argparse.Namespace) -> int:
@@ -65,6 +73,26 @@ def _list(args: argparse.Namespace) -> int:
     width = max(len(row["key"]) for row in rows)
     for row in rows:
         print(f"{row['key']:<{width}}  {row['updated']}  {row['status']:<14}  {row['title']}")
+    return 0
+
+
+def _new(args: argparse.Namespace) -> int:
+    context = contexts.resolve().context
+    if context.provider != local.LocalProvider.name:
+        raise UsageError(
+            f"this repo resolves to a {context.provider} context, which owns its own tasks",
+            fix=[
+                f"create the task in {context.provider} and run: wb task get <KEY>",
+                "or bind this repo to a local backlog: wb ctx use <local-context>",
+            ],
+        )
+
+    data = local.create(
+        args.title, kind=args.kind, desc=args.desc, key=args.key, links=args.link
+    )
+    print(f"{data['key']}  {data['type']:<8} {data['title']}")
+    print(f"wrote {local.task_path(data['key'])}")
+    print(f"next: wb task get {data['key']}")
     return 0
 
 

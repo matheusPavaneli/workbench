@@ -25,7 +25,7 @@ MAX_RETRY_SLEEP = 8.0
 MAX_BODY_BYTES = 4 * 1024 * 1024
 ERROR_EXCERPT_CHARS = 300
 
-USER_AGENT = "workbench/0.1 (+https://github.com/USER/workbench)"
+USER_AGENT = "workbench/0.1 (+https://github.com/matheusPavaneli/workbench)"
 
 
 def basic_auth(user: str, secret: str) -> str:

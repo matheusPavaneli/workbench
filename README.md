@@ -24,7 +24,7 @@ checks and writes artifacts; git operations stay with the user.
 ## Install
 
 ```
-/plugin marketplace add USER/workbench
+/plugin marketplace add matheusPavaneli/workbench
 /plugin install workbench@workbench
 ```
 

@@ -1,6 +1,6 @@
 {
   "name": "workbench",
-  "owner": { "name": "workbench" },
+  "owner": { "name": "matheusPavaneli", "url": "https://github.com/matheusPavaneli" },
   "metadata": {
     "description": "Ticket-to-PR development workflow skills with pluggable issue trackers.",
     "version": "0.1.0"

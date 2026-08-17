@@ -1,0 +1,69 @@
+"""``wb status`` -- what a new session needs to know before it does anything.
+
+One key: the pipeline for that ticket, and the one command that moves it on.
+No key: every ticket with work in flight, one line each.
+
+This is the command a session runs *first* after a ``/clear``. It reads only
+artifacts already on disk -- no tracker call, no context needed -- so it works
+in a repo whose credentials are not set up, and costs nothing but a few stats.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+
+from .. import status as status_lib
+from ..errors import UsageError
+
+ACTIONS: list[str] = []
+
+
+def register(subparsers: argparse._SubParsersAction) -> None:
+    parser = subparsers.add_parser("status", help="where a ticket stands, and what to run next")
+    parser.add_argument("key", nargs="?", help="a ticket key; omit to list everything in flight")
+    parser.add_argument("--json", action="store_true", help="machine-readable, for a skill rather than a person")
+    parser.add_argument("--stats", action="store_true", help="aggregate across tickets: where work is piling up")
+
+
+def run(args: argparse.Namespace) -> int:
+    if args.stats:
+        if args.key:
+            raise UsageError("--stats aggregates every ticket", fix=["drop the key, or drop --stats"])
+        return _stats(args)
+    if args.key:
+        return _one(args)
+    return _all(args)
+
+
+def _stats(args: argparse.Namespace) -> int:
+    summary = status_lib.summarise([status_lib.read(key) for key in status_lib.keys()])
+    if args.json:
+        print(json.dumps(summary, indent=2))
+        return 0
+    print(status_lib.render_summary(summary))
+    return 0
+
+
+def _one(args: argparse.Namespace) -> int:
+    status = status_lib.read(args.key)
+    if args.json:
+        print(json.dumps(status.to_dict(), indent=2, ensure_ascii=False))
+        return 0
+    print(status_lib.render(status))
+    return 0
+
+
+def _all(args: argparse.Namespace) -> int:
+    keys = status_lib.keys()
+    if not keys and not args.json:
+        print("no work in progress")
+        print("start one: wb task list, or wb task get <KEY>")
+        return 0
+
+    items = [status_lib.read(key) for key in keys]
+    if args.json:
+        print(json.dumps([s.to_dict() for s in items], indent=2, ensure_ascii=False))
+        return 0
+    print(status_lib.render_list(items))
+    return 0

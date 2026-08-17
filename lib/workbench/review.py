@@ -19,6 +19,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import redact
+
 CODE_EXTENSIONS = {
     ".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".go", ".rs", ".java", ".kt",
     ".rb", ".php", ".cs", ".swift", ".scala", ".c", ".cc", ".cpp", ".h", ".hpp", ".m",
@@ -107,6 +109,12 @@ _SWALLOWED = [
 # The multi-line form is the one people actually write, and matching only the
 # single-line form meant the common case passed silently. Pairs are (opener,
 # body): an opener whose very next added line is the body and nothing else.
+#
+# The body patterns are bare on purpose. A swallow carrying a comment that says
+# why -- `pass  # a lost statistic is not a failure` -- is a stated decision,
+# and the gate exists to catch the unstated ones. Flagging a documented choice
+# would leave no way to express it, and a gate with no way out is a gate people
+# route around.
 _SWALLOWED_PAIRS = [
     (re.compile(r"^\s*except\b.*:\s*$"), re.compile(r"^\s*pass\s*$"),
      "except ...: pass discards the error and its cause"),
@@ -155,8 +163,19 @@ def gate_findings(added: list[tuple[str, int, str]]) -> list[Finding]:
         if secret is None and not _NOT_A_SECRET.search(text):
             secret = next((d for p, d in _SECRET_BY_KEYWORD if p.search(text)), None)
         if secret is not None:
+            # Masked here, at the one place the tool deliberately captures a
+            # credential. A finding travels further than the terminal it was
+            # printed to -- into evidence.md, into --json, into a PR comment --
+            # and the reader needs the location, never the value.
             findings.append(
-                Finding("no secret in code or in a committed file", HIGH, path, line, text.strip()[:120], secret)
+                Finding(
+                    "no secret in code or in a committed file",
+                    HIGH,
+                    path,
+                    line,
+                    redact.scrub(text.strip())[:120],
+                    secret,
+                )
             )
 
         if not is_source(path):
@@ -182,6 +201,44 @@ def gate_findings(added: list[tuple[str, int, str]]) -> list[Finding]:
                 findings.append(Finding(swallowed, MEDIUM, path, line, text.strip()[:120], detail))
                 break
 
+    return findings
+
+
+# Manifests where an added line can mean a new dependency. Lockfiles are
+# excluded: they change for a transitive bump nobody chose, and flagging those
+# would bury the one line somebody did choose.
+_MANIFESTS = {
+    "package.json": re.compile(r'^\s*"[\w@./-]+"\s*:\s*"[^"]+"\s*,?\s*$'),
+    "pyproject.toml": re.compile(r"^\s*[\"']?[A-Za-z][\w.-]*[\"']?\s*(==|>=|~=|>|\s*=\s*[\"'])"),
+    "requirements.txt": re.compile(r"^\s*[A-Za-z][\w.-]*\s*(==|>=|~=|>|$)"),
+    "go.mod": re.compile(r"^\s*[\w.-]+/[\w./-]+\s+v\d"),
+    "Cargo.toml": re.compile(r"^\s*[A-Za-z][\w-]*\s*=\s*"),
+    "Gemfile": re.compile(r"^\s*gem\s+[\"']"),
+}
+
+
+def dependency_findings(added: list[tuple[str, int, str]]) -> list[Finding]:
+    """Lines that add a dependency, so the gate about it has something to point at.
+
+    Whether a dependency is justified is a judgement; whether one was added is
+    not. Reporting the line turns "no new dependency without a stated owner"
+    from a question a reviewer has to remember into one they cannot miss.
+    """
+    findings = []
+    for path, line, text in added:
+        pattern = _MANIFESTS.get(Path(path).name)
+        if pattern is None or not pattern.match(text):
+            continue
+        findings.append(
+            Finding(
+                "no new dependency without a stated owner and a justification",
+                MEDIUM,
+                path,
+                line,
+                text.strip()[:120],
+                "a dependency was added; name the owner and why nothing already in the repo does this",
+            )
+        )
     return findings
 
 

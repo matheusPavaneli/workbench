@@ -1,0 +1,11 @@
+{
+  "key": "WB-12",
+  "title": "a plan cannot be extended once implementation has started",
+  "type": "bug",
+  "status": "open",
+  "desc": "sdd audit is a pre-implementation gate, so re-auditing after an edit reports mismatch on the parts already done. But plan-change tells you to update the plan when it turns out wrong, which is exactly what happens mid-implementation. Today the only way through is to revert, extend the plan, re-audit and redo. Hit on WB-11. Options: audit citations against the merge-base rather than the working tree, or an explicit --since-implemented mode.",
+  "created": "2026-08-17T19:05:11Z",
+  "updated": "2026-08-17T19:05:11Z",
+  "comments": [],
+  "linked": []
+}

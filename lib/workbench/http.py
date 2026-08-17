@@ -16,6 +16,7 @@ import urllib.request
 from typing import Any
 
 from . import redact
+from . import __version__
 from .errors import AuthError, NotFoundError, ProviderError
 
 TIMEOUT_SECONDS = 20
@@ -25,7 +26,10 @@ MAX_RETRY_SLEEP = 8.0
 MAX_BODY_BYTES = 4 * 1024 * 1024
 ERROR_EXCERPT_CHARS = 300
 
-USER_AGENT = "workbench/0.1 (+https://github.com/matheusPavaneli/workbench)"
+# Derived, not written out again. This string had already fallen two releases
+# behind the manifests, because a version copied by hand is a version nobody
+# remembers to copy.
+USER_AGENT = f"workbench/{__version__} (+https://github.com/matheusPavaneli/workbench)"
 
 
 def basic_auth(user: str, secret: str) -> str:

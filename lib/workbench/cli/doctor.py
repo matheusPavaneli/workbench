@@ -181,6 +181,16 @@ def _flow(check, root: Path) -> None:
     check("flow", OK, described)
 
 
+# Runners invoked through an interpreter rather than as a program on PATH.
+# Looking for an executable called "unittest" would always fail, and reporting
+# a missing runner that is in fact present is worse than not checking.
+_MODULE_RUNNERS = {"unittest": "python"}
+
+
+def _available(name: str) -> bool:
+    return shutil.which(_MODULE_RUNNERS.get(name, name)) is not None
+
+
 def _runners(check, root: Path) -> None:
     """A plan's verify commands are worthless if the runner is not installed."""
     conventions = profile_lib.detect(root).conventions
@@ -191,8 +201,11 @@ def _runners(check, root: Path) -> None:
         check("runners", OK, "no runner detected from the repo; verify commands will name their own")
         return
 
-    missing = [name for name in wanted if shutil.which(name) is None]
-    allowed = [name for name in wanted if name not in verify_lib.ALLOWED_RUNNERS]
+    missing = [name for name in wanted if not _available(name)]
+    # Both checks ask about the command that would actually run, not the label
+    # the convention is recorded under: a verify step for unittest is spelled
+    # "python -m unittest", and python is on the allowlist.
+    allowed = [name for name in wanted if _MODULE_RUNNERS.get(name, name) not in verify_lib.ALLOWED_RUNNERS]
 
     if missing:
         check("runners", FAIL, f"{', '.join(missing)} not on PATH but used by this repo",

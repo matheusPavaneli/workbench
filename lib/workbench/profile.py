@@ -29,7 +29,12 @@ MONEY_PATTERN = re.compile(r"stripe|paddle|lemonsqueezy|billing|subscription|che
 CRITICAL_ZONES = {
     "billing": re.compile(r"billing|payment|invoice|subscription|checkout|stripe|paddle|quota|plan", re.I),
     "auth": re.compile(r"auth|login|session|password|token|oauth|permission|role|acl", re.I),
-    "user-data": re.compile(r"(^|/)(users?|accounts?|profiles?|pii|personal)(/|_|\.)", re.I),
+    # "user", "account", "pii" and "personal" name user data wherever they
+    # appear. "profile" does not: it is just as often a performance profile or,
+    # here, the repo quality profiler -- and a zone that fires on the wrong file
+    # raises the bar for no reason, which is how a raised bar stops meaning
+    # anything. It therefore only counts as a directory segment.
+    "user-data": re.compile(r"(^|/)(users?|accounts?|pii|personal)(/|_|\.)|(^|/)profiles?/", re.I),
     "migration": re.compile(r"migrat|schema|alembic|liquibase", re.I),
     "secrets": re.compile(r"secret|credential|keystore|vault|\.env", re.I),
 }
@@ -237,4 +242,25 @@ def _conventions(root: Path) -> dict[str, str]:
             conventions["test_dir"] = name
             break
 
+    # Every marker above belongs to a tool that needs its own config file, so a
+    # repo running the standard library's runner read as having no runner at
+    # all -- which turned doctor's runner check into a no-op on exactly the
+    # repos it was meant to cover, this one included. The inference is last, so
+    # explicit evidence always outranks it.
+    #
+    # The signal is the test files themselves, not a manifest: a project with no
+    # third-party dependencies has no manifest to read, and that is precisely
+    # the project most likely to be running unittest.
+    if "test_runner" not in conventions and conventions.get("test_dir"):
+        if _has_unittest_files(root / conventions["test_dir"]):
+            conventions["test_runner"] = "unittest"
+
     return conventions
+
+
+def _has_unittest_files(directory: Path) -> bool:
+    """Python test modules named the way unittest discovery requires."""
+    try:
+        return any(directory.glob("test_*.py")) or any(directory.glob("*_test.py"))
+    except OSError:
+        return False

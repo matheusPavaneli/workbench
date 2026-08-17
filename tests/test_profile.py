@@ -56,6 +56,32 @@ class Detection(unittest.TestCase):
         self.assertEqual("uv", conventions["package_manager"])
         self.assertEqual("pytest", conventions["test_runner"])
 
+    def test_a_stdlib_only_repo_still_has_a_runner(self) -> None:
+        """Regression: every marker needs a config file, so unittest read as none.
+
+        The effect was not a wrong label but a silent one: doctor's runner
+        check reported a clean all-clear on any repo it could not name a
+        runner for, which is exactly the repo the check exists to warn.
+        """
+        self._touch("tests/test_a.py", "")
+        self.assertEqual("unittest", profile.detect(self.root).conventions["test_runner"])
+
+    def test_no_manifest_is_needed_to_see_it(self) -> None:
+        """A project with no third-party dependencies has no manifest to read,
+        and is the project most likely to be running unittest."""
+        self._touch("tests/test_a.py", "")
+        self.assertNotIn("ecosystem", profile.detect(self.root).conventions)
+
+    def test_an_explicit_runner_outranks_the_inference(self) -> None:
+        self._touch("tests/test_a.py", "")
+        self._touch("pytest.ini", "[pytest]")
+        self.assertEqual("pytest", profile.detect(self.root).conventions["test_runner"])
+
+    def test_a_non_python_repo_is_not_labelled_unittest(self) -> None:
+        self._touch("package.json", "{}")
+        self._touch("tests/a.spec.js", "")
+        self.assertNotIn("test_runner", profile.detect(self.root).conventions)
+
 
 class Gates(unittest.TestCase):
     def test_floor_applies_to_every_preset(self) -> None:

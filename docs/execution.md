@@ -24,11 +24,37 @@ design exists to prevent, so the CLI does not offer a way to do it.
 
 ## When the audit runs
 
-`wb sdd audit` is a **pre-implementation** gate. It compares the plan's
-citations against the code as it stands before the change. After implementing,
-those line numbers have moved and a re-run reports `moved` — correctly. The
-post-implementation checks are `impl check` (scope) and `impl verify`
-(behaviour); re-audit only after editing the plan itself.
+`wb sdd audit` is a gate before implementation, but it is not only usable
+before implementation. The first audit is strict and checks the working tree,
+because a wrong line number is a defect while the plan is still cheap to
+change. It also records the commit it ran against, as `baseline` in
+`audit.json`.
+
+Every audit after that is **anchored to that commit**, and the plan is treated
+as under way:
+
+| Citation | First audit | Once under way |
+|---|---|---|
+| matches at the cited line | `ok` | `ok` |
+| found elsewhere in the file | `moved`, fails | `moved`, passes, line reported |
+| found only at the baseline commit | `mismatch`, fails | `baseline`, passes |
+| found nowhere, ever | `mismatch`, fails | `mismatch`, fails |
+
+This exists because `plan-change` instructs the author to correct a plan that
+turns out wrong — which is precisely when the tree has already moved. Before
+the baseline, the only route was to revert the work, extend the plan, re-audit
+and redo it.
+
+A drifted citation is **never folded into a silent `ok`**. Each one is printed
+with the line it is now at, so a reader can tell which claims no longer
+describe the current code. `wb sdd audit <KEY> --rebaseline` re-anchors the
+plan to the current tree and is strict again.
+
+What the fallback never does is let an invented claim through: a quote found in
+neither the working tree nor the baseline is still a `mismatch`.
+
+The post-implementation checks remain `impl check` (scope) and `impl verify`
+(behaviour).
 
 ## Verification
 

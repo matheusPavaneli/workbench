@@ -57,6 +57,11 @@ class Finding:
 @dataclass
 class Report:
     key: str
+    # The rigour tier the plan qualified for, and why. Recorded rather than
+    # applied silently: a waived section must be visible in the artifact, or
+    # "this plan has no steps" reads as an omission instead of a decision.
+    tier: str = "standard"
+    tier_reason: str = ""
     findings: list[Finding] = field(default_factory=list)
     structure: list[str] = field(default_factory=list)
     missing_paths: list[str] = field(default_factory=list)
@@ -74,6 +79,8 @@ class Report:
             "schema": 1,
             "key": self.key,
             "verdict": "pass" if self.passed else "fail",
+            "tier": self.tier,
+            "tier_reason": self.tier_reason,
             "citations_checked": len(self.findings),
             "citations_failed": len(self.failures),
             "findings": [f.to_dict() for f in self.findings if f.verdict not in PASSING],
@@ -86,6 +93,7 @@ def run(doc: dict, root: Path) -> Report:
     from . import sdd
 
     report = Report(key=str(doc.get("key", "")))
+    report.tier, report.tier_reason = sdd.tier(doc)
     report.structure = sdd.validate(doc)
 
     for index, item in enumerate(doc.get("evidence") or []):

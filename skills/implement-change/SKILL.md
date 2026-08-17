@@ -33,7 +33,9 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
    regression test must fail without the fix; check that it does.
 
 5. **Check the scope.** `impl check <KEY>` after each step or two. It lists
-   planned files as changed or pending, and fails on anything outside the plan.
+   planned files as changed or pending, `other` for a file another audited plan
+   claims, and `overlap` where two plans claim one file. It fails only on a file
+   no audited plan accounts for.
 
 6. **Verify.** `impl verify <KEY>` runs the plan's `verify` commands and writes
    `.workflow/<KEY>/evidence.md`. It refuses anything that is not a known test,
@@ -42,9 +44,9 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
 7. **Report honestly.** If verification fails, say so with the failing line.
    Fix the code, never the evidence.
 
-Do not re-run `sdd audit` to confirm your work. It measures the plan against
-the code as it was when planned; after implementing, the cited lines have moved
-and it will say so. `impl check` and `impl verify` are the checks for this
+Do not re-run `sdd audit` to confirm your work: it checks the plan, not the
+code. Re-run it when you **change** the plan — that now passes, reporting which
+citations have drifted. `impl check` and `impl verify` are the checks for this
 stage.
 
 ## When the plan is wrong

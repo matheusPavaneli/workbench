@@ -31,6 +31,22 @@ def _skills():
     return sorted(path for path in SKILLS.glob("*/SKILL.md"))
 
 
+def _actions(module) -> list:
+    """The subcommands a CLI group registers, read off the parser it builds."""
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    module.register(parser.add_subparsers())
+    for action in parser._actions:
+        if not isinstance(action, argparse._SubParsersAction):
+            continue
+        for group in action.choices.values():
+            for nested in group._actions:
+                if isinstance(nested, argparse._SubParsersAction):
+                    return list(nested.choices)
+    return []
+
+
 def _frontmatter(path: Path) -> dict:
     match = FRONTMATTER.match(path.read_text(encoding="utf-8"))
     if not match:
@@ -101,6 +117,32 @@ class Skills(unittest.TestCase):
                 body = path.read_text(encoding="utf-8")
                 if "wb.py" in body:
                     self.assertIn("${CLAUDE_PLUGIN_ROOT}", body)
+
+    def test_every_command_a_skill_names_exists(self) -> None:
+        """A SKILL.md is an instruction an agent follows, not a document a
+        person may or may not read, so a command that has been renamed or
+        removed does not merely mislead -- it sends the session somewhere.
+
+        Three skills drifted from the CLI unnoticed because nothing compared
+        them.
+        """
+        import sys
+
+        sys.path.insert(0, str(ROOT / "lib"))
+        import wb
+
+        groups = {name: set(_actions(module)) for name, module in wb.GROUPS.items()}
+        quoted = re.compile(r"`(?:wb )?(" + "|".join(groups) + r")(?: ([a-z-]+))?[^`]*`")
+
+        for path in _skills():
+            body = path.read_text(encoding="utf-8")
+            for group, action in quoted.findall(body):
+                with self.subTest(skill=path.parent.name, command=f"{group} {action}".strip()):
+                    if not action or not groups[group]:
+                        continue  # a group with no subcommands, or named on its own
+                    self.assertIn(
+                        action, groups[group], f"{path.parent.name} names '{group} {action}', which does not exist"
+                    )
 
     def test_no_skill_composes_a_tracker_query(self) -> None:
         """The whole point of the closed CLI surface."""

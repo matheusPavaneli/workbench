@@ -2,16 +2,23 @@
   "name": "workbench",
   "owner": { "name": "matheusPavaneli", "url": "https://github.com/matheusPavaneli" },
   "metadata": {
-    "description": "Ticket-to-PR development workflow skills with pluggable issue trackers.",
-    "version": "0.1.0"
+    "description": "Ticket-to-PR development workflow skills. Jira, Azure DevOps and GitHub Issues, or a backlog in the repo when there is no tracker at all.",
+    "version": "0.2.0"
   },
   "plugins": [
     {
       "name": "workbench",
       "source": "./",
-      "description": "Nine skills covering the path from a ticket to a pull request: triage-task, plan-change, implement-change, review-diff, write-commit, draft-pr, address-review, plus frame-product and trace-incident for work that starts without a ticket. Scripts distil tracker payloads and enforce policy; prompts stay short.",
+      "description": "Ten skills covering the path from a ticket to a pull request: triage-task, plan-change, implement-change, review-diff, write-commit, draft-pr, address-review, write-handover for the people who are not engineers, plus frame-product and trace-incident for work that starts from an idea or a symptom instead. Plans carry file:line citations that a script reopens and checks; implementation is held to the file list the plan declared. Works against Jira, Azure DevOps and GitHub Issues, or with no tracker at all. Scripts distil tracker payloads and enforce policy; prompts stay short.",
       "category": "workflow",
-      "keywords": ["jira", "azure-devops", "planning", "code-review", "pull-request"]
+      "keywords": [
+        "jira",
+        "azure-devops",
+        "github-issues",
+        "planning",
+        "code-review",
+        "pull-request"
+      ]
     }
   ]
 }

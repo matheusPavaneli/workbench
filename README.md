@@ -193,9 +193,9 @@ on a plan whose audit did not pass.
 wb doctor  everything that has to be true, in one pass
 wb status  [KEY] | --stats     where work stands, and what to run next
 wb ctx     show | list | add | use | test
-wb task    list | get | new
+wb task    list | get | new | done
 wb repo    profile | zones
-wb sdd     audit | get | render | handover | gates
+wb sdd     audit [--rebaseline] | get | render | handover | gates
 wb flow    show | start | carry | set
 wb impl    check | verify
 wb review  context | gates

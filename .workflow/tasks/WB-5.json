@@ -2,10 +2,10 @@
   "key": "WB-5",
   "title": "wb doctor",
   "type": "chore",
-  "status": "open",
+  "status": "done",
   "desc": "One pass over everything that has to be true.",
   "created": "2026-08-17T18:37:29Z",
-  "updated": "2026-08-17T18:37:29Z",
+  "updated": "2026-08-17T19:30:35Z",
   "comments": [],
   "linked": []
 }

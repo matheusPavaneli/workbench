@@ -156,6 +156,61 @@ class Capabilities(LocalBase):
         with self.assertRaises(NotFoundError):
             _ = self.provider.auth
 
+class Closing(LocalBase):
+    """A backlog that can only grow is not a backlog.
+
+    Four statuses were defined and only one was ever written, so every finished
+    ticket still read open: the listing showed work that had shipped and the
+    stats counted it as outstanding.
+    """
+
+    def test_closing_a_task_removes_it_from_the_listing(self) -> None:
+        self.make("first")
+        self.make("second")
+        local.set_status("WB-1", local.DONE)
+        self.assertEqual(["WB-2"], [row["key"] for row in self.provider.list_tasks(20)])
+
+    def test_it_reports_the_status_it_moved_from(self) -> None:
+        """So a no-op is visible rather than looking like a change."""
+        self.make("first")
+        self.assertEqual(local.OPEN, local.set_status("WB-1", local.DONE)[0])
+        self.assertEqual(local.DONE, local.set_status("WB-1", local.DONE)[0])
+
+    def test_an_unknown_status_is_refused_rather_than_stored(self) -> None:
+        self.make("first")
+        with self.assertRaises(WbError):
+            local.set_status("WB-1", "shipped")
+        self.assertEqual(local.OPEN, self.provider.fetch_task("WB-1").status)
+
+    def test_a_missing_task_is_refused_naming_the_ones_that_exist(self) -> None:
+        self.make("first")
+        with self.assertRaises(NotFoundError) as caught:
+            local.set_status("WB-9", local.DONE)
+        self.assertIn("WB-1", " ".join(caught.exception.fix))
+
+    def test_the_stamp_moves_so_the_listing_order_follows(self) -> None:
+        self.make("first")
+        before = self.provider.fetch_task("WB-1").updated
+        local.set_status("WB-1", "blocked")
+        self.assertNotEqual("", self.provider.fetch_task("WB-1").updated)
+        self.assertGreaterEqual(self.provider.fetch_task("WB-1").updated, before)
+
+    def test_closing_a_task_keeps_everything_else_in_it(self) -> None:
+        """Closing a ticket must not be a way to lose its description."""
+        self.make("first", desc="the detail that matters", kind="bug")
+        local.set_status("WB-1", local.DONE)
+        task = self.provider.fetch_task("WB-1")
+        self.assertEqual("the detail that matters", task.desc)
+        self.assertEqual("bug", task.type)
+        self.assertEqual("first", task.title)
+
+    def test_every_defined_status_can_actually_be_reached(self) -> None:
+        self.make("first")
+        for status in local.STATUSES:
+            with self.subTest(status=status):
+                local.set_status("WB-1", status)
+                self.assertEqual(status, self.provider.fetch_task("WB-1").status)
+
 
 if __name__ == "__main__":
     unittest.main()

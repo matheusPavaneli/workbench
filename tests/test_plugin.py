@@ -125,6 +125,45 @@ class Manifests(unittest.TestCase):
             source = (ROOT / entry["source"]).resolve()
             self.assertTrue((source / ".claude-plugin" / "plugin.json").is_file())
 
+    def test_the_listing_names_every_skill_that_ships(self) -> None:
+        """The listing is the only text most people read before installing.
+
+        It claimed nine skills and named nine while the package shipped ten,
+        and nothing noticed, because nothing was looking. A count in prose
+        drifts the moment a skill is added; a check against the directory tree
+        does not.
+        """
+        marketplace = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
+        described = " ".join(entry["description"] for entry in marketplace["plugins"])
+        for path in _skills():
+            with self.subTest(skill=path.parent.name):
+                self.assertIn(path.parent.name, described, f"{path.parent.name} is not in the marketplace listing")
+
+    def test_every_declared_version_agrees_with_the_package(self) -> None:
+        """A version copied by hand is a version nobody remembers to copy.
+
+        There were four: the package, both manifests and the outbound user
+        agent. The user agent had already fallen two releases behind without
+        anything noticing, so the package is now the source and the rest are
+        checked against it.
+        """
+        from workbench import __version__
+
+        plugin = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        marketplace = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
+        self.assertEqual(__version__, plugin["version"])
+        self.assertEqual(__version__, marketplace["metadata"]["version"])
+
+    def test_the_user_agent_carries_the_package_version(self) -> None:
+        from workbench import __version__, http
+
+        self.assertIn(__version__, http.USER_AGENT)
+
+    def test_the_version_is_a_real_release_number(self) -> None:
+        from workbench import __version__
+
+        self.assertRegex(__version__, r"^\d+\.\d+\.\d+$")
+
     def test_shared_references_exist_where_skills_point(self) -> None:
         pattern = re.compile(r"\$\{CLAUDE_PLUGIN_ROOT\}/([\w./-]+\.md)")
         for path in _skills():

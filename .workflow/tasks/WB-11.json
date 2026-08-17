@@ -1,0 +1,11 @@
+{
+  "key": "WB-11",
+  "title": "marketplace manifest is stale and undercounts the skills",
+  "type": "chore",
+  "status": "open",
+  "desc": "marketplace.json says 'Nine skills' and lists nine by name; there are ten (write-handover is missing). Both manifests still read 0.1.0 after four new commands and two new providers, and neither mentions GitHub Issues or the no-tracker path. Nothing asserts any of this, so it drifted silently.",
+  "created": "2026-08-17T19:03:02Z",
+  "updated": "2026-08-17T19:03:02Z",
+  "comments": [],
+  "linked": []
+}

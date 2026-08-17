@@ -1,9 +1,12 @@
 {
   "name": "workbench",
-  "owner": { "name": "matheusPavaneli", "url": "https://github.com/matheusPavaneli" },
+  "owner": {
+    "name": "matheusPavaneli",
+    "url": "https://github.com/matheusPavaneli"
+  },
   "metadata": {
     "description": "Ticket-to-PR development workflow skills. Jira, Azure DevOps and GitHub Issues, or a backlog in the repo when there is no tracker at all.",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "plugins": [
     {

@@ -18,6 +18,8 @@ themselves. Refusing is cheap; running an unexpected command is not.
 
 from __future__ import annotations
 
+import os
+import re
 import shlex
 import subprocess
 import time
@@ -29,6 +31,20 @@ from .errors import UsageError
 TIMEOUT_SECONDS = 600
 OUTPUT_HEAD = 1500
 OUTPUT_TAIL = 2500
+MAX_ENV_VALUE = 4096
+
+_ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+# Variables that change how the interpreter or linker loads code. Setting one
+# of these makes a verify step run something the command allowlist never sees,
+# which is the one thing this boundary exists to prevent.
+FORBIDDEN_ENV = frozenset(
+    {
+        "LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT", "DYLD_INSERT_LIBRARIES", "DYLD_LIBRARY_PATH",
+        "PATH", "PYTHONSTARTUP", "PYTHONEXECUTABLE", "PYTHONHOME", "NODE_OPTIONS", "BASH_ENV", "ENV",
+        "PERL5OPT", "RUBYOPT", "GIT_SSH_COMMAND", "GIT_EXTERNAL_DIFF",
+    }
+)
 
 # Runners a verification step may invoke. Deliberately conservative: adding an
 # entry is a decision, and the fallback (run it yourself) always works.
@@ -80,6 +96,7 @@ class Evidence:
     key: str
     results: list[Result] = field(default_factory=list)
     refused: list[tuple[str, str]] = field(default_factory=list)
+    env: dict = field(default_factory=dict)
 
     @property
     def passed(self) -> bool:
@@ -92,6 +109,7 @@ class Evidence:
             "verdict": "pass" if self.passed else "fail",
             "results": [r.to_dict() for r in self.results],
             "refused": [{"command": c, "reason": r} for c, r in self.refused],
+            "env": sorted(self.env),
         }
 
 
@@ -126,21 +144,68 @@ def check(command: str) -> str | None:
     return None
 
 
-def run(key: str, commands: list[str], root: Path) -> Evidence:
+def run(key: str, commands: list[str], root: Path, env: dict | None = None) -> Evidence:
     evidence = Evidence(key=key)
+    overrides, rejected = resolve_env(env)
+    evidence.env = overrides
+    evidence.refused.extend(rejected)
 
     for command in commands:
         refusal = check(command)
         if refusal:
             evidence.refused.append((command, refusal))
             continue
-        evidence.results.append(_execute(command, root))
+        evidence.results.append(_execute(command, root, overrides))
 
     return evidence
 
 
-def _execute(command: str, root: Path) -> Result:
+def resolve_env(env: dict | None) -> tuple[dict, list]:
+    """Split a plan's ``env`` block into what may be applied and what may not.
+
+    Shell is refused outright, so ``PYTHONPATH=lib python -m unittest`` cannot
+    be expressed as a command -- which meant a repo whose tests need a variable
+    could not be verified at all. The variables are therefore declared as data
+    in the audited plan, where they are reviewed alongside the commands.
+
+    Nothing here expands, interpolates or reads a file: a value is a literal
+    string. Variables that change how the process itself is loaded are refused,
+    because those turn a verify step into arbitrary code execution by a route
+    the command allowlist cannot see.
+    """
+    if not env:
+        return {}, []
+    if not isinstance(env, dict):
+        return {}, [("env", "must be an object of NAME: value pairs")]
+
+    applied: dict = {}
+    rejected: list = []
+
+    for raw_name, raw_value in env.items():
+        name = str(raw_name)
+        if name.upper() in FORBIDDEN_ENV:
+            rejected.append((f"env {name}", "changes how the process loads code; not applied"))
+            continue
+        if not _ENV_NAME.match(name):
+            rejected.append((f"env {name}", "not a plain variable name"))
+            continue
+        if isinstance(raw_value, (dict, list)):
+            rejected.append((f"env {name}", "value must be a string"))
+            continue
+        value = str(raw_value)
+        if len(value) > MAX_ENV_VALUE:
+            rejected.append((f"env {name}", f"value longer than {MAX_ENV_VALUE} characters"))
+            continue
+        applied[name] = value
+
+    return applied, rejected
+
+
+def _execute(command: str, root: Path, env: dict | None = None) -> Result:
     started = time.monotonic()
+    environment = None
+    if env:
+        environment = {**os.environ, **env}
     try:
         completed = subprocess.run(
             shlex.split(command),
@@ -149,6 +214,7 @@ def _execute(command: str, root: Path) -> Result:
             text=True,
             timeout=TIMEOUT_SECONDS,
             check=False,
+            env=environment,
         )
         output = (completed.stdout or "") + (completed.stderr or "")
         exit_code = completed.returncode
@@ -179,6 +245,11 @@ def render(evidence: Evidence) -> str:
     lines = [f"# {evidence.key} — verification evidence", ""]
     lines.append(f"**Verdict:** {'pass' if evidence.passed else 'fail'}")
     lines.append("")
+
+    if evidence.env:
+        # Names only. A value here is as likely to be a connection string as a
+        # search path, and evidence.md is written to be pasted into a PR.
+        lines += [f"**Environment:** {', '.join(sorted(evidence.env))}", ""]
 
     for result in evidence.results:
         status = "pass" if result.ok else f"FAIL (exit {result.exit_code})"

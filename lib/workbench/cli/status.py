@@ -13,7 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from .. import status as status_lib
+from .. import events, status as status_lib
 from ..errors import UsageError
 
 ACTIONS: list[str] = []
@@ -37,11 +37,22 @@ def run(args: argparse.Namespace) -> int:
 
 
 def _stats(args: argparse.Namespace) -> int:
-    summary = status_lib.summarise([status_lib.read(key) for key in status_lib.keys()])
+    """Two halves that answer different questions.
+
+    The snapshot says where work is stuck now; the history says where this repo
+    keeps losing time. A stage that always passes on the second attempt looks
+    fine in the snapshot and is the most expensive thing in the log.
+    """
+    snapshot = status_lib.summarise([status_lib.read(key) for key in status_lib.keys()])
+    history = events.summarise(events.read())
+
     if args.json:
-        print(json.dumps(summary, indent=2))
+        print(json.dumps({"snapshot": snapshot, "history": history}, indent=2))
         return 0
-    print(status_lib.render_summary(summary))
+
+    print(status_lib.render_summary(snapshot))
+    print()
+    print(events.render(history))
     return 0
 
 

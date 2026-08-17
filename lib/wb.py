@@ -16,10 +16,12 @@ from __future__ import annotations
 import argparse
 import io
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from workbench import events  # noqa: E402
 from workbench import redact  # noqa: E402
 from workbench.cli import ctx as ctx_cli  # noqa: E402
 from workbench.cli import commit as commit_cli  # noqa: E402
@@ -85,13 +87,40 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _timed(args: argparse.Namespace) -> int:
+    """Run the command and record what happened, without ever changing it.
+
+    A raised WbError is logged with its own exit code and re-raised, so a
+    failure counts in the history rather than only a success.
+    """
+    started = time.monotonic()
+    code = 0
+    try:
+        code = GROUPS[args.group].run(args)
+        return code
+    except WbError as exc:
+        code = exc.code
+        raise
+    except BaseException:
+        code = EXIT_USAGE
+        raise
+    finally:
+        events.record(
+            args.group,
+            getattr(args, "action", "") or "",
+            getattr(args, "key", None),
+            code,
+            int((time.monotonic() - started) * 1000),
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     try:
         args = parser.parse_args(argv if argv is not None else sys.argv[1:])
         if not args.group:
             raise UsageError("wb needs a command group", fix=[f"groups: {', '.join(sorted(GROUPS))}"])
-        return GROUPS[args.group].run(args)
+        return _timed(args)
 
     except WbError as exc:
         print(redact.scrub(exc.render()), file=sys.stderr)

@@ -1,0 +1,11 @@
+{
+  "key": "WB-6",
+  "title": "Mechanically settled review gates",
+  "type": "feature",
+  "status": "open",
+  "desc": "Secrets and swallowed errors as file:line findings.",
+  "created": "2026-08-17T18:37:29Z",
+  "updated": "2026-08-17T18:37:29Z",
+  "comments": [],
+  "linked": []
+}

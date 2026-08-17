@@ -1,9 +1,9 @@
 # workbench
 
 Ticket-to-PR development workflow skills for Claude Code, with pluggable issue
-trackers (Jira Cloud, Azure DevOps).
+trackers (Jira Cloud, Azure DevOps, GitHub Issues, or a backlog in the repo).
 
-Ten skills, one CLI, 196 tests, no third-party dependencies.
+Ten skills, one CLI, 293 tests, no third-party dependencies.
 
 ## Two design rules
 
@@ -28,7 +28,24 @@ checks and writes artifacts; git operations stay with the user.
 /plugin install workbench@workbench
 ```
 
-Then configure one context per account (once per machine):
+`wb` is `python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py"`. Requires Python 3.9+.
+
+### With no tracker
+
+Nine of the ten skills never touch a tracker, so needing one to reach them was
+a cost with nothing behind it. Commit four lines and a clone works with no
+per-machine setup at all:
+
+```json
+{ "provider": "local", "preset": "solo-saas" }
+```
+
+in `.workflow/config.json`. Then `wb task new "the thing to do" --type bug`
+writes a task under `.workflow/tasks/`, and everything downstream is unchanged.
+
+### With a tracker
+
+One context per account, once per machine:
 
 ```sh
 wb ctx add personal --provider jira \
@@ -37,10 +54,16 @@ wb ctx add personal --provider jira \
 
 export JIRA_TOKEN_ME=...        # the token stays in the environment
 wb ctx use personal
-wb ctx test
+wb doctor
 ```
 
-`wb` is `python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py"`. Requires Python 3.9+.
+GitHub needs less: `wb ctx add oss --provider github` reads `owner/repo` from
+the checkout's remote and borrows the token `gh` already holds.
+
+`wb doctor` checks the whole chain in one pass — Python, git, the resolved
+context, the credential, the tracker, the commit identity, the branching flow,
+the test runner, and whether `.workflow/` is about to be committed — and prints
+the exact fix for anything wrong.
 
 ## The skills
 
@@ -64,6 +87,34 @@ conversation twice.
 
 Three entry points: a ticket (`triage-task`), an idea (`frame-product`), a
 symptom (`trace-incident`).
+
+### Picking work back up
+
+Chaining through files only pays if a new session can read the thread back.
+
+```
+$ wb status ABC-123
+ABC-123  Coupon applied after the charge  [bug, jira]
+  triage    ok    jira In Progress
+  plan      ok    3 file(s), 4 step(s), 2 verify
+  audit     ok    6 citation(s) verified
+  scope     part  2 of 3 planned file(s) changed
+  verify    --
+  handover  --    required for bug work
+  next: wb impl verify ABC-123
+```
+
+`wb status` with no key lists everything in flight; `--stats` aggregates across
+tickets to show which stage work is piling up at.
+
+### Rigour proportional to risk
+
+A seven-section plan for a one-line change costs more than the change, and a
+gate that does not pay for itself is one people route around. `sdd audit`
+computes a **tier** from the plan's own file list: at most two files, no
+critical zone and no bug/support ticket waives `steps` and `product`. Citations,
+the file list, `verify` and `rollback` are required at every tier, and the tier
+is computed rather than declared, so a plan cannot ask for a lower bar.
 
 `write-handover` exists because a support ticket has an audience that is not
 engineering. A QA lead has to validate the fix without reading the diff, and the

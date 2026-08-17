@@ -117,5 +117,76 @@ class Reporting(unittest.TestCase):
         self.assertIn("secret", finding.gate)
 
 
+
+class SecretsNeverTravel(unittest.TestCase):
+    """A finding outlives the terminal it was printed to.
+
+    It lands in evidence.md, in --json output and sometimes in a PR comment.
+    Masking at the stdout wrapper protects the terminal and nothing else, so
+    the one place the tool deliberately captures a credential masks it there.
+    """
+
+    def test_the_value_is_masked_in_the_finding_itself(self) -> None:
+        finding = _gates("src/a.py", 'API_KEY = "abcd1234abcd1234abcd"')[0]
+        self.assertNotIn("abcd1234abcd1234abcd", finding.quote)
+
+    def test_the_location_survives_so_it_is_still_actionable(self) -> None:
+        finding = _gates("src/a.py", 'API_KEY = "abcd1234abcd1234abcd"')[0]
+        self.assertEqual("src/a.py", finding.file)
+        self.assertEqual(1, finding.line)
+
+    def test_the_serialised_form_carries_no_value_either(self) -> None:
+        finding = _gates("src/a.py", 'API_KEY = "abcd1234abcd1234abcd"')[0]
+        self.assertNotIn("abcd1234abcd1234abcd", str(finding.to_dict()))
+
+
+class Dependencies(unittest.TestCase):
+    def test_an_added_npm_dependency_is_reported(self) -> None:
+        findings = review.dependency_findings(_added("package.json", '    "left-pad": "^1.3.0",'))
+        self.assertEqual(1, len(findings))
+        self.assertIn("dependency", findings[0].gate)
+
+    def test_an_added_python_requirement_is_reported(self) -> None:
+        self.assertTrue(review.dependency_findings(_added("requirements.txt", "requests==2.31.0")))
+
+    def test_a_go_module_line_is_reported(self) -> None:
+        self.assertTrue(review.dependency_findings(_added("go.mod", "\tgithub.com/pkg/errors v0.9.1")))
+
+    def test_a_lockfile_is_not_a_choice_anyone_made(self) -> None:
+        """A transitive bump would bury the one line somebody did choose."""
+        self.assertEqual([], review.dependency_findings(_added("package-lock.json", '    "left-pad": "1.3.0",')))
+
+    def test_an_unrelated_manifest_line_is_not_a_dependency(self) -> None:
+        self.assertEqual([], review.dependency_findings(_added("package.json", '  "scripts": {')))
+
+    def test_an_ordinary_source_file_is_not_scanned(self) -> None:
+        self.assertEqual([], review.dependency_findings(_added("src/a.py", "requests==2.31.0")))
+
+class StatedDecisions(unittest.TestCase):
+    """A gate with no way out is a gate people route around.
+
+    A swallow that says why it swallows is a decision someone made and wrote
+    down. The gate is for the unstated ones.
+    """
+
+    def test_a_commented_swallow_is_a_stated_decision(self) -> None:
+        body = """
+    try:
+        g()
+    except OSError:
+        pass  # deliberate: a lost statistic is not a failed command
+"""
+        self.assertEqual([], _gates("src/a.py", body))
+
+    def test_a_bare_swallow_is_still_caught(self) -> None:
+        body = """
+    try:
+        g()
+    except OSError:
+        pass
+"""
+        self.assertTrue(_gates("src/a.py", body))
+
+
 if __name__ == "__main__":
     unittest.main()

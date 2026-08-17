@@ -1,0 +1,81 @@
+{
+  "id": "10042",
+  "key": "ABC-123",
+  "fields": {
+    "summary": "Checkout fails when the coupon is expired",
+    "updated": "2026-08-14T09:12:33.000+0000",
+    "status": { "name": "In Review", "statusCategory": { "key": "indeterminate" } },
+    "issuetype": { "name": "Bug" },
+    "assignee": { "displayName": "Ana Ruiz", "emailAddress": "ana@acme.com" },
+    "description": {
+      "type": "doc",
+      "version": 1,
+      "content": [
+        {
+          "type": "paragraph",
+          "content": [
+            { "type": "text", "text": "Applying an expired coupon returns a " },
+            { "type": "text", "text": "500", "marks": [{ "type": "code" }] },
+            { "type": "text", "text": " instead of a validation error." }
+          ]
+        },
+        {
+          "type": "bulletList",
+          "content": [
+            {
+              "type": "listItem",
+              "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Only on the v2 endpoint" }] }]
+            },
+            {
+              "type": "listItem",
+              "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Reported by " }, { "type": "mention", "attrs": { "text": "@Bo Lin" } }] }]
+            }
+          ]
+        },
+        {
+          "type": "codeBlock",
+          "attrs": { "language": "python" },
+          "content": [{ "type": "text", "text": "raise CouponError(coupon.code)" }]
+        },
+        { "type": "unknownFutureNode", "content": [{ "type": "text", "text": "still readable" }] }
+      ]
+    },
+    "parent": {
+      "key": "ABC-100",
+      "fields": { "summary": "Coupon engine rewrite", "status": { "name": "In Progress" } }
+    },
+    "subtasks": [
+      { "key": "ABC-124", "fields": { "summary": "Add regression test", "status": { "name": "To Do" } } }
+    ],
+    "issuelinks": [
+      {
+        "type": { "name": "Blocks", "inward": "is blocked by", "outward": "blocks" },
+        "inwardIssue": {
+          "key": "ABC-98",
+          "fields": { "summary": "Coupon service migration", "status": { "name": "Done" } }
+        }
+      },
+      {
+        "type": { "name": "Blocks", "inward": "is blocked by", "outward": "blocks" },
+        "outwardIssue": {
+          "key": "ABC-150",
+          "fields": { "summary": "Release 4.2", "status": { "name": "To Do" } }
+        }
+      },
+      {
+        "type": { "name": "Relates", "inward": "relates to", "outward": "relates to" },
+        "outwardIssue": {
+          "key": "ABC-77",
+          "fields": { "summary": "Old coupon spike", "status": { "name": "Done" } }
+        }
+      },
+      {
+        "type": { "name": "Mitigates", "inward": "is mitigated by", "outward": "mitigates" },
+        "outwardIssue": {
+          "key": "ABC-201",
+          "fields": { "summary": "Custom link type", "status": { "name": "To Do" } }
+        }
+      }
+    ]
+  }
+}

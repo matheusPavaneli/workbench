@@ -1,0 +1,21 @@
+{
+  "isLast": true,
+  "issues": [
+    {
+      "key": "ABC-123",
+      "fields": {
+        "summary": "Checkout fails when the coupon is expired",
+        "status": { "name": "In Review" },
+        "updated": "2026-08-14T09:12:33.000+0000"
+      }
+    },
+    {
+      "key": "ABC-131",
+      "fields": {
+        "summary": "Rate limit the coupon endpoint",
+        "status": { "name": "To Do" },
+        "updated": "2026-08-11T15:02:00.000+0000"
+      }
+    }
+  ]
+}

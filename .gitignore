@@ -1,0 +1,7 @@
+# Workflow artifacts are per-checkout scratch, except the context binding.
+.workflow/*
+!.workflow/config.json
+
+__pycache__/
+*.py[cod]
+.pytest_cache/

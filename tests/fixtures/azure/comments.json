@@ -1,0 +1,27 @@
+{
+  "totalCount": 42,
+  "count": 2,
+  "comments": [
+    {
+      "id": 9001,
+      "createdDate": "2026-08-14T08:00:00Z",
+      "createdBy": {
+        "displayName": "Bo Lin",
+        "uniqueName": "bo@acme.com"
+      },
+      "text": "Reproduced on staging with coupon SUMMER24. Fails when qty <5.",
+      "format": "markdown"
+    },
+    {
+      "id": 9002,
+      "createdDate": "2026-08-13T17:22:00Z",
+      "createdBy": {
+        "displayName": "Ana Ruiz",
+        "uniqueName": "ana@acme.com"
+      },
+      "text": "Root cause is in the validator, not the endpoint.",
+      "format": "html",
+      "renderedText": "<p>Root cause is in the validator, not the endpoint.</p>"
+    }
+  ]
+}

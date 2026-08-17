@@ -1,0 +1,47 @@
+{
+  "count": 6,
+  "value": [
+    {
+      "id": 4800,
+      "fields": {
+        "System.Title": "Coupon engine rewrite",
+        "System.State": "Active"
+      }
+    },
+    {
+      "id": 4830,
+      "fields": {
+        "System.Title": "Add regression test",
+        "System.State": "New"
+      }
+    },
+    {
+      "id": 4700,
+      "fields": {
+        "System.Title": "Coupon service migration",
+        "System.State": "Closed"
+      }
+    },
+    {
+      "id": 4655,
+      "fields": {
+        "System.Title": "Old coupon spike",
+        "System.State": "Closed"
+      }
+    },
+    {
+      "id": 4999,
+      "fields": {
+        "System.Title": "Custom link type",
+        "System.State": "New"
+      }
+    },
+    {
+      "id": 7001,
+      "fields": {
+        "System.Title": "Cross-org dependency",
+        "System.State": "Active"
+      }
+    }
+  ]
+}

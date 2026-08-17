@@ -1,0 +1,31 @@
+{
+  "startAt": 0,
+  "maxResults": 5,
+  "total": 42,
+  "comments": [
+    {
+      "id": "9001",
+      "created": "2026-08-14T08:00:00.000+0000",
+      "author": { "displayName": "Bo Lin" },
+      "body": {
+        "type": "doc",
+        "version": 1,
+        "content": [
+          { "type": "paragraph", "content": [{ "type": "text", "text": "Reproduced on staging with coupon SUMMER24." }] }
+        ]
+      }
+    },
+    {
+      "id": "9002",
+      "created": "2026-08-13T17:22:00.000+0000",
+      "author": { "displayName": "Ana Ruiz" },
+      "body": {
+        "type": "doc",
+        "version": 1,
+        "content": [
+          { "type": "paragraph", "content": [{ "type": "text", "text": "Root cause is in the validator, not the endpoint." }] }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "name": "workbench",
+  "version": "0.1.0",
+  "description": "Ticket-to-PR development workflow: triage, plan with verified citations, implement inside the plan, review, commit, PR. Pluggable issue trackers (Jira, Azure DevOps).",
+  "author": { "name": "workbench" },
+  "homepage": "https://github.com/USER/workbench",
+  "repository": "https://github.com/USER/workbench",
+  "license": "MIT",
+  "keywords": [
+    "jira",
+    "azure-devops",
+    "workflow",
+    "planning",
+    "code-review",
+    "pull-request",
+    "incident-response"
+  ]
+}

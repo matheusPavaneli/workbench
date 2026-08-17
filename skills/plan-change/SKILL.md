@@ -1,0 +1,60 @@
+---
+name: plan-change
+description: Turns .workflow/<KEY>/triage.json and the code into an audited implementation spec at .workflow/<KEY>/sdd.json. Use before writing code for a ticket, bug fix or feature.
+---
+
+# plan-change
+
+```
+python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
+```
+
+## Steps
+
+1. **Load the ticket.** `sdd get` is not it — read `.workflow/<KEY>/triage.json`.
+   No triage yet? Run `triage-task` first, or work from what the user stated and
+   record that in `questions`.
+
+2. **Get the bar.** `repo profile`. It prints the preset, the repo's own
+   conventions, and the gates that apply. Follow the conventions it reports;
+   do not introduce a second test runner or package manager.
+
+3. **Pick a persona** from `references/personas.md`. It shapes what counts as
+   done, not the format.
+
+4. **Confirm everything in the code.** Assume nothing. Every claim about this
+   codebase needs a `file:line` and the text of that line, because the audit in
+   step 7 reopens each one. A claim you cannot cite is a question, not a fact —
+   put it in `questions`. Search with the strongest tool available and quote
+   only lines you actually read: `${CLAUDE_PLUGIN_ROOT}/shared/code-search.md`.
+
+5. **Find the raised bar.** `repo zones <path>...` with every file you plan to
+   touch. Billing, auth, user data, migrations and secrets are held to a higher
+   standard whatever the preset says.
+
+6. **Write `.workflow/<KEY>/sdd.json`.** Shape and required fields:
+   `references/sdd.md`.
+
+7. **Audit.** `sdd audit <KEY>`. It must pass. On failure, fix the plan — never
+   the citation to match a wrong claim, and never proceed to implementation.
+   Then `sdd render <KEY>` for the human-readable copy.
+
+   The audit checks the plan against the code **as it is now**, before any of it
+   changes. Once implemented, the cited lines have moved and re-running it will
+   report `moved` — that is expected, not a regression. Re-audit only after
+   editing the plan.
+
+## Rules
+
+- **Smallest change that achieves the objective.** Fixes and improvements to
+  existing behaviour touch as little as possible. No refactor riding along, no
+  abstraction for a second case that does not exist yet, no dependency that
+  replaces code already in the repo.
+- **List every file before touching any.** `implement-change` stops on a file
+  that is not in the list, so an incomplete list is a plan that fails to run.
+- **Verification is commands, not intentions.** `verify` holds the exact lines
+  that will be executed, using this repo's runner.
+- **An open question is output.** A plan that guesses reads the same as a plan
+  that knows; say which one it is.
+
+Next: `implement-change` reads `sdd get <KEY> --section files|steps`.

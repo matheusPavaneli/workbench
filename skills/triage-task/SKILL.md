@@ -1,0 +1,49 @@
+---
+name: triage-task
+description: Reads a ticket from Jira or Azure DevOps and writes .workflow/<KEY>/triage.json. Use when asked what to work on, to pick up a ticket by key, or to understand its description, comments and blocking links.
+---
+
+# triage-task
+
+All tracker access goes through one command. Never construct JQL, WIQL, URLs or
+field lists — the provider builds them from the resolved context.
+
+```
+python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
+```
+
+## Steps
+
+1. **No key given** — `task list`. Four columns, newest first. Show them and ask
+   which one, unless the request already names one.
+
+2. **Read it** — `task get <KEY>`. Writes `.workflow/<KEY>/triage.json` and
+   prints it. Depth defaults to 1: the task, plus one line per linked item.
+   - Use `--depth 0` when the ticket is self-contained and links do not matter.
+   - Use `--depth 2` only when a blocker or a parent decides the approach. It
+     fetches bodies for blocking and hierarchy links, never for `relates`.
+
+3. **Go deeper only where it pays** — the `_expand` list names what exists but
+   was not included. Pass a handle back **verbatim**:
+   `task get <KEY> --expand comments:all`. Do not compose handles; anything not
+   in `_expand` is rejected.
+
+4. **Check `_unmapped` and `_truncated`** if present. `_unmapped` means the
+   tracker had a link type or field this version does not model — say so rather
+   than guessing what it meant. `_truncated` means content was capped, and
+   names the handle that would retrieve it.
+
+5. **Report gaps before planning.** If the ticket lacks acceptance criteria, a
+   reproduction, or a decision someone else owns, list those questions plainly.
+   A blocked-by link that is not Done is a gap, not a detail. Write them to
+   `.workflow/<KEY>/questions.md` and say the ticket is not ready to plan.
+
+## Rules
+
+- Report what the ticket says, not what it probably means. Missing information
+  is a finding to report, never a blank to fill.
+- Quote the `key` in every claim so later steps can check it.
+- One tracker per context, resolved automatically. If `wb` reports no context,
+  relay its fix lines — do not guess a project or a URL.
+
+Next: `plan-change` reads the artifact this produced.

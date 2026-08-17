@@ -1,0 +1,21 @@
+{
+  "count": 2,
+  "value": [
+    {
+      "id": 4821,
+      "fields": {
+        "System.Title": "Checkout fails when the coupon is expired",
+        "System.State": "Active",
+        "System.ChangedDate": "2026-08-14T09:12:33.62Z"
+      }
+    },
+    {
+      "id": 4830,
+      "fields": {
+        "System.Title": "Add regression test",
+        "System.State": "New",
+        "System.ChangedDate": "2026-08-11T15:02:00.0Z"
+      }
+    }
+  ]
+}

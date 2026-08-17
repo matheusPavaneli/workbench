@@ -1,0 +1,8 @@
+{
+  "queryType": "flat",
+  "asOf": "2026-08-14T09:20:00Z",
+  "workItems": [
+    { "id": 4821, "url": "https://dev.azure.com/acme/_apis/wit/workItems/4821" },
+    { "id": 4830, "url": "https://dev.azure.com/acme/_apis/wit/workItems/4830" }
+  ]
+}

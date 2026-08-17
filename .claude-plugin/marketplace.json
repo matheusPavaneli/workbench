@@ -1,0 +1,17 @@
+{
+  "name": "workbench",
+  "owner": { "name": "workbench" },
+  "metadata": {
+    "description": "Ticket-to-PR development workflow skills with pluggable issue trackers.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "workbench",
+      "source": "./",
+      "description": "Nine skills covering the path from a ticket to a pull request: triage-task, plan-change, implement-change, review-diff, write-commit, draft-pr, address-review, plus frame-product and trace-incident for work that starts without a ticket. Scripts distil tracker payloads and enforce policy; prompts stay short.",
+      "category": "workflow",
+      "keywords": ["jira", "azure-devops", "planning", "code-review", "pull-request"]
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "id": 4821,
+  "rev": 12,
+  "fields": {
+    "System.Title": "Checkout fails when the coupon is expired",
+    "System.State": "Active",
+    "System.WorkItemType": "Bug",
+    "System.ChangedDate": "2026-08-14T09:12:33.62Z",
+    "System.AssignedTo": {
+      "displayName": "Ana Ruiz",
+      "uniqueName": "ana@acme.com"
+    },
+    "Microsoft.VSTS.TCM.ReproSteps": "<div>Applying an expired coupon returns a <code>500</code>.</div><ul><li>Only on the v2 endpoint</li><li>Reported by Bo Lin</li></ul><script>ignored()</script>"
+  },
+  "relations": [
+    {
+      "rel": "System.LinkTypes.Hierarchy-Reverse",
+      "url": "https://dev.azure.com/acme/_apis/wit/workItems/4800",
+      "attributes": {
+        "name": "Parent"
+      }
+    },
+    {
+      "rel": "System.LinkTypes.Hierarchy-Forward",
+      "url": "https://dev.azure.com/acme/_apis/wit/workItems/4830",
+      "attributes": {
+        "name": "Child"
+      }
+    },
+    {
+      "rel": "System.LinkTypes.Dependency-Reverse",
+      "url": "https://dev.azure.com/acme/_apis/wit/workItems/4700",
+      "attributes": {
+        "name": "Predecessor"
+      }
+    },
+    {
+      "rel": "System.LinkTypes.Related",
+      "url": "https://dev.azure.com/acme/_apis/wit/workItems/4655",
+      "attributes": {
+        "name": "Related"
+      }
+    },
+    {
+      "rel": "AttachedFile",
+      "url": "https://dev.azure.com/acme/_apis/wit/attachments/abc",
+      "attributes": {
+        "name": "trace.log"
+      }
+    },
+    {
+      "rel": "Hyperlink",
+      "url": "https://status.example.com/incident/9"
+    },
+    {
+      "rel": "System.LinkTypes.Custom-Forward",
+      "url": "https://dev.azure.com/acme/_apis/wit/workItems/4999",
+      "attributes": {
+        "name": "Mitigates"
+      }
+    },
+    {
+      "rel": "System.LinkTypes.Remote.Dependency-Reverse",
+      "url": "https://dev.azure.com/other/_apis/wit/workItems/7001",
+      "attributes": {
+        "name": "Consumes From"
+      }
+    }
+  ]
+}

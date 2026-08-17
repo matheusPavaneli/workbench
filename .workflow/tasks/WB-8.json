@@ -2,10 +2,10 @@
   "key": "WB-8",
   "title": "repo zones flags profile.py as user-data",
   "type": "bug",
-  "status": "open",
+  "status": "done",
   "desc": "The user-data zone pattern matches 'profile.py' by filename, so this repo's quality-preset profiler reads as user data and raises the bar for no reason. Found while planning WB-7.",
   "created": "2026-08-17T18:46:09Z",
-  "updated": "2026-08-17T18:46:09Z",
+  "updated": "2026-08-17T19:30:35Z",
   "comments": [],
   "linked": []
 }

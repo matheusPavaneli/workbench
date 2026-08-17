@@ -2,10 +2,10 @@
   "key": "WB-3",
   "title": "wb status: resume work across sessions",
   "type": "feature",
-  "status": "open",
+  "status": "done",
   "desc": "Read the pipeline back off .workflow/<KEY>/. See docs/status.md.",
   "created": "2026-08-17T18:37:27Z",
-  "updated": "2026-08-17T18:37:27Z",
+  "updated": "2026-08-17T19:30:34Z",
   "comments": [],
   "linked": []
 }

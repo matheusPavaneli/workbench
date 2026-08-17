@@ -2,10 +2,10 @@
   "key": "WB-4",
   "title": "Rigour tier proportional to risk",
   "type": "feature",
-  "status": "open",
+  "status": "done",
   "desc": "sdd.tier computes light/standard from the plan. Relates to WB-2.",
   "created": "2026-08-17T18:37:28Z",
-  "updated": "2026-08-17T18:37:28Z",
+  "updated": "2026-08-17T19:30:34Z",
   "comments": [],
   "linked": []
 }

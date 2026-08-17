@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 from .. import artifacts, audit as audit_lib, gitctx, profile as profile_lib, sdd as sdd_lib
-from ..errors import EXIT_AUDIT, UsageError
+from ..errors import EXIT_AUDIT, UsageError, WbError
 
 ACTIONS = ["audit", "get", "render", "handover", "gates"]
 
@@ -25,6 +25,11 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     check = actions.add_parser("audit", help="verify every citation and required section; exit 7 on failure")
     check.add_argument("key")
     check.add_argument("--json", action="store_true")
+    check.add_argument(
+        "--rebaseline",
+        action="store_true",
+        help="re-anchor the plan's citations to the current commit instead of the one already recorded",
+    )
 
     get = actions.add_parser("get", help="print one section, so consumers do not read the whole plan")
     get.add_argument("key")
@@ -46,12 +51,29 @@ def run(args: argparse.Namespace) -> int:
     return {"audit": _audit, "get": _get, "render": _render, "handover": _handover, "gates": _gates}[args.action](args)
 
 
+def _baseline(key: str, root: Path, *, rebaseline: bool) -> str | None:
+    """The commit this plan's citations are anchored to.
+
+    Recorded on the first audit and reused after, so re-auditing is stable for
+    the whole life of a plan however far implementation has gone. Without this
+    the second audit of a plan under way fails on every line already rewritten,
+    which is the one moment an author most needs to correct the plan.
+    """
+    if rebaseline:
+        return None  # start again from the current tree, strictly
+    try:
+        return str(artifacts.read_json(key, "audit.json").get("baseline") or "") or None
+    except WbError:
+        return None  # no previous audit: this plan is still being written
+
+
 def _audit(args: argparse.Namespace) -> int:
     key = artifacts.validate_key(args.key)
     doc = artifacts.read_json(key, "sdd.json")
     root = gitctx.repo_root(Path.cwd()) or Path.cwd()
 
-    report = audit_lib.run(doc, root)
+    baseline = _baseline(key, root, rebaseline=args.rebaseline)
+    report = audit_lib.run(doc, root, baseline)
     artifacts.write_json(key, "audit.json", report.to_dict())
 
     if args.json:
@@ -60,9 +82,17 @@ def _audit(args: argparse.Namespace) -> int:
 
     checked = len(report.findings)
     tier = f"{report.tier} tier ({report.tier_reason})"
+    drifted = [f for f in report.findings if f.verdict in (audit_lib.BASELINE, audit_lib.MOVED)]
     if report.passed:
         print(f"pass  {checked} citation(s) verified, structure complete")
         print(f"      {tier}")
+        for finding in drifted:
+            # Never folded into the pass count in silence: these no longer
+            # describe the code at the line the plan gives.
+            print(f"      {finding.verdict:<9} {finding.file}:{finding.line}  {finding.detail}")
+        if drifted:
+            print(f"      the plan is under way, so line numbers were not enforced; "
+                  f"re-anchor with: wb sdd audit {key} --rebaseline")
         if report.tier == sdd_lib.LIGHT:
             print(f"      waived: {', '.join(sdd_lib.LIGHT_WAIVES)}; citations, files, verify and rollback still apply")
         return 0

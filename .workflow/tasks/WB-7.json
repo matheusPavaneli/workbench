@@ -1,0 +1,11 @@
+{
+  "key": "WB-7",
+  "title": "doctor does not detect a unittest-only repo",
+  "type": "bug",
+  "status": "open",
+  "desc": "wb doctor reports 'no runner detected' in this repo, which runs python -m unittest. profile._conventions only looks for pytest.ini/tox.ini/vitest/jest markers, so a repo using the stdlib runner reads as having none. Effect: the check that exists to catch a missing runner cannot fire here.",
+  "created": "2026-08-17T18:45:47Z",
+  "updated": "2026-08-17T18:45:47Z",
+  "comments": [],
+  "linked": []
+}

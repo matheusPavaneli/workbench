@@ -53,6 +53,34 @@ is exactly the failure mode the evidence file exists to close.
 Adding a runner to the allowlist is a deliberate change. The fallback — the user
 runs it and reports back — always works.
 
+### Environment
+
+Shell is refused, so `PYTHONPATH=lib python -m unittest` cannot be written as a
+command -- which meant a repo whose tests need a variable could not be verified
+at all. This repo was one of them.
+
+Variables are therefore declared as data, in the audited plan, where they are
+reviewed alongside the commands:
+
+```json
+"verify": ["python -m unittest discover -s tests -q"],
+"verify_env": { "PYTHONPATH": "lib" }
+```
+
+Nothing is expanded, interpolated or read from a file: a value is a literal
+string, merged over the ambient environment.
+
+`verify.FORBIDDEN_ENV` refuses the variables that change how a process loads
+code -- `PATH`, `LD_PRELOAD`, `NODE_OPTIONS`, `PYTHONSTARTUP`, `BASH_ENV` and
+their relatives. Those would run something the command allowlist never sees,
+which is the one thing this boundary exists to prevent. A refused variable is
+reported under "Not run" and the verdict cannot be `pass` while one is present,
+exactly like a refused command.
+
+`evidence.md` records the variable **names** only. A value is as likely to be a
+connection string as a search path, and the file is written to be pasted into a
+PR.
+
 ### Quoting
 
 `verify` entries are split POSIX-style on every platform. Bare runner names are

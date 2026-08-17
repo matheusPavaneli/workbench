@@ -1,0 +1,11 @@
+{
+  "key": "WB-10",
+  "title": "impl check cannot tell two tickets apart in one working tree",
+  "type": "bug",
+  "status": "open",
+  "desc": "wb impl check compares the whole working tree against one plan's file list, so a second ticket in progress reads as scope creep on the first. Hit while closing WB-7 alongside WB-8 and WB-9. Options: compare only paths the plan lists plus those no other .workflow plan lists, or take an explicit --only flag.",
+  "created": "2026-08-17T18:53:12Z",
+  "updated": "2026-08-17T18:53:12Z",
+  "comments": [],
+  "linked": []
+}

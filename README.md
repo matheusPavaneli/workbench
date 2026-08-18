@@ -3,7 +3,7 @@
 Ticket-to-PR development workflow skills for Claude Code, with pluggable issue
 trackers (Jira Cloud, Azure DevOps, GitHub Issues, or a backlog in the repo).
 
-Ten skills, one CLI, 485 tests, no third-party dependencies.
+Ten skills, one CLI, 599 tests, no third-party dependencies.
 
 ## Two design rules
 
@@ -312,6 +312,7 @@ Exit codes: 2 usage, 3 config, 4 auth, 5 provider, 6 not found, 7 audit failed.
 - [providers.md](docs/providers.md) — internal schema, tracker quirks, adding a provider
 - [depth-policy.md](docs/depth-policy.md) — depth, expansion handles, output caps
 - [execution.md](docs/execution.md) — scope guard, verification boundary, declared environment, git façade and execution
+- [CHANGELOG.md](CHANGELOG.md) — what changed, and the deprecation policy
 - [status.md](docs/status.md) — the pipeline, the command history, rigour tiers, settled gates
 - [flow.md](docs/flow.md) — source and validation branches, cherry-pick carrying, branch naming
 

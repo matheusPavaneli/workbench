@@ -12,7 +12,7 @@ import json
 import sys
 from pathlib import Path
 
-from .. import artifacts, flow as flow_lib, gitctx, profile as profile_lib, prose, sdd as sdd_lib
+from .. import artifacts, contract, flow as flow_lib, gitctx, profile as profile_lib, prose, sdd as sdd_lib
 from ..errors import UsageError, WbError
 
 ACTIONS = ["context", "check"]
@@ -91,7 +91,7 @@ def _context(args: argparse.Namespace) -> int:
         # Otherwise the empty commit list reads as "this branch adds nothing".
         payload["_note"] = f"branch and base are both {base!r}; pass --base to compare against something"
 
-    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    print(contract.emit("pr.context", payload))
     return 0
 
 

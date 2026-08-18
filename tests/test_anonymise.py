@@ -149,9 +149,26 @@ class TheShapeSurvives(unittest.TestCase):
         self.assertEqual(assignee, commenter)
 
     def test_two_different_people_stay_two_people(self) -> None:
+        """Regression, and it was intermittent: hashing into a pool of six names
+        collided about one run in six, so two commenters could read as one
+        author -- incoherent in a way that is easy to reason wrongly from."""
         result = anonymise.Anonymiser().payload(PAYLOAD)
         comments = result["fields"]["comment"]["comments"]
         self.assertNotEqual(comments[0]["author"]["displayName"], comments[1]["author"]["displayName"])
+
+    def test_no_two_people_ever_collide_however_many_there_are(self) -> None:
+        """The property the pool cannot provide by itself: more distinct people
+        than names must still produce distinct names."""
+        anonymiser = anonymise.Anonymiser()
+        people = [f"Person Number {index}" for index in range(25)]
+        pseudonyms = [anonymiser.person(name) for name in people]
+        self.assertEqual(len(people), len(set(pseudonyms)))
+
+    def test_the_same_person_is_still_one_person_across_a_payload(self) -> None:
+        anonymiser = anonymise.Anonymiser()
+        first = anonymiser.person("Marina Castilho")
+        anonymiser.person("Somebody Else")
+        self.assertEqual(first, anonymiser.person("Marina Castilho"))
 
 
 def _shape(data, key=""):

@@ -107,7 +107,13 @@ def tier(doc: dict) -> tuple[str, str]:
     """
     from .profile import critical_zones
 
-    paths = [str(item.get("path", "")) for item in doc.get("files") or [] if item.get("path")]
+    # Tolerant of a malformed entry on purpose: this runs *before* validate, so
+    # it is reached by exactly the documents that have not been checked yet.
+    paths = [
+        str(item.get("path", ""))
+        for item in doc.get("files") or []
+        if isinstance(item, dict) and item.get("path")
+    ]
 
     if len(paths) > LIGHT_MAX_FILES:
         return STANDARD, f"{len(paths)} files (light is up to {LIGHT_MAX_FILES})"
@@ -145,6 +151,13 @@ def validate(doc: dict) -> list[str]:
     if not doc.get("evidence"):
         problems.append("evidence is empty: every claim about this codebase needs a file:line citation")
     for index, item in enumerate(doc.get("evidence") or []):
+        if not isinstance(item, dict):
+            # A list of strings where a list of objects belongs is the
+            # commonest malformed plan there is. Reporting it is the job;
+            # raising AttributeError from inside the checker is not, and
+            # an audit that crashes teaches people to skip the audit.
+            problems.append(f"evidence[{index}] must be an object, not {type(item).__name__}")
+            continue
         for required in ("claim", "file", "line"):
             if not item.get(required):
                 problems.append(f"evidence[{index}] has no {required}")
@@ -154,6 +167,13 @@ def validate(doc: dict) -> list[str]:
     if not doc.get("files"):
         problems.append("files is empty: list every file this change touches, before touching any")
     for index, item in enumerate(doc.get("files") or []):
+        if not isinstance(item, dict):
+            # A list of strings where a list of objects belongs is the
+            # commonest malformed plan there is. Reporting it is the job;
+            # raising AttributeError from inside the checker is not, and
+            # an audit that crashes teaches people to skip the audit.
+            problems.append(f"files[{index}] must be an object, not {type(item).__name__}")
+            continue
         if not item.get("path"):
             problems.append(f"files[{index}] has no path")
         if item.get("change") not in CHANGE_KINDS:
@@ -167,6 +187,13 @@ def validate(doc: dict) -> list[str]:
     if not doc.get("tests"):
         problems.append("tests is empty: the floor is a unit test for every changed logic branch")
     for index, item in enumerate(doc.get("tests") or []):
+        if not isinstance(item, dict):
+            # A list of strings where a list of objects belongs is the
+            # commonest malformed plan there is. Reporting it is the job;
+            # raising AttributeError from inside the checker is not, and
+            # an audit that crashes teaches people to skip the audit.
+            problems.append(f"tests[{index}] must be an object, not {type(item).__name__}")
+            continue
         if item.get("kind") not in TEST_KINDS:
             problems.append(f"tests[{index}].kind must be one of: {', '.join(TEST_KINDS)}")
         if not str(item.get("asserts", "")).strip():

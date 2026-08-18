@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 
-from .. import status as status_lib
+from .. import contract, status as status_lib
 from ..errors import NotFoundError
 
 ACTIONS: list[str] = []
@@ -38,7 +38,7 @@ def run(args: argparse.Namespace) -> int:
 
     status, origin = picked
     if args.json:
-        print(json.dumps(status_lib.next_dict(status, origin), indent=2, ensure_ascii=False))
+        print(contract.emit("next", status_lib.next_dict(status, origin)))
         return 0
     print(status_lib.render_next(status, origin))
     return 0

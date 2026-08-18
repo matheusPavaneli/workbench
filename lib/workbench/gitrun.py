@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -70,6 +71,12 @@ FORBIDDEN_CHARACTERS = (";", "&", "|", ">", "<", "`", "$(", "\n", "\r")
 # which ``rendered`` now quotes.
 REDIRECTION = ("<", ">")
 VALUE_FLAGS = frozenset({"--author"})
+
+# The exemption is for an address, not for any string that happens to follow
+# --author. Narrowed after a fuzz run allowed `--author "> /etc/hosts"`: not
+# exploitable -- there is no shell, and the printed form is quoted -- but an
+# exemption wider than its reason is one nobody can reason about later.
+_ADDRESS = re.compile(r"^[^<>]{1,120}<[^<>@\s]{1,64}@[^<>@\s]{1,255}>$")
 
 CLEAN_TREE = "clean-tree"
 NOT_PROTECTED = "not-protected"
@@ -175,7 +182,7 @@ def check(action: Action) -> str | None:
         # substitute a command is still refused, in every position.
         forbidden = (
             tuple(c for c in FORBIDDEN_CHARACTERS if c not in REDIRECTION)
-            if previous in VALUE_FLAGS
+            if previous in VALUE_FLAGS and _ADDRESS.match(token)
             else FORBIDDEN_CHARACTERS
         )
         previous = token

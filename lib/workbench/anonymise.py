@@ -173,9 +173,23 @@ class Anonymiser:
         return f"https://example.invalid/{path}"
 
     def _stable(self, value: str, pool: tuple[str, ...]) -> str:
+        """One pseudonym per input, and never the same one for two inputs.
+
+        Hashing into the pool gave the first property and not the second: with
+        six names, two distinct people collided about one run in six, and a
+        fixture where two commenters read as the same author is incoherent in a
+        way that is hard to notice and easy to reason wrongly from.
+
+        Assigning in encounter order is injective by construction. It is still
+        stable within a run, which is all consistency ever needed, and the
+        ordering carries no information about the input.
+        """
         if value not in self._seen:
-            index = int(self._digest(value)[:8], 16) % len(pool)
-            self._seen[value] = pool[index]
+            index = len(self._seen)
+            name = pool[index % len(pool)]
+            if index >= len(pool):
+                name = f"{name} {index // len(pool) + 1}"
+            self._seen[value] = name
         return self._seen[value]
 
     def _digest(self, value: str) -> str:

@@ -30,12 +30,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import support  # noqa: E402
 import wb  # noqa: E402
 
-# Wall-clock ceilings, in seconds. Set to catch a class change, not a slow CI
-# box: the commands below do no I/O beyond reading a handful of small files.
+# Wall-clock ceiling, in seconds. Measured on the development machine, `wb
+# status` across twenty tickets runs in 50ms with a worst case of 71ms, so this
+# is roughly a tenfold margin: it is here to catch a *change in kind* -- a
+# network call, an unbounded directory walk -- and never to grade a busy CI box.
+# A timing test that fails on load teaches people to rerun the suite until it
+# passes, which costs more than the check is worth.
 OPENING_COMMAND = 0.75
-# The measurement is the best of a few runs, so a scheduling hiccup does not
-# fail a build.
-ATTEMPTS = 3
+# Best of five: a scheduling hiccup during one attempt must not fail a build.
+ATTEMPTS = 5
 
 
 class OpeningCommands(unittest.TestCase):

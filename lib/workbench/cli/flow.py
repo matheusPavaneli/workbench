@@ -14,7 +14,7 @@ import argparse
 import json
 from pathlib import Path
 
-from .. import artifacts, contexts, flow as flow_lib, gitctx, gitrun
+from .. import artifacts, contexts, contract, flow as flow_lib, gitctx, gitrun
 from ..errors import UsageError, WbError
 
 ACTIONS = ["show", "start", "carry", "set"]
@@ -64,7 +64,7 @@ def _show(args: argparse.Namespace) -> int:
     flow = flow_lib.resolve(root)
 
     if args.json:
-        print(json.dumps(flow.to_dict(), indent=2))
+        print(contract.emit("flow.show", flow.to_dict()))
         return 0
 
     origin = "detected from remote branches" if flow.detected else "configured"

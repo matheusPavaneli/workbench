@@ -22,7 +22,7 @@ import argparse
 import json
 from pathlib import Path
 
-from .. import artifacts, gitctx, profile as profile_lib, sdd as sdd_lib, status as status_lib
+from .. import artifacts, contract, gitctx, profile as profile_lib, sdd as sdd_lib, status as status_lib
 from ..errors import UsageError
 
 ACTIONS: list[str] = []
@@ -68,15 +68,17 @@ def run(args: argparse.Namespace) -> int:
         steps = [step for step in FULL if step in steps or step[0] == "handover"]
 
     if args.json:
-        print(json.dumps(
+        print(contract.emit(
+            "route",
             {
-                "schema": 1,
                 "key": key,
                 "tier": tier,
                 "reason": reason,
-                "steps": [{"step": name, "skill": skill, "check": check.format(key=key)} for name, skill, check in steps],
+                "steps": [
+                    {"step": name, "skill": skill, "check": check.format(key=key)}
+                    for name, skill, check in steps
+                ],
             },
-            indent=2,
         ))
         return 0
 

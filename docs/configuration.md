@@ -72,6 +72,32 @@ Then verify with one real request:
 wb ctx test
 ```
 
+## What `.workflow/config.json` holds
+
+Committable, secret-free, and the highest rung of the ladder above. Every key is
+optional; the file is merged, never rewritten, so recording one setting never
+drops another.
+
+| Key | Set by | Meaning |
+|---|---|---|
+| `provider`, `project`, `board` | `wb ctx use` | the tracker binding for this repo |
+| `preset` | `wb repo profile --set/--confirm` | the quality bar, overriding detection |
+| `preset_confirmed` | the same | somebody reviewed it; stops the prompting |
+| `preset_paths` | by hand | a bar per path, for a repo that builds several things |
+| `flow` | `wb flow set` | source branch, validation targets, branch pattern |
+| `execute` | by hand | `false` refuses every `--execute`, standing |
+
+```json
+{
+  "provider": "jira",
+  "preset": "startup",
+  "preset_confirmed": true,
+  "preset_paths": { "packages/billing/**": "enterprise" },
+  "flow": { "source": "main", "validation": ["homolog"] },
+  "execute": false
+}
+```
+
 ## Exit codes
 
 | Code | Meaning |

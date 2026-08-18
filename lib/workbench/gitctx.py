@@ -97,6 +97,21 @@ def changed_files(cwd: Path, *, staged: bool = False) -> list[str]:
     return sorted(path for path in normalised if not _is_noise(path))
 
 
+def tracked_changes(cwd: Path) -> list[str]:
+    """Changes to files git already knows about, staged or not.
+
+    ``changed_files`` counts untracked files on purpose -- scope has to be
+    checked against a file a plan actually added. "Is it safe to switch branch"
+    is the opposite question: an untracked file crosses a ``switch`` unharmed,
+    and treating one as a dirty tree blocks the ordinary case, with advice that
+    does not work either -- plain ``git stash`` leaves untracked files be.
+    """
+    tracked = _git(["diff", "--name-only", "HEAD"], cwd) or ""
+    paths = {line.strip() for line in tracked.splitlines() if line.strip()}
+    normalised = (path.replace("\\", "/") for path in paths)
+    return sorted(path for path in normalised if not _is_noise(path))
+
+
 def _is_noise(path: str) -> bool:
     """This tool's own artifacts, and anything a build generated."""
     if path.startswith(ARTIFACT_DIR + "/"):

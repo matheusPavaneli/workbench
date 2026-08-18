@@ -141,7 +141,7 @@ def _gates(args: argparse.Namespace) -> int:
     preset = args.preset
     if not preset:
         root = gitctx.repo_root(Path.cwd()) or Path.cwd()
-        preset = profile_lib.detect(root).preset
+        preset = profile_lib.resolve(root).preset
     print(f"preset {preset}")
     for gate in sdd_lib.gates_for(preset):
         print(f"  - {gate}")

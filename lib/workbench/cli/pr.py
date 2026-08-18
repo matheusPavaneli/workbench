@@ -60,7 +60,7 @@ def _context(args: argparse.Namespace) -> int:
     if root is None:
         raise UsageError("not a git repository", fix=["run this inside a checkout"])
 
-    flow = flow_lib.load(None, root)
+    flow = flow_lib.resolve(root)
     if args.target:
         base = flow.target(args.target).branch
     else:
@@ -74,7 +74,7 @@ def _context(args: argparse.Namespace) -> int:
         "commits": gitctx.subjects_since(root, base),
         "changed": changed,
         "zones": profile_lib.critical_zones(changed),
-        "preset": profile_lib.detect(root).preset,
+        "preset": profile_lib.resolve(root).preset,
         "size": prose.size_class(changed),
         "shape": prose.SHAPE[prose.size_class(changed)],
     }

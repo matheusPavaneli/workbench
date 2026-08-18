@@ -144,6 +144,38 @@ class Skills(unittest.TestCase):
                         action, groups[group], f"{path.parent.name} names '{group} {action}', which does not exist"
                     )
 
+    def test_every_command_is_reachable_from_a_skill_or_a_doc(self) -> None:
+        """The other direction of the same seam.
+
+        The test above stops a skill naming a command that does not exist. This
+        one stops a command existing that nothing names: `wb next` and
+        `wb repo gates` were both written before anything told a session they
+        were there, which is the same defect from the other end -- a capability
+        nobody can reach was not really delivered.
+        """
+        import sys
+
+        sys.path.insert(0, str(ROOT / "lib"))
+        import wb
+
+        written = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in [*_skills(), *(ROOT / "docs").glob("*.md"), ROOT / "README.md"]
+        )
+
+        unreachable = []
+        for group, module in wb.GROUPS.items():
+            actions = _actions(module)
+            if not actions:
+                if f"wb {group}" not in written:
+                    unreachable.append(f"wb {group}")
+                continue
+            unreachable.extend(
+                f"wb {group} {action}" for action in actions if f"{group} {action}" not in written
+            )
+
+        self.assertEqual([], unreachable, "named nowhere a session will read: " + ", ".join(unreachable))
+
     def test_no_skill_composes_a_tracker_query(self) -> None:
         """The whole point of the closed CLI surface."""
         for path in _skills():

@@ -66,7 +66,9 @@ wb ctx use work-acme --remember remote   # every repo on this host + org
 wb ctx use personal  --remember path     # every repo under this directory
 ```
 
-Then verify with one real request:
+`wb ctx list` shows every context on this machine and which one this repo
+resolves to; `wb ctx show` prints the resolved one and where each field came
+from. Then verify with one real request:
 
 ```sh
 wb ctx test

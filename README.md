@@ -224,7 +224,8 @@ A monorepo has no single answer, so it can give a different bar to each part:
 ```
 
 `wb repo gates <paths>` resolves the rules for the files a change actually
-touches. A change spanning two presets is held to the **higher** one — the
+touches, and `wb sdd gates` prints them for the repo as a whole (or for a preset
+named with `--preset`, to see what a different bar would demand). A change spanning two presets is held to the **higher** one — the
 alternative is a plan that meets neither — and the audit fails a plan that
 declares a preset below what its own files demand.
 Rigour is not uniform inside a repo either: billing, auth, user data, migrations

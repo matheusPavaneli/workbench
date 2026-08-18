@@ -95,7 +95,7 @@ def _context(args: argparse.Namespace) -> int:
         print("no changes" + (" staged" if args.staged else ""))
         return 0
 
-    detected = profile_lib.detect(root)
+    detected = profile_lib.resolve(root)
     zones = profile_lib.critical_zones(changed)
     missing_tests = review_lib.untested(changed)
 

@@ -97,6 +97,28 @@ def changed_files(cwd: Path, *, staged: bool = False) -> list[str]:
     return sorted(path for path in normalised if not _is_noise(path))
 
 
+def is_ignored(cwd: Path, path: str) -> bool | None:
+    """Whether git ignores ``path``. ``None`` when git could not answer.
+
+    Here rather than in the caller because this module is the git façade: a
+    second place that shells out to git is a second place that has to remember
+    the timeout, the encoding and the failure mode.
+    """
+    try:
+        completed = subprocess.run(
+            ["git", "check-ignore", "-q", path],
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    # 0 ignored, 1 not ignored, anything else is git failing to answer.
+    return True if completed.returncode == 0 else (False if completed.returncode == 1 else None)
+
+
 def tracked_changes(cwd: Path) -> list[str]:
     """Changes to files git already knows about, staged or not.
 

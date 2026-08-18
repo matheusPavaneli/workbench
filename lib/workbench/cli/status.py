@@ -77,4 +77,27 @@ def _all(args: argparse.Namespace) -> int:
         print(json.dumps([s.to_dict() for s in items], indent=2, ensure_ascii=False))
         return 0
     print(status_lib.render_list(items))
+    _warn_unconfirmed_preset()
     return 0
+
+
+def _warn_unconfirmed_preset() -> None:
+    """The bar every plan in this list will be held to, if nobody has looked.
+
+    Said here because this is the command a session runs first. A detected
+    preset that nobody reviewed is not wrong, it is unexamined -- and the
+    difference only shows up much later, in a plan that met the wrong bar.
+    """
+    from pathlib import Path
+
+    from .. import gitctx, profile as profile_lib
+
+    try:
+        root = gitctx.repo_root(Path.cwd()) or Path.cwd()
+        resolved = profile_lib.resolve(root)
+    except Exception:  # noqa: BLE001 - a status listing must never fail on this
+        return
+    if resolved.needs_confirmation:
+        print(f"\npreset {resolved.preset} is detected and unconfirmed ({resolved.confidence} confidence)")
+        print("  wb repo profile            # the evidence, and the alternatives it supports")
+        print("  wb repo profile --confirm")

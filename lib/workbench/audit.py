@@ -145,7 +145,44 @@ def run(doc: dict, root: Path, baseline: str | None = None) -> Report:
         if not _resolve(root, path).is_file():
             report.missing_paths.append(path)
 
+    report.structure.extend(_preset_problems(doc, root))
     return report
+
+
+def _preset_problems(doc: dict, root: Path) -> list[str]:
+    """Is this plan held to the bar its own files demand?
+
+    Only checked where the repo has said what its bars are -- a recorded preset
+    or a ``preset_paths`` mapping. Absent that, detection is advice and this
+    stays quiet: a plan should not fail an audit over a guess nobody made.
+
+    Where the repo *has* said, the plan cannot come in under it. A monorepo
+    change that touches the billing package while declaring the playground's
+    preset is the case this exists for, and it is invisible to every other
+    check: the citations are real, the files exist, and the bar is wrong.
+    """
+    from . import profile
+
+    config = profile.repo_config(root)
+    mapping = profile.preset_paths(root)
+    recorded = config.get("preset") if config.get("preset") in profile.RANK else None
+    if not mapping and not recorded:
+        return []
+
+    declared = str(doc.get("preset", ""))
+    if declared not in profile.RANK:
+        return [f"preset {declared!r} is not one of: {', '.join(profile.PRESETS)}"]
+
+    paths = [str(item.get("path", "")) for item in doc.get("files") or [] if item.get("path")]
+    required, hits = profile.resolve_for(paths, mapping, recorded or declared)
+    if profile.RANK[declared] >= profile.RANK[required]:
+        return []
+
+    where = ", ".join(sorted(hits.get(required, []))[:3]) or "this repo"
+    return [
+        f"the plan declares preset {declared} but {where} is held to {required}: "
+        f"raise the preset, or split the change"
+    ]
 
 
 def _check(index: int, item: dict, root: Path, baseline: str | None = None) -> Finding:

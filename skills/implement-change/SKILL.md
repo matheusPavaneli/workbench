@@ -66,4 +66,6 @@ does not is an unreviewed change wearing a reviewed plan's name.
   file and line.
 
 Next: `write-commit`, then `draft-pr`. If the flow has a validation branch,
-`flow carry <KEY> --to <branch>` lists the commits to cherry-pick, oldest first.
+`flow carry <KEY> --to <branch>` lists the commits to cherry-pick, oldest first,
+measured against `origin/<source>` after a fetch. It prints the commands; pass
+`--execute` only when the user asked you to run them.

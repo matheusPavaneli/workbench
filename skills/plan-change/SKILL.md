@@ -17,7 +17,11 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
 
 2. **Get the bar.** `repo profile`. It prints the preset, the repo's own
    conventions, and the gates that apply. Follow the conventions it reports;
-   do not introduce a second test runner or package manager.
+   do not introduce a second test runner or package manager. `LOW confidence`
+   means the preset is a guess nobody reviewed: say so, let the user settle it.
+   Once the file list is known, `repo gates <paths>` resolves the bar those
+   paths land in — in a monorepo that is not the repo's, and the audit fails a
+   plan that declares a preset below it.
 
 3. **Pick a persona** from `references/personas.md`. It shapes what counts as
    done, not the format.

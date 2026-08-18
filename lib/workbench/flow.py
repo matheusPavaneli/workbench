@@ -97,7 +97,15 @@ def load(config: dict | None, root: Path) -> Flow:
         raise ConfigError('flow needs a "source" branch', fix=['e.g. "source": "main"'])
 
     validation = [Target(branch=str(b), role="validation") for b in config.get("validation") or []]
-    protected = [str(b) for b in config.get("protected") or []] or [str(source)]
+    # A validation branch receives commits through a PR like the source does, so
+    # it is protected unless the config says otherwise. Defaulting to the source
+    # alone left a hand-written config declaring a validation target with that
+    # target unprotected -- which ``wb flow set`` never produces, and which the
+    # commit precondition then read as permission.
+    protected = [str(b) for b in config.get("protected") or []] or [
+        str(source),
+        *(target.branch for target in validation),
+    ]
 
     return Flow(
         source=Target(branch=str(source), role="source"),
@@ -190,3 +198,113 @@ def validate_pattern(pattern: str) -> str:
             fix=["available: {key}, {slug}, {type}"],
         )
     return pattern
+
+
+def resolve(root: Path) -> Flow:
+    """Repo config wins over context, context over detection.
+
+    Every caller that needs "what is protected here" goes through this. It used
+    to live in ``cli/flow.py`` alone, so ``wb git`` resolved the flow by calling
+    ``load(None, root)`` -- which skips straight to detection and guesses the
+    protected branches from the remote. A repo that had recorded
+    ``--source develop --validation release/*`` got back ``["main"]``, and a
+    commit onto a branch it had declared protected passed the check.
+    """
+    from . import contexts
+
+    config = _repo_flow(root)
+    if config is None:
+        try:
+            config = contexts.resolve(root).context.flow
+        except Exception:  # noqa: BLE001 - no context just means fall through to detection
+            config = None
+    return load(config, root)
+
+
+def _repo_flow(root: Path) -> dict | None:
+    from . import contexts
+
+    path = root / contexts.REPO_CONFIG
+    if not path.is_file():
+        return None
+    try:
+        import json
+
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data.get("flow") if isinstance(data, dict) else None
+
+
+def protected(root: Path) -> list[str]:
+    """Branches a write must never land on. Fails closed.
+
+    A flow that cannot be resolved is not permission to commit anywhere: the
+    fallback is the conventional set, so an unresolvable flow blocks the branch
+    names that are protected in practice rather than blocking nothing.
+    """
+    try:
+        return resolve(root).protected
+    except Exception:  # noqa: BLE001
+        return [*COMMON_SOURCES, *COMMON_VALIDATION]
+
+
+def carry_base(root: Path, source: str) -> str:
+    """The ref to measure "already on the source" against.
+
+    ``origin/main`` when it exists, not local ``main``. A local source branch is
+    only as fresh as the last time somebody checked it out and pulled, and a
+    stale one makes the range too wide: commits already merged upstream come
+    back into the carry and get picked onto the validation branch a second time.
+
+    Nothing else in this flow reads a local branch either -- ``start`` and
+    ``carry`` both branch from ``origin/<base>`` -- so this closes the one place
+    that still did.
+    """
+    remote = f"origin/{source}"
+    return remote if gitctx.branch_exists(root, remote) else source
+
+
+def fetch_action() -> "object":
+    """Refresh the remote-tracking refs. Runs before anything is measured."""
+    from . import gitrun
+
+    return gitrun.Action(["fetch", "origin"], why="so the base and target are current")
+
+
+def start_actions(name: str, base: str) -> list:
+    """Fetch, then branch. One list, whether it gets printed or run.
+
+    Both forms came from the same computation before, but the rendering was
+    duplicated -- and a duplicated rendering is how ``--execute`` ends up
+    running something other than what it printed.
+    """
+    from . import gitrun
+
+    return [
+        fetch_action(),
+        gitrun.Action(
+            ["switch", "-c", name, f"origin/{base}"],
+            why=f"start {name} from {base}",
+            precondition=gitrun.CLEAN_TREE,
+        ),
+    ]
+
+
+def carry_actions(carry_branch: str, target: str, commits: list[str]) -> list:
+    """Branch off the validation target, then pick the series oldest first.
+
+    No fetch here: the caller has already run one, because the commit range had
+    to be computed against refs that were current when it was computed.
+    """
+    from . import gitrun
+
+    hashes = [line.split(" ", 1)[0] for line in commits]
+    return [
+        gitrun.Action(
+            ["switch", "-c", carry_branch, f"origin/{target}"],
+            why=f"carry onto {target}",
+            precondition=gitrun.CLEAN_TREE,
+        ),
+        gitrun.Action(["cherry-pick", *hashes], why=f"{len(hashes)} commit(s), oldest first"),
+    ]

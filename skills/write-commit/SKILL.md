@@ -9,8 +9,8 @@ description: Writes a commit message in the repo's own convention, validated and
 python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
 ```
 
-This skill writes the message. It does not run git — committing is the user's
-call, through their own tooling, where they can see it.
+This skill writes the message. Committing stays the user's call: the CLI prints
+the command and runs it only for an explicit `--execute`.
 
 ## Steps
 
@@ -39,8 +39,11 @@ call, through their own tooling, where they can see it.
    `.workflow/<KEY>/commit.txt`; on failure nothing is saved and the reasons
    are listed. Fix the message, not the check.
 
-5. **Hand it over.** Show the message and let the user commit, or commit through
-   your own tooling if they asked you to.
+5. **Hand it over.** Show the message. `git commit <KEY>` prints the exact
+   commit command, carrying the saved message and the author the context
+   expects; add `--execute` only if the user asked you to commit. It refuses on
+   a protected branch and with nothing staged — choosing what goes in a commit
+   stays theirs.
 
 ## Rules
 

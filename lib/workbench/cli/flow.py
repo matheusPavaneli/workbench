@@ -1,8 +1,11 @@
 """``wb flow`` -- where work starts, where it lands, and what to carry across.
 
-Nothing here runs git. It computes the branch name, the base to start from, and
-the exact commits to cherry-pick, then prints the commands for the user to run.
-Creating branches and picking commits are theirs to approve.
+It computes the branch name, the base to start from, and the exact commits to
+cherry-pick. By default it prints those commands and the user runs them, which
+is what keeps a wrong computation a wasted paste rather than a wrong branch.
+
+``--execute`` runs them, through the allowlist in ``gitrun``. The commands are
+the same objects either way, so what runs is what was printed.
 """
 
 from __future__ import annotations
@@ -11,7 +14,7 @@ import argparse
 import json
 from pathlib import Path
 
-from .. import artifacts, contexts, flow as flow_lib, gitctx
+from .. import artifacts, contexts, flow as flow_lib, gitctx, gitrun
 from ..errors import UsageError, WbError
 
 ACTIONS = ["show", "start", "carry", "set"]
@@ -29,10 +32,12 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     start.add_argument("--title", required=True, help="ticket title, used for the slug")
     start.add_argument("--type", dest="kind", default="feature", help="value for {type} in the pattern")
     start.add_argument("--target", help="start against this target instead of the source branch")
+    start.add_argument("--execute", action="store_true", help="run the commands instead of printing them")
 
     carry = actions.add_parser("carry", help="the commits to cherry-pick onto a validation target")
     carry.add_argument("key")
     carry.add_argument("--to", required=True, help="validation branch to carry onto")
+    carry.add_argument("--execute", action="store_true", help="run the commands instead of printing them")
 
     configure = actions.add_parser("set", help="record the flow for this repo")
     configure.add_argument("--source", required=True, help="branch that holds the truth, e.g. main")
@@ -54,31 +59,9 @@ def _root() -> Path:
     return root
 
 
-def _flow(root: Path) -> flow_lib.Flow:
-    """Repo config wins over context, context over detection."""
-    config = _repo_flow(root)
-    if config is None:
-        try:
-            config = contexts.resolve(root).context.flow
-        except WbError:
-            config = None
-    return flow_lib.load(config, root)
-
-
-def _repo_flow(root: Path) -> dict | None:
-    path = root / contexts.REPO_CONFIG
-    if not path.is_file():
-        return None
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    return data.get("flow") if isinstance(data, dict) else None
-
-
 def _show(args: argparse.Namespace) -> int:
     root = _root()
-    flow = _flow(root)
+    flow = flow_lib.resolve(root)
 
     if args.json:
         print(json.dumps(flow.to_dict(), indent=2))
@@ -103,7 +86,7 @@ def _show(args: argparse.Namespace) -> int:
 
 def _start(args: argparse.Namespace) -> int:
     root = _root()
-    flow = _flow(root)
+    flow = flow_lib.resolve(root)
     key = artifacts.validate_key(args.key)
 
     base = flow.target(args.target).branch if args.target else flow.source.branch
@@ -115,13 +98,12 @@ def _start(args: argparse.Namespace) -> int:
 
     print(f"branch  {name}")
     print(f"base    {base}")
-    print(f"\n  git fetch origin && git switch -c {name} origin/{base}")
-    return 0
+    return _emit(flow_lib.start_actions(name, base), root, flow, key, execute=args.execute)
 
 
 def _carry(args: argparse.Namespace) -> int:
     root = _root()
-    flow = _flow(root)
+    flow = flow_lib.resolve(root)
     key = artifacts.validate_key(args.key)
     target = flow.target(args.to)
 
@@ -132,21 +114,79 @@ def _carry(args: argparse.Namespace) -> int:
         )
 
     source_branch = _source_branch(root, flow, key)
-    commits = flow_lib.carry_plan(root, source_branch, flow.source.branch, target.branch)
+
+    # Fetch before measuring, not alongside it. The range is "what the source
+    # does not have yet", and answering that against stale remote-tracking refs
+    # puts commits already merged upstream back into the carry.
+    fetch = flow_lib.fetch_action()
+    if args.execute:
+        run = gitrun.apply([fetch], root, protected=flow.protected)
+        gitrun.record(run, key, root)
+        if not run.ok:
+            print(gitrun.render(run))
+            return 1
+
+    base = flow_lib.carry_base(root, flow.source.branch)
+    commits = flow_lib.carry_plan(root, source_branch, base, target.branch)
     if not commits:
-        print(f"nothing to carry: {source_branch} has no commits that {flow.source.branch} lacks")
+        print(f"nothing to carry: {source_branch} has no commits that {base} lacks")
         return 0
 
     carry_branch = f"{source_branch}-{target.branch}"
-    print(f"from    {source_branch}  ({len(commits)} commit(s), oldest first)")
+    if gitctx.branch_exists(root, carry_branch):
+        # Same guard ``start`` has. Without it a second run tries to create a
+        # branch that exists, fails, and leaves the cherry-pick to be applied
+        # somewhere it does not belong.
+        print(f"branch {carry_branch} already exists; carry it by hand or delete it first")
+        return 0
+
+    print(f"from    {source_branch}  ({len(commits)} commit(s) {base} lacks, oldest first)")
     for line in commits:
         print(f"  {line}")
 
-    hashes = " ".join(line.split(" ", 1)[0] for line in commits)
-    print(f"\n  git fetch origin && git switch -c {carry_branch} origin/{target.branch}")
-    print(f"  git cherry-pick {hashes}")
-    print(f"\nthen open a second PR: {carry_branch} -> {target.branch}")
-    return 0
+    actions = flow_lib.carry_actions(carry_branch, target.branch, commits)
+    if not args.execute:
+        # Printed for the user to run, the fetch included: the range above was
+        # measured against the refs as they are now, so a stale checkout should
+        # refresh and re-read it rather than trust this list.
+        actions = [fetch, *actions]
+
+    code = _emit(actions, root, flow, key, execute=args.execute)
+    if code == 0:
+        # Only where the commits are actually on the branch. Telling someone to
+        # open a PR for a carry that conflicted is telling them to ship nothing.
+        print(f"\nthen open a second PR: {carry_branch} -> {target.branch}")
+    return code
+
+
+def _emit(actions: list, root: Path, flow: flow_lib.Flow, key: str, *, execute: bool) -> int:
+    """Print the series, or run it. Printing stays the default and the fallback.
+
+    A refused or failed run prints what is left, because the user's own shell is
+    always the way out -- that is what makes refusing cheap enough to do often.
+    """
+    if not execute:
+        print()
+        for action in actions:
+            print(f"  {action.rendered}")
+        return 0
+
+    run = gitrun.apply(actions, root, protected=flow.protected)
+    print()
+    print(gitrun.render(run))
+    gitrun.record(run, key, root)
+    if run.ok:
+        return 0
+
+    # From the step that failed, not after it. The failed step did not happen,
+    # and handing over a cherry-pick whose branch was never created applies the
+    # commits onto whatever branch the user is standing on.
+    remaining = actions[max(len(run.steps) - 1, 0):]
+    if remaining:
+        print("\nnot run -- these are yours to finish, in this order:")
+        for action in remaining:
+            print(f"  {action.rendered}")
+    return 1
 
 
 def _source_branch(root: Path, flow: flow_lib.Flow, key: str) -> str:

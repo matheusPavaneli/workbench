@@ -6,13 +6,13 @@
   },
   "metadata": {
     "description": "Ticket-to-PR development workflow skills. Jira, Azure DevOps and GitHub Issues, or a backlog in the repo when there is no tracker at all.",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "plugins": [
     {
       "name": "workbench",
       "source": "./",
-      "description": "Ten skills covering the path from a ticket to a pull request: triage-task, plan-change, implement-change, review-diff, write-commit, draft-pr, address-review, write-handover for the people who are not engineers, plus frame-product and trace-incident for work that starts from an idea or a symptom instead. Plans carry file:line citations that a script reopens and checks; implementation is held to the file list the plan declared. Works against Jira, Azure DevOps and GitHub Issues, or with no tracker at all. Scripts distil tracker payloads and enforce policy; prompts stay short.",
+      "description": "Ten skills covering the path from a ticket to a pull request: triage-task, plan-change, implement-change, review-diff, write-commit, draft-pr, address-review, write-handover for the people who are not engineers, plus frame-product and trace-incident for work that starts from an idea or a symptom instead. Plans carry file:line citations that a script reopens and checks; implementation is held to the file list the plan declared. `wb next` resolves which ticket a session is on and prints the one command to run. The quality bar is detected with a stated confidence, can differ per path in a monorepo, and the audit fails a plan declared below it. Git stays read-only by default; an opt-in --execute runs only allowlisted commands, never a force-push. Works against Jira, Azure DevOps and GitHub Issues, or with no tracker at all.",
       "category": "workflow",
       "keywords": [
         "jira",
@@ -20,7 +20,9 @@
         "github-issues",
         "planning",
         "code-review",
-        "pull-request"
+        "pull-request",
+        "quality-gates",
+        "monorepo"
       ]
     }
   ]

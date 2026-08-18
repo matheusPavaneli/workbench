@@ -88,6 +88,7 @@ drops another.
 | `preset_paths` | by hand | a bar per path, for a repo that builds several things |
 | `flow` | `wb flow set` | source branch, validation targets, branch pattern |
 | `execute` | by hand | `false` refuses every `--execute`, standing |
+| `field_map` | by hand | custom tracker fields this repo wants read, by destination |
 
 ```json
 {
@@ -96,9 +97,32 @@ drops another.
   "preset_confirmed": true,
   "preset_paths": { "packages/billing/**": "enterprise" },
   "flow": { "source": "main", "validation": ["homolog"] },
-  "execute": false
+  "execute": false,
+  "field_map": { "customfield_10042": "acceptance_criteria" }
 }
 ```
+
+### `field_map`
+
+A tracker field this tool has no slot for is dropped, and dropped in silence --
+which is worse than a wrong mapping, because a wrong mapping gets noticed. Name
+the ones that matter and they reach `triage.json` under `extra`:
+
+| Destination | Read by |
+|---|---|
+| `acceptance_criteria` | `plan-change`, as the definition of done |
+| `steps_to_reproduce` | `trace-incident`, `write-handover` |
+| `impact` | `frame-product`, and the handover's plain summary |
+| `component` | routing, and the critical-zone hint |
+| `environment` | which deployment the report came from |
+
+The destinations are a closed set for the same reason the CLI surface is: an
+open one invites a slot nothing reads. An entry naming a destination that does
+not exist is dropped at load so the ticket still reads, and reported by
+`wb doctor` -- which is the only place the typo is visible.
+
+`wb ctx test --deep` lists the fields present in your payloads that nothing here
+reads, with a sample of each, so the mapping is a decision rather than a guess.
 
 ## Exit codes
 

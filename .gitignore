@@ -7,3 +7,8 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+
+# Recordings of a real tenant, written by `wb ctx record`. Ignored by default:
+# committing one is a decision to make deliberately, after reading it, and the
+# suite works either way -- it picks them up locally and skips without them.
+tests/fixtures/*/local/

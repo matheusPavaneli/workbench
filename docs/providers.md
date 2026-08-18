@@ -116,6 +116,46 @@ Auth prefers a configured `pat_env`/`pat_keychain` and falls back to
 a fallback and not the default so a context that names its credential keeps
 working on a machine with no `gh`.
 
+## Recording your own tenant
+
+The fixtures in `tests/fixtures/` follow the vendors' published contracts —
+endpoints, parameter names, response shapes, link-direction semantics, all
+checked against the documentation. What they cannot cover is *your* instance:
+the custom fields, the custom link types, the workflow state names somebody
+invented years ago. That gap is where this tool breaks first for a new user.
+
+```sh
+wb ctx record ABC-123
+```
+
+Runs the calls `triage-task` makes against a real ticket, replaces the content,
+keeps the shape, and writes the result to `tests/fixtures/<provider>/local/`.
+The suite picks those up automatically and runs every provider test twice: once
+against the packaged contracts, once against your tenant.
+
+What "replaces the content" means precisely:
+
+| | |
+|---|---|
+| Kept | key names, nesting, types, list lengths, and the structural values the code branches on (`id`, `key`, `type`, `statusCategory`, …) |
+| Replaced | every free-text value, with lorem of the same length, line count and list markers |
+| Replaced consistently | names, emails, URLs and account ids — the same person stays one person across the fixture, without being traceable |
+| Replaced by default | anything it cannot classify |
+
+Consistency comes from a salt generated per run and thrown away, so two
+recordings of the same ticket do not agree and nothing survives to correlate.
+Secrets go through `redact.scrub` first, whatever the field is called.
+
+It is still your data and your judgement: **read a recording before committing
+it.** The design fails towards losing information, but no anonymiser is a
+substitute for looking.
+
+`wb ctx test --deep` is the other half. It reports the fields present in the
+payload that this tool does not read — a `customfield_10042` carrying acceptance
+criteria is invisible today, and silence there is worse than a wrong mapping,
+because a wrong mapping gets noticed. Map one with `field_map` in
+`.workflow/config.json`.
+
 ## Local
 
 A backlog with no tracker, no network and no credential: one JSON file per task

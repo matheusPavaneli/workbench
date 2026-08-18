@@ -89,6 +89,10 @@ class Task:
     linked: list[Link] = field(default_factory=list)
     linked_total: int = 0
     unmapped: list[str] = field(default_factory=list)
+    # Fields this tenant carries that the normal schema has no slot for, named
+    # by the repo's ``field_map``. Empty unless somebody mapped one: the tool
+    # never guesses which custom field means what.
+    extra: dict = field(default_factory=dict)
 
     def to_dict(self, expand_handles: list[str], truncations: list[str] | None = None) -> dict:
         truncations = list(truncations or [])
@@ -118,6 +122,8 @@ class Task:
             truncations.append(f"linked ({self.linked_total - len(self.linked)} more)")
         if self.comments_total > len(self.comments):
             truncations.append(f"comments ({self.comments_total - len(self.comments)} more)")
+        if self.extra:
+            payload["extra"] = dict(sorted(self.extra.items()))
         if self.unmapped:
             payload["_unmapped"] = sorted(set(self.unmapped))
         if truncations:

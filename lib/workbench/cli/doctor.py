@@ -56,6 +56,7 @@ def run(args: argparse.Namespace) -> int:
     _identity(check, cwd, resolution)
     _flow(check, root or cwd)
     _runners(check, root or cwd)
+    _field_map(check, root or cwd)
     _ignore(check, root)
 
     width = max(len(name) for name, *_ in results)
@@ -214,6 +215,26 @@ def _runners(check, root: Path) -> None:
               ["wb impl verify will refuse it; run it yourself and record the result"])
         return
     check("runners", OK, ", ".join(wanted))
+
+
+def _field_map(check, root: Path) -> None:
+    """A mapping that names a destination nothing reads loses the field silently.
+
+    Worth a check rather than a runtime error: the read has to keep working, so
+    an invalid entry is dropped at load -- which makes this the only place the
+    typo is ever visible.
+    """
+    from .. import fields as fields_lib, profile as profile_lib
+
+    configured = profile_lib.repo_config(root).get("field_map")
+    if not configured:
+        return
+
+    problems = fields_lib.validate(configured)
+    if problems:
+        check("field_map", FAIL, problems[0], problems[1:] or [f"destinations: {', '.join(fields_lib.DESTINATIONS)}"])
+        return
+    check("field_map", OK, f"{len(configured)} field(s) mapped: {', '.join(sorted(configured.values()))}")
 
 
 def _ignore(check, root: Path | None) -> None:

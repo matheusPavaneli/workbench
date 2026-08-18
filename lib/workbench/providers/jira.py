@@ -17,6 +17,7 @@ from __future__ import annotations
 from .. import schema
 from ..errors import ConfigError
 from ..schema import Comment, Link, Task
+from .. import fields as fields_lib
 from ..text import adf_to_text, normalise
 from .base import Identity, Provider
 
@@ -98,8 +99,12 @@ class JiraProvider(Provider):
         return rows
 
     def fetch_task(self, key: str) -> Task:
+        # A mapped custom field has to be asked for by name: Jira returns only
+        # the fields in the query, so a field_map nobody adds here reads as an
+        # empty field rather than as a mapping that did not work.
+        wanted = ISSUE_FIELDS + [name for name in self.field_map if name not in ISSUE_FIELDS]
         data = self.require_dict(
-            self.get(f"/rest/api/3/issue/{key}", fields=",".join(ISSUE_FIELDS)), f"issue {key}"
+            self.get(f"/rest/api/3/issue/{key}", fields=",".join(wanted)), f"issue {key}"
         )
         fields = data.get("fields") or {}
         unmapped: list[str] = []
@@ -116,7 +121,18 @@ class JiraProvider(Provider):
             desc=normalise(adf_to_text(fields.get("description"))),
             linked=self._links(fields, unmapped),
             unmapped=unmapped,
+            extra=fields_lib.mapped(fields, self.field_map),
         )
+
+    def scan_fields(self, key: str) -> dict[str, str]:
+        """Every field this tenant carries that nothing here reads.
+
+        Asks for everything, once, on request only -- `fields=*all` is a much
+        larger response than the normal path wants, which is exactly why the
+        normal path does not use it.
+        """
+        data = self.require_dict(self.get(f"/rest/api/3/issue/{key}", fields="*all"), f"issue {key}")
+        return fields_lib.unread(data.get("fields") or {}, set(ISSUE_FIELDS), self.field_map)
 
     def _links(self, fields: dict, unmapped: list[str]) -> list[Link]:
         links: list[Link] = []

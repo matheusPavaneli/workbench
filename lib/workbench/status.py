@@ -30,12 +30,32 @@ SKIP = "n/a"
 _MARK = {OK: "ok", FAIL: "FAIL", PENDING: "part", TODO: "--", SKIP: "n/a"}
 
 
+# Which skill does the work each stage names. A session that knows the command
+# still has to know who runs it, and ten skills is more than anybody keeps in
+# their head -- so the answer travels with the stage rather than being looked up.
+SKILL_FOR = {
+    "triage": "triage-task",
+    "plan": "plan-change",
+    "audit": "plan-change",
+    "scope": "implement-change",
+    "verify": "implement-change",
+    "handover": "write-handover",
+    "commit": "write-commit",
+    "pr": "draft-pr",
+    "review": "address-review",
+}
+
+
 @dataclass
 class Stage:
     name: str
     state: str
     detail: str = ""
     command: str = ""
+
+    @property
+    def skill(self) -> str:
+        return SKILL_FOR.get(self.name, "")
 
     @property
     def done(self) -> bool:
@@ -80,7 +100,7 @@ class Status:
             "type": self.kind,
             "provider": self.provider,
             "stages": [
-                {"name": s.name, "state": s.state, "detail": s.detail, "command": s.command}
+                {"name": s.name, "state": s.state, "detail": s.detail, "command": s.command, "skill": s.skill}
                 for s in self.stages
             ],
             "next": self.next_command,
@@ -342,7 +362,9 @@ def render_next(status: Status, origin: str) -> str:
 
     state = "BLOCKED" if status.blocked else stage.state
     detail = f"  {stage.detail}" if stage.detail else ""
-    command = stage.command or "(no command; the next step is a skill, not the CLI)"
+    command = stage.command or (f"run the {stage.skill} skill" if stage.skill else "nothing outstanding")
+    if stage.command and stage.skill:
+        command = f"{command}   ({stage.skill})"
     return _lines(f"{head}  {stage.name} {state}{detail}", f"  next: {command}")
 
 
@@ -356,6 +378,7 @@ def next_dict(status: Status, origin: str) -> dict:
         "state": "blocked" if status.blocked else (stage.state if stage else "complete"),
         "reason": stage.detail if stage else "",
         "command": stage.command if stage else "",
+        "skill": stage.skill if stage else "",
     }
 
 

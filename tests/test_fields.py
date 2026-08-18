@@ -107,6 +107,17 @@ class Reporting(unittest.TestCase):
 class ThroughTheProvider(unittest.TestCase):
     """The mapping has to survive the round trip, including the request itself."""
 
+    def setUp(self) -> None:
+        # get_task writes a cache under .workflow/<KEY>/. Without this the suite
+        # leaves artifacts in whatever repo it was run from -- which it did.
+        import tempfile
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        patcher = mock.patch("workbench.gitctx.repo_root", return_value=Path(self._tmp.name))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _jira(self, field_map: dict, issue: dict | None = None):
         provider = support.FakeJira(**({"issue": issue} if issue else {}))
         provider.field_map = field_map

@@ -29,20 +29,24 @@ from workbench.cli import doctor as doctor_cli  # noqa: E402
 from workbench.cli import flow as flow_cli  # noqa: E402
 from workbench.cli import git as git_cli  # noqa: E402
 from workbench.cli import impl as impl_cli  # noqa: E402
+from workbench.cli import init as init_cli  # noqa: E402
 from workbench.cli import next as next_cli  # noqa: E402
 from workbench.cli import pr as pr_cli  # noqa: E402
 from workbench.cli import repo as repo_cli  # noqa: E402
 from workbench.cli import review as review_cli  # noqa: E402
+from workbench.cli import route as route_cli  # noqa: E402
 from workbench.cli import sdd as sdd_cli  # noqa: E402
 from workbench.cli import status as status_cli  # noqa: E402
 from workbench.cli import task as task_cli  # noqa: E402
 from workbench.errors import EXIT_USAGE, UsageError, WbError  # noqa: E402
 
 GROUPS = {
+    "init": init_cli,
     "ctx": ctx_cli,
     "doctor": doctor_cli,
     "status": status_cli,
     "next": next_cli,
+    "route": route_cli,
     "task": task_cli,
     "repo": repo_cli,
     "sdd": sdd_cli,

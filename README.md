@@ -34,6 +34,18 @@ off standing.
 
 `wb` is `python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py"`. Requires Python 3.9+.
 
+### One pass to a working setup
+
+```sh
+wb init            # proposes a config: provider from the remote, preset and flow detected
+wb init --write    # writes it
+wb doctor          # checks the whole chain
+```
+
+It proposes and you dispose: nothing is written without `--write`, an existing
+config is never replaced without `--force`, and it never writes a credential.
+Detection that cannot be trusted says so, the same way the preset does.
+
 ### With no tracker
 
 Nine of the ten skills never touch a tracker, so needing one to reach them was
@@ -124,6 +136,30 @@ of where this repo keeps losing time — a stage that always passes on the secon
 attempt is invisible in the snapshot and the most expensive thing in the log.
 
 ### Rigour proportional to risk
+
+Ceremony has a cost that is not measured in minutes: a process too heavy for a
+one-line fix gets routed around, and then it only ever sees the changes nobody
+minded doing carefully. So the short route is named and computed rather than
+improvised:
+
+```
+$ wb route ABC-123 --files src/util.py
+ABC-123  light route  (1 file(s), no critical zone)
+  1. triage     triage-task        wb task get ABC-123
+  2. plan       plan-change        wb sdd audit ABC-123
+  3. implement  implement-change   wb impl check ABC-123
+  4. verify     implement-change   wb impl verify ABC-123
+  5. commit     write-commit       wb commit check --file <path> --key ABC-123
+
+waived by the light tier: steps, product
+the floor is not waived: citations, the file list, verify and rollback still apply
+```
+
+Touch a critical zone, exceed two files, or pick up a bug ticket and the same
+command returns the full eight steps, with the reason. It is a router, not an
+eleventh skill: ten descriptions are already this plugin's always-on cost, and
+one more to say "do less" would be the joke telling itself.
+
 
 A seven-section plan for a one-line change costs more than the change, and a
 gate that does not pay for itself is one people route around. `sdd audit`
@@ -251,10 +287,12 @@ on a plan whose audit did not pass.
 ## Command surface
 
 ```
+wb init    [--write]           propose (or write) this repo's config
 wb doctor  everything that has to be true, in one pass
+wb route   [KEY]               the steps this change actually needs
 wb next    [KEY]               the single command to run now
 wb status  [KEY] | --stats     where work stands, and what to run next
-wb ctx     show | list | add | use | test
+wb ctx     show | list | add | use | test | record
 wb task    list | get | new | done
 wb repo    profile [--confirm] | zones | gates <paths>
 wb sdd     audit [--rebaseline] | get | render | handover | gates

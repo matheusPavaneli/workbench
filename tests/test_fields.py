@@ -10,6 +10,9 @@ Two properties, and the second is the sharper one:
 - an *unmapped* field with content is reported rather than silently dropped
 """
 
+from __future__ import annotations
+
+
 import json
 import sys
 import unittest

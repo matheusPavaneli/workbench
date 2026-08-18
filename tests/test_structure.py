@@ -81,6 +81,55 @@ class Resolvers(unittest.TestCase):
         self.assertTrue(callable(flow.load))
 
 
+class PythonFloor(unittest.TestCase):
+    """The package supports 3.9, and the tests have to as well.
+
+    `X | None` in an annotation is evaluated at definition time before 3.10, so a
+    file using it without `from __future__ import annotations` imports fine on
+    the development machine and raises TypeError on the floor. That is the worst
+    shape of failure: invisible locally, and only ever seen in CI.
+    """
+
+    def _files(self):
+        for directory in (LIB, ROOT / "tests"):
+            for path in sorted(directory.rglob("*.py")):
+                if "__pycache__" not in path.parts:
+                    yield path
+
+    def test_every_file_using_new_union_syntax_defers_its_annotations(self) -> None:
+        offences = []
+        for path in self._files():
+            text = path.read_text(encoding="utf-8")
+            tree = ast.parse(text, filename=str(path))
+
+            uses_union = any(
+                isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr)
+                for parent in ast.walk(tree)
+                if isinstance(parent, (ast.AnnAssign, ast.arg, ast.FunctionDef, ast.AsyncFunctionDef))
+                for node in _annotations_of(parent)
+            )
+            if not uses_union:
+                continue
+            if "from __future__ import annotations" not in text:
+                offences.append(f"{path.relative_to(ROOT)} uses `X | Y` without deferring annotations")
+
+        self.assertEqual([], offences, "\n" + "\n".join(offences))
+
+
+def _annotations_of(node):
+    """Every annotation expression hanging off a node, walked."""
+    found = []
+    if isinstance(node, ast.AnnAssign) and node.annotation:
+        found.append(node.annotation)
+    elif isinstance(node, ast.arg) and node.annotation:
+        found.append(node.annotation)
+    elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.returns:
+        found.append(node.returns)
+    for annotation in list(found):
+        found.extend(ast.walk(annotation))
+    return found
+
+
 class ExecutionSurface(unittest.TestCase):
     """One module writes to a repository. Keeping it that way is a property of
     the source, not a habit."""

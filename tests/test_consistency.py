@@ -17,6 +17,8 @@ is deliberately non-trivial, because every one of those bugs was invisible under
 a default config.
 """
 
+from __future__ import annotations
+
 import io
 import json
 import os

@@ -21,8 +21,31 @@ from workbench.providers.jira import JiraProvider
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
+# A recording of the user's own tenant, written by ``wb ctx record``. Absent in
+# a fresh clone, which is why every lookup falls back to the packaged contract.
+#
+# This is the difference between "the shapes the vendor documents" and "the
+# shapes your instance actually sends" -- custom fields, custom link types,
+# workflow states named years ago. The second is where this tool breaks first,
+# and it cannot ship in the package because it does not exist until somebody
+# records it.
+LOCAL = "local"
 
-def load(provider: str, name: str):
+
+def local_fixtures(provider: str) -> Path:
+    return FIXTURES / provider / LOCAL
+
+
+def has_local(provider: str) -> bool:
+    return local_fixtures(provider).is_dir() and any(local_fixtures(provider).glob("*.json"))
+
+
+def load(provider: str, name: str, *, prefer_local: bool = False):
+    """A fixture by name, from the recording when asked for and present."""
+    if prefer_local:
+        recorded = local_fixtures(provider) / f"{name}.json"
+        if recorded.is_file():
+            return json.loads(recorded.read_text(encoding="utf-8"))
     return json.loads((FIXTURES / provider / f"{name}.json").read_text(encoding="utf-8"))
 
 
@@ -89,14 +112,15 @@ class _Recorder:
 
 
 class FakeJira(JiraProvider, _Recorder):
-    def __init__(self, context: Context | None = None, **fixtures) -> None:
+    def __init__(self, context: Context | None = None, *, local: bool = False, **fixtures) -> None:
         JiraProvider.__init__(self, context or jira_context())
         _Recorder.__init__(self)
         self._auth = "Basic test"
         self.fixtures = fixtures
+        self.local = local
 
     def _fixture(self, name: str) -> dict:
-        return self.fixtures.get(name) or load("jira", name)
+        return self.fixtures.get(name) or load("jira", name, prefer_local=self.local)
 
     def get(self, path: str, **query) -> object:
         self.record(path)
@@ -131,14 +155,15 @@ class FakeJira(JiraProvider, _Recorder):
 
 
 class FakeAzure(AzureProvider, _Recorder):
-    def __init__(self, context: Context | None = None, **fixtures) -> None:
+    def __init__(self, context: Context | None = None, *, local: bool = False, **fixtures) -> None:
         AzureProvider.__init__(self, context or azure_context())
         _Recorder.__init__(self)
         self._auth = "Basic test"
         self.fixtures = fixtures
+        self.local = local
 
     def _fixture(self, name: str) -> dict:
-        return self.fixtures.get(name) or load("azure", name)
+        return self.fixtures.get(name) or load("azure", name, prefer_local=self.local)
 
     def get(self, path: str, **query) -> object:
         self.record(path)
@@ -170,15 +195,16 @@ class FakeAzure(AzureProvider, _Recorder):
 class FakeGithub(GithubProvider, _Recorder):
     """The transport is a fixture; the mapping under test is the real one."""
 
-    def __init__(self, context: Context | None = None, **fixtures) -> None:
+    def __init__(self, context: Context | None = None, *, local: bool = False, **fixtures) -> None:
         GithubProvider.__init__(self, context or github_context())
         _Recorder.__init__(self)
         self._auth = "Bearer test"
         self.fixtures = fixtures
+        self.local = local
 
     def _fixture(self, name: str):
         loaded = self.fixtures.get(name)
-        return loaded if loaded is not None else load("github", name)
+        return loaded if loaded is not None else load("github", name, prefer_local=self.local)
 
     def get(self, path: str, **query) -> object:
         self.record(path)

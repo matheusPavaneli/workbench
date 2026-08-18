@@ -154,8 +154,11 @@ class LocalProvider(Provider):
     @property
     def auth(self) -> str:
         raise NotFoundError(
-            "the local provider makes no requests",
-            fix=["this is a bug: something tried to authenticate a file-backed backlog"],
+            "the local provider makes no requests, so it holds no credential",
+            fix=[
+                "switch to a tracker if you meant to reach one: wb ctx use <name>",
+                "otherwise report it: a file-backed backlog was asked to authenticate",
+            ],
         )
 
     def probe(self) -> Identity:

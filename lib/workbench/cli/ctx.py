@@ -11,10 +11,10 @@ import argparse
 import json
 from pathlib import Path
 
-from .. import artifacts, contexts, gitctx, providers
+from .. import anonymise, artifacts, contexts, gitctx, providers
 from ..errors import ConfigError, UsageError
 
-ACTIONS = ["show", "list", "add", "use", "test"]
+ACTIONS = ["show", "list", "add", "use", "test", "record"]
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:
@@ -47,11 +47,16 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         help="repo: write .workflow/config.json; remote/path: add a rule for every repo like this one",
     )
 
-    actions.add_parser("test", help="verify the resolved context against the tracker (1 request)")
+    test = actions.add_parser("test", help="verify the resolved context against the tracker (1 request)")
+    test.add_argument("--deep", action="store_true", help="also report fields this tool is discarding")
+
+    record = actions.add_parser("record", help="save an anonymised copy of this tracker's payloads as fixtures")
+    record.add_argument("key", help="a real ticket to record; its content is replaced, its shape is kept")
+    record.add_argument("--out", help="directory to write to (default: tests/fixtures/<provider>/local)")
 
 
 def run(args: argparse.Namespace) -> int:
-    handlers = {"show": _show, "list": _list, "add": _add, "use": _use, "test": _test}
+    handlers = {"show": _show, "list": _list, "add": _add, "use": _use, "test": _test, "record": _record}
     if not args.action:
         raise UsageError("wb ctx needs an action", fix=[f"actions: {', '.join(ACTIONS)}"])
     return handlers[args.action](args)
@@ -204,10 +209,156 @@ def _append_rule(match: dict[str, str], name: str) -> None:
     path.write_text(json.dumps(rules, indent=2) + "\n", encoding="utf-8")
 
 
-def _test(_: argparse.Namespace) -> int:
+def _test(args: argparse.Namespace) -> int:
     resolution = contexts.resolve()
     provider = providers.for_context(resolution.context)
     identity = provider.probe()
     print(f"ok  {resolution.context.name} ({resolution.context.provider}) authenticated as {identity.account}")
     print(f"    {identity.detail}")
+    if getattr(args, "deep", False):
+        _discarded(provider)
     return 0
+
+
+# Fixture names, keyed by what the request looked like. They match the files
+# that ship with the package, so a recording drops straight into the same slots
+# the suite already reads.
+_JIRA_SHAPES = (
+    ("/comment", "comments"),
+    ("changelog", "changelog"),
+    ("/search/jql", "search"),
+    ("/issue/", "issue"),
+    ("/myself", "probe"),
+)
+_AZURE_SHAPES = (
+    ("/comments", "comments"),
+    ("/updates", "updates"),
+    ("/wiql", "wiql"),
+    ("/workitems/", "workitem"),
+    ("/_apis/wit/workitems", "batch"),
+)
+_GITHUB_SHAPES = (
+    ("/timeline", "timeline"),
+    ("/comments", "comments"),
+    ("/issues/", "issue"),
+    ("/issues", "list"),
+    ("/user", "probe"),
+)
+_SHAPES = {"jira": _JIRA_SHAPES, "azure": _AZURE_SHAPES, "github": _GITHUB_SHAPES}
+
+
+def _record(args: argparse.Namespace) -> int:
+    """Save this tenant's payload shapes, with the content replaced.
+
+    The fixtures that ship follow the vendors' published contracts, which cannot
+    describe a custom field somebody added in 2019 -- and that is exactly what
+    breaks first for a new user. The README asked people to close that gap by
+    hand with anonymised payloads, which is a request nobody acts on. This is
+    the same request as one command.
+    """
+    key = artifacts.validate_key(args.key)
+    resolution = contexts.resolve()
+    context = resolution.context
+    if context.provider == "local":
+        raise UsageError(
+            "the local provider has no payloads to record",
+            fix=["point at a tracker first: wb ctx use <name>"],
+        )
+
+    captured: list[tuple[str, object]] = []
+    _capture(provider := providers.for_context(context), captured)
+
+    # The calls triage makes. Failures are reported and skipped: a tenant that
+    # forbids one endpoint should still get fixtures for the rest.
+    for label, call in (
+        ("task", lambda: provider.fetch_task(key)),
+        ("comments", lambda: provider.fetch_comments(key, 20)),
+        ("history", lambda: provider.fetch_history(key, 20)),
+        ("probe", provider.probe),
+    ):
+        try:
+            call()
+        except Exception as exc:  # noqa: BLE001 - a partial recording beats none
+            print(f"skipped {label}: {type(exc).__name__}")
+
+    out = Path(args.out) if args.out else _default_out(context.provider)
+    written = _write_fixtures(captured, context.provider, out)
+
+    if not written:
+        raise UsageError(
+            "nothing was recorded",
+            fix=[f"check the ticket exists and this context can read it: wb task get {key}"],
+        )
+
+    print(f"wrote {len(written)} fixture(s) to {out}")
+    for name in sorted(written):
+        print(f"  {name}.json")
+    print()
+    print("content replaced, shape kept. Read one before committing it.")
+    print("the suite picks these up automatically: PYTHONPATH=\"lib;tests\" python -m unittest discover -s tests")
+    return 0
+
+
+def _capture(provider, captured: list) -> None:
+    """Tee every transport response, without changing what the provider does."""
+    for name in ("get", "post"):
+        original = getattr(provider, name)
+
+        def tee(*a, _original=original, **kw):
+            response = _original(*a, **kw)
+            captured.append((str(a[0]) if a else "", response))
+            return response
+
+        setattr(provider, name, tee)
+
+
+def _write_fixtures(captured: list, provider: str, out: Path) -> list[str]:
+    shapes = _SHAPES.get(provider, ())
+    anonymiser = anonymise.Anonymiser()
+    written: dict[str, object] = {}
+
+    for path, response in captured:
+        name = next((label for fragment, label in shapes if fragment in path), None)
+        if name is None or name in written:
+            continue
+        written[name] = anonymiser.payload(response)
+
+    if written:
+        out.mkdir(parents=True, exist_ok=True)
+        for name, payload in written.items():
+            (out / f"{name}.json").write_text(
+                json.dumps(payload, indent=2, ensure_ascii=False) + chr(10), encoding="utf-8"
+            )
+    return list(written)
+
+
+def _default_out(provider: str) -> Path:
+    root = gitctx.repo_root(Path.cwd()) or Path.cwd()
+    return root / "tests" / "fixtures" / provider / "local"
+
+
+def _scan(provider) -> dict:
+    """The scan needs a real ticket; use the first one this context can see."""
+    try:
+        rows = provider.list_tasks(1)
+        key = rows[0]["key"] if rows else ""
+        return provider.scan_fields(key) if key else {}
+    except Exception:  # noqa: BLE001 - --deep is a bonus on top of a passing test
+        return {}
+
+
+def _discarded(provider) -> None:
+    """Fields present in the payload that normalisation drops.
+
+    A custom field carrying acceptance criteria is invisible today: it is simply
+    not in the normalised task, and nothing says so. Silence there is worse than
+    a wrong mapping, because a wrong mapping gets noticed.
+    """
+    seen = _scan(provider)
+    if not seen:
+        print("    --deep: nothing unread, or this provider cannot scan")
+        return
+    print(f"    {len(seen)} field(s) in the payload are not read by this tool:")
+    for name, sample in sorted(seen.items())[:20]:
+        print(f"      {name}  e.g. {sample}")
+    print('    map one:  "field_map": {"<id>": "acceptance_criteria"} in .workflow/config.json')

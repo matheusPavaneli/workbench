@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import argparse
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
@@ -57,6 +56,7 @@ def run(args: argparse.Namespace) -> int:
     _identity(check, cwd, resolution)
     _flow(check, root or cwd)
     _runners(check, root or cwd)
+    _field_map(check, root or cwd)
     _ignore(check, root)
 
     width = max(len(name) for name, *_ in results)
@@ -161,12 +161,11 @@ def _flow(check, root: Path) -> None:
     from .. import flow as flow_lib
 
     try:
-        resolution = contexts.resolve(root)
-        config = (resolution.context.flow or {})
-    except WbError:
-        config = {}
-    try:
-        flow = flow_lib.load(config or None, root)
+        # Through the resolver, so doctor reports the flow ``wb flow`` uses.
+        # Reading the context alone skipped .workflow/config.json, which is the
+        # rung above it -- so a repo that had recorded its flow was told about a
+        # different one by the command whose whole job is checking the setup.
+        flow = flow_lib.resolve(root)
     except WbError as exc:
         check("flow", FAIL, exc.message, exc.fix)
         return
@@ -193,7 +192,7 @@ def _available(name: str) -> bool:
 
 def _runners(check, root: Path) -> None:
     """A plan's verify commands are worthless if the runner is not installed."""
-    conventions = profile_lib.detect(root).conventions
+    conventions = profile_lib.resolve(root).conventions
     wanted = [conventions.get("test_runner"), conventions.get("package_manager")]
     wanted = [w for w in wanted if w]
 
@@ -218,19 +217,35 @@ def _runners(check, root: Path) -> None:
     check("runners", OK, ", ".join(wanted))
 
 
+def _field_map(check, root: Path) -> None:
+    """A mapping that names a destination nothing reads loses the field silently.
+
+    Worth a check rather than a runtime error: the read has to keep working, so
+    an invalid entry is dropped at load -- which makes this the only place the
+    typo is ever visible.
+    """
+    from .. import fields as fields_lib, profile as profile_lib
+
+    configured = profile_lib.repo_config(root).get("field_map")
+    if not configured:
+        return
+
+    problems = fields_lib.validate(configured)
+    if problems:
+        check("field_map", FAIL, problems[0], problems[1:] or [f"destinations: {', '.join(fields_lib.DESTINATIONS)}"])
+        return
+    check("field_map", OK, f"{len(configured)} field(s) mapped: {', '.join(sorted(configured.values()))}")
+
+
 def _ignore(check, root: Path | None) -> None:
     if root is None:
         check("gitignore", WARN, "skipped: not a git checkout", [])
         return
-    try:
-        completed = subprocess.run(
-            ["git", "check-ignore", "-q", f"{WORKFLOW_DIR}/scratch"],
-            cwd=str(root), capture_output=True, text=True, timeout=10, check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
+    ignored = gitctx.is_ignored(root, f"{WORKFLOW_DIR}/scratch")
+    if ignored is None:
         check("gitignore", WARN, "could not ask git whether .workflow is ignored", [])
         return
-    if completed.returncode == 0:
+    if ignored:
         check("gitignore", OK, f"{WORKFLOW_DIR}/ is ignored")
         return
     check("gitignore", WARN, f"{WORKFLOW_DIR}/ is not ignored; artifacts will show up in every diff",

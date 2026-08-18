@@ -11,7 +11,7 @@ import json
 import sys
 from pathlib import Path
 
-from .. import artifacts, commitmsg, contexts, gitctx
+from .. import artifacts, commitmsg, contexts, contract, gitctx
 from ..errors import UsageError, WbError
 
 ACTIONS = ["convention", "check"]
@@ -58,7 +58,7 @@ def _convention(args: argparse.Namespace) -> int:
     convention = commitmsg.resolve(root, gitctx.recent_subjects(root))
 
     if args.json:
-        print(json.dumps(convention.to_dict(), indent=2))
+        print(contract.emit("commit.convention", convention.to_dict()))
         return 0
 
     print(f"style     {convention.describe()}")

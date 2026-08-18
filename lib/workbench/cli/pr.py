@@ -12,7 +12,7 @@ import json
 import sys
 from pathlib import Path
 
-from .. import artifacts, flow as flow_lib, gitctx, profile as profile_lib, prose, sdd as sdd_lib
+from .. import artifacts, contract, flow as flow_lib, gitctx, profile as profile_lib, prose, sdd as sdd_lib
 from ..errors import UsageError, WbError
 
 ACTIONS = ["context", "check"]
@@ -60,7 +60,7 @@ def _context(args: argparse.Namespace) -> int:
     if root is None:
         raise UsageError("not a git repository", fix=["run this inside a checkout"])
 
-    flow = flow_lib.load(None, root)
+    flow = flow_lib.resolve(root)
     if args.target:
         base = flow.target(args.target).branch
     else:
@@ -74,7 +74,7 @@ def _context(args: argparse.Namespace) -> int:
         "commits": gitctx.subjects_since(root, base),
         "changed": changed,
         "zones": profile_lib.critical_zones(changed),
-        "preset": profile_lib.detect(root).preset,
+        "preset": profile_lib.resolve(root).preset,
         "size": prose.size_class(changed),
         "shape": prose.SHAPE[prose.size_class(changed)],
     }
@@ -91,7 +91,7 @@ def _context(args: argparse.Namespace) -> int:
         # Otherwise the empty commit list reads as "this branch adds nothing".
         payload["_note"] = f"branch and base are both {base!r}; pass --base to compare against something"
 
-    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    print(contract.emit("pr.context", payload))
     return 0
 
 

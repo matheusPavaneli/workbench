@@ -169,8 +169,8 @@ token are a refusal, not an escape.
 
 `<` and `>` are redirection to a shell and punctuation to a human, and the only
 one this tool produces is the second kind: the RFC 822 address in `--author`.
-They are therefore allowed **in the value of a flag that takes one**, and
-nowhere else; everything that could chain or substitute a command stays refused
+They are therefore allowed **only in a value that is shaped like an address**,
+following a flag that takes one, and nowhere else; everything that could chain or substitute a command stays refused
 in every position. The printed form quotes any token carrying spaces or angle
 brackets, so a pasted command reaches git as one argument rather than as a
 redirect.

@@ -12,7 +12,7 @@ import argparse
 import json
 from pathlib import Path
 
-from .. import gitctx, profile as profile_lib
+from .. import contract, gitctx, profile as profile_lib
 from ..errors import UsageError
 
 ACTIONS = ["profile", "zones", "gates"]
@@ -51,7 +51,7 @@ def _profile(args: argparse.Namespace) -> int:
     resolved = profile_lib.resolve(root)
 
     if args.json:
-        print(json.dumps({**resolved.to_dict(), "gates": resolved.gates()}, indent=2))
+        print(contract.emit("repo.profile", {**resolved.to_dict(), "gates": resolved.gates()}))
         return 0
 
     origin = "override" if resolved.preset != resolved.detected else "detected"
@@ -92,7 +92,7 @@ def _gates(args: argparse.Namespace) -> int:
     gates = profile_lib.gates_for(preset, args.paths)
 
     if args.json:
-        print(json.dumps({"preset": preset, "by_preset": hits, "gates": gates}, indent=2))
+        print(contract.emit("repo.gates", {"preset": preset, "by_preset": hits, "gates": gates}))
         return 0
 
     spans = "  (the highest of the presets these paths land in)" if len(hits) > 1 else ""

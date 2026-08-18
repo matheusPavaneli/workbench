@@ -36,6 +36,34 @@ class Provider:
     def __init__(self, context: Context) -> None:
         self.context = context
         self._auth: str | None = None
+        self.field_map = self._field_map()
+
+    @staticmethod
+    def _field_map() -> dict[str, str]:
+        """This repo's custom-field mapping, or nothing.
+
+        Read here rather than passed in because every provider needs it and
+        none of them should have to remember to ask. Invalid entries are
+        dropped: ``wb doctor`` reports them, and a typo in a config must not
+        stop a ticket being read.
+        """
+        from pathlib import Path
+
+        from .. import fields as fields_lib, gitctx, profile
+
+        root = gitctx.repo_root(Path.cwd()) or Path.cwd()
+        configured = profile.repo_config(root).get("field_map")
+        if not isinstance(configured, dict) or fields_lib.validate(configured):
+            return {
+                source: destination
+                for source, destination in (configured or {}).items()
+                if isinstance(source, str) and destination in fields_lib.DESTINATIONS
+            }
+        return dict(configured)
+
+    def scan_fields(self, key: str) -> dict[str, str]:
+        """Fields this tenant carries that nothing here reads. Empty by default."""
+        return {}
 
     # ---- authentication -------------------------------------------------
 

@@ -139,6 +139,8 @@ def run(doc: dict, root: Path, baseline: str | None = None) -> Report:
     # A plan may only claim to edit files that exist. Claiming to edit a file
     # that is not there is the same class of error as a false citation.
     for item in doc.get("files") or []:
+        if not isinstance(item, dict):
+            continue  # validate() reports the shape; this pass must not raise on it
         path = str(item.get("path", ""))
         if not path or item.get("change") == "add":
             continue
@@ -173,7 +175,11 @@ def _preset_problems(doc: dict, root: Path) -> list[str]:
     if declared not in profile.RANK:
         return [f"preset {declared!r} is not one of: {', '.join(profile.PRESETS)}"]
 
-    paths = [str(item.get("path", "")) for item in doc.get("files") or [] if item.get("path")]
+    paths = [
+        str(item.get("path", ""))
+        for item in doc.get("files") or []
+        if isinstance(item, dict) and item.get("path")
+    ]
     required, hits = profile.resolve_for(paths, mapping, recorded or declared)
     if profile.RANK[declared] >= profile.RANK[required]:
         return []
@@ -186,6 +192,18 @@ def _preset_problems(doc: dict, root: Path) -> list[str]:
 
 
 def _check(index: int, item: dict, root: Path, baseline: str | None = None) -> Finding:
+    if not isinstance(item, dict):
+        # Reported as a finding rather than raised: a malformed plan must fail
+        # the audit, and failing it is not the same as crashing the checker.
+        return Finding(
+            index=index,
+            verdict=MISMATCH,
+            file="",
+            line=0,
+            claim="",
+            detail=f"evidence[{index}] must be an object, not {type(item).__name__}",
+        )
+
     raw_path = str(item.get("file", ""))
     claim = str(item.get("claim", ""))
     quote = " ".join(str(item.get("quote", "")).split())

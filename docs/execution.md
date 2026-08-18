@@ -133,10 +133,102 @@ Forward slashes work everywhere and are the simpler choice.
 
 ## Git façade
 
-`lib/workbench/gitctx.py` is read-only by design. Nothing in this package
-commits, pushes, or modifies a working tree — those are the user's calls, and
-they go through the agent's own tooling where the user sees and approves them.
+`lib/workbench/gitctx.py` is read-only by design, and everything that reads a
+repository goes through it.
 
 `wb git ctx` also reports when the checkout's `user.email` differs from the one
 the resolved context expects, which is how work commits end up carrying a
 personal address.
+
+## Git execution boundary
+
+`lib/workbench/gitrun.py` is the one module that writes to a repository, and
+only for a call that passed `--execute`. It is drawn the same way the verify
+boundary above is drawn, and for the same reason: the commands are computed
+from a plan, not typed by a person.
+
+The default is unchanged — print the command, let the user run it. `--execute`
+removes the copy-paste, not the review.
+
+### What may run
+
+| Subcommand | Flags allowed |
+|---|---|
+| `fetch` | `--prune` |
+| `switch` | `-c` |
+| `cherry-pick` | `--continue`, `--abort`, `-x` |
+| `commit` | `-F`, `--author` |
+| `push` | `-u` |
+
+Everything else is refused, including a flag the subcommand does not own. Also
+refused wherever it appears: `--force` in any spelling, `--amend`,
+`--no-verify`, `reset`, `rebase`, `clean`, `filter-branch`, `update-ref`, and
+anything that redirects what git itself runs (`--exec`, `--upload-pack`,
+`--receive-pack`). There is no shell — `;`, `&`, `|`, backticks and `$(` in any
+token are a refusal, not an escape.
+
+`<` and `>` are redirection to a shell and punctuation to a human, and the only
+one this tool produces is the second kind: the RFC 822 address in `--author`.
+They are therefore allowed **in the value of a flag that takes one**, and
+nowhere else; everything that could chain or substitute a command stays refused
+in every position. The printed form quotes any token carrying spaces or angle
+brackets, so a pasted command reaches git as one argument rather than as a
+redirect.
+
+`-c` is deliberately **not** on the denied list. It is git's config override
+before a subcommand and `switch`'s create flag after one; the override form
+cannot reach here because `argv[0]` must be an allowed subcommand, so denying
+the token would only break the legitimate use.
+
+### Preconditions
+
+Checked immediately before each step, never once for the series — a series
+changes the state its later steps depend on.
+
+| Precondition | Refuses when |
+|---|---|
+| `clean-tree` | a **tracked** file has uncommitted changes |
+| `not-protected` | the current branch is protected by the flow |
+| `no-upstream` | the branch is already published |
+
+`clean-tree` reads tracked changes only. `git switch -c` carries untracked
+files across unharmed, and `git stash` without `-u` leaves them where they are —
+so counting them refused the ordinary case and offered a remedy that did not
+clear it. Scope checking still counts untracked files, because a plan that adds
+a file has to be checked against the file it added; the two questions are
+different and now use different reads.
+
+Protected branches come from `flow.resolve()` — repo config, then context, then
+detection — the same resolution `wb flow` uses. If the flow cannot be resolved
+at all the check **fails closed** onto the conventional names, because not
+knowing what is protected is not permission to write to any of it.
+
+`no-upstream` is why `wb git push` is first-publish only. Recovering from a bad
+push onto a published branch means a force-push, and a force-push should not be
+a situation this tool can reach.
+
+### Stopping
+
+A refusal or a non-zero exit stops the series and prints what did not run,
+**starting at the step that failed** — that step did not happen, so handing over
+the remainder without it would mean, for `carry`, a cherry-pick whose branch was
+never created being applied to whatever branch the user is standing on. This
+matters most for `carry`: a cherry-pick series that continues past a failure
+lands the rest out of order, which is the mistake the carry computation exists
+to prevent.
+
+### Switches
+
+Either of these turns execution off, and `--execute` then fails loudly rather
+than silently doing nothing:
+
+- `WB_NO_EXECUTE=1` in the environment — for a session or a CI job that must
+  never write
+- `"execute": false` in `.workflow/config.json` — a standing decision for a
+  checkout
+
+### The trail
+
+Every executed series is appended to `.workflow/<KEY>/git.log.json` with the
+exact argv, exit code and captured output, and counted in `wb status --stats`
+through the usual event record.

@@ -35,6 +35,34 @@ Two rules decide what gets reported as `next`:
 - **A corrupt artifact reads as absent.** Status is what a stuck session runs
   first; it must never be the thing that fails.
 
+## `wb next`
+
+`wb status` answers "where does this stand", which is eight stages because a
+person resuming work wants the shape of it. `wb next` answers "what do I run",
+in two lines, and resolves *which* ticket without being told:
+
+1. an explicit key
+2. a ticket **with artifacts on disk** whose key is spelled in the branch name —
+   matched on a boundary and longest first, so `ABC-1` does not answer for a
+   checkout on `feature/ABC-12-thing`
+3. the most recently touched ticket
+4. only then a key read out of the branch name, anchored to the start of a path
+   segment — unanchored it turned `chore/bump-node-20` into `NODE-20`, and since
+   an unknown key reads as untouched work rather than as an error, that hid the
+   ticket actually in flight
+5. otherwise exit 6, pointing at `wb task list`
+
+Narrowest evidence first, so an argument always wins, a checkout sitting on a
+ticket branch never reports a different ticket, and a guessed key never
+displaces real work — it answers only when there is nothing else to answer
+with. `--json` carries `key`, `origin`,
+`stage`, `state`, `reason` and `command` — five fields a skill can branch on
+without parsing prose.
+
+Listing status also reports a **detected, unconfirmed preset**, because that is
+the bar every plan in the list will be held to and this is the command a session
+runs first.
+
 `--stats` has two halves that answer different questions.
 
 The **snapshot** aggregates the pipeline across tickets: where work is stuck

@@ -3,7 +3,7 @@
 Ticket-to-PR development workflow skills for Claude Code, with pluggable issue
 trackers (Jira Cloud, Azure DevOps, GitHub Issues, or a backlog in the repo).
 
-Ten skills, one CLI, 388 tests, no third-party dependencies.
+Ten skills, one CLI, 485 tests, no third-party dependencies.
 
 ## Two design rules
 
@@ -18,8 +18,12 @@ flag is an invitation to invent a field name that does not exist. Depth limits,
 output caps, field normalisation, quality gates and the citation audit are all
 enforced by the CLI and covered by tests, so every session behaves identically.
 
-Nothing in this package commits, pushes, or edits a working tree. It reads,
-checks and writes artifacts; git operations stay with the user.
+**Git is read-only until you say otherwise.** Every command prints what it
+would run and lets the user run it — a wrong computation is then a wasted paste,
+not a wrong branch. `--execute` runs it instead, through an allowlist that
+admits five subcommands and refuses every rewrite of history: no `reset`, no
+`rebase`, no `--amend`, and no force-push in any spelling. Two switches turn it
+off standing.
 
 ## Install
 
@@ -104,6 +108,16 @@ ABC-123  Coupon applied after the charge  [bug, jira]
   next: wb impl verify ABC-123
 ```
 
+`wb next` is the shorter question — *what do I run* rather than *where does
+this stand* — and works out which ticket without being told, from the branch
+name, then from what was touched last:
+
+```
+$ wb next
+ABC-123  (branch)  audit BLOCKED  1 of 4 citation(s) unverified
+  next: fix the plan, then: wb sdd audit ABC-123
+```
+
 `wb status` with no key lists everything in flight. `--stats` has two halves:
 a snapshot of where work is stuck now, and a history from a local command log
 of where this repo keeps losing time — a stage that always passes on the second
@@ -149,7 +163,34 @@ wb flow carry ABC-123 --to homolog     # the commits to cherry-pick, oldest firs
 ```
 
 Order is the point of `carry`: a series applied newest-first conflicts on every
-commit after the first. See [flow.md](docs/flow.md).
+commit after the first.
+
+Every base is a remote-tracking ref, so there is no pull step — `start` fetches
+and branches from `origin/<base>`, and `carry` fetches *before* it measures the
+range, because measuring "what the source lacks" against stale refs carries
+commits that were already merged.
+
+### Running it
+
+The commands above print. Add `--execute` to run them:
+
+```sh
+wb flow start ABC-123 --title "..." --execute
+wb flow carry ABC-123 --to homolog --execute
+wb git commit ABC-123 --execute    # the message from wb commit check, the author from the context
+wb git push --execute              # first publish only
+```
+
+The printed and the executed forms are the same objects, so `--execute` cannot
+run something other than what it showed. A refusal or a failure stops the series
+and hands back the rest, starting at the step that failed. Preconditions are
+checked before each step: a clean tree to switch branch, a working branch to
+commit, and no upstream to push — recovering from a bad push onto a published
+branch means a force-push, so this tool cannot reach the situation.
+
+Turn it off standing with `WB_NO_EXECUTE=1` or `"execute": false` in
+`.workflow/config.json`. See [flow.md](docs/flow.md) and
+[execution.md](docs/execution.md).
 
 ## Quality presets
 
@@ -167,6 +208,25 @@ errors, no secrets in code, and a stated rollback path apply to every preset —
 | `enterprise` | backwards compatibility, runbooks, cross-team blast radius |
 
 Detected from repo evidence (`wb repo profile`), overridable with `--set`.
+
+Detection is allowed to be wrong. It is not allowed to be wrong **silently**:
+where the evidence supports more than one bar — an unreadable contributor
+count, CI on a one-person repo, or a monorepo — the preset comes back marked
+`LOW confidence` with the alternatives named, and `wb status` keeps saying so
+until somebody settles it with `--confirm` or `--set`.
+
+A monorepo has no single answer, so it can give a different bar to each part:
+
+```json
+{ "preset": "startup",
+  "preset_paths": { "packages/billing/**": "enterprise",
+                    "apps/playground/**": "prototype" } }
+```
+
+`wb repo gates <paths>` resolves the rules for the files a change actually
+touches. A change spanning two presets is held to the **higher** one — the
+alternative is a plan that meets neither — and the audit fails a plan that
+declares a preset below what its own files demand.
 Rigour is not uniform inside a repo either: billing, auth, user data, migrations
 and secrets raise the bar locally whatever the preset says.
 
@@ -191,17 +251,18 @@ on a plan whose audit did not pass.
 
 ```
 wb doctor  everything that has to be true, in one pass
+wb next    [KEY]               the single command to run now
 wb status  [KEY] | --stats     where work stands, and what to run next
 wb ctx     show | list | add | use | test
 wb task    list | get | new | done
-wb repo    profile | zones
+wb repo    profile [--confirm] | zones | gates <paths>
 wb sdd     audit [--rebaseline] | get | render | handover | gates
-wb flow    show | start | carry | set
+wb flow    show | start | carry | set        start, carry take --execute
 wb impl    check | verify
 wb review  context | gates
 wb commit  convention | check
 wb pr      context | check
-wb git     ctx | diff
+wb git     ctx | diff | commit | push        commit, push take --execute
 ```
 
 Exit codes: 2 usage, 3 config, 4 auth, 5 provider, 6 not found, 7 audit failed.
@@ -211,7 +272,7 @@ Exit codes: 2 usage, 3 config, 4 auth, 5 provider, 6 not found, 7 audit failed.
 - [configuration.md](docs/configuration.md) — contexts, matching rules, keychain, exit codes
 - [providers.md](docs/providers.md) — internal schema, tracker quirks, adding a provider
 - [depth-policy.md](docs/depth-policy.md) — depth, expansion handles, output caps
-- [execution.md](docs/execution.md) — scope guard, verification boundary, declared environment, git façade
+- [execution.md](docs/execution.md) — scope guard, verification boundary, declared environment, git façade and execution
 - [status.md](docs/status.md) — the pipeline, the command history, rigour tiers, settled gates
 - [flow.md](docs/flow.md) — source and validation branches, cherry-pick carrying, branch naming
 

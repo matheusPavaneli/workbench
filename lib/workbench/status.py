@@ -14,6 +14,7 @@ proves it happened, how to say so in one line, and the command that produces it
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -98,6 +99,68 @@ def keys(cwd: Path | None = None) -> list[str]:
     ]
     found.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return [p.name for p in found]
+
+
+# A branch name carries the key in every convention this tool detects, so the
+# ticket a session is working on is a fact about the checkout, not a question.
+#
+# Anchored to the start of a path segment, because unanchored it read a key out
+# of any branch name with a number in it: "chore/bump-node-20" became NODE-20,
+# and since an unknown key reads as untouched work rather than as an error,
+# `wb next` then reported that instead of the ticket actually in flight.
+_KEY_IN_BRANCH = re.compile(r"(?:^|/)([A-Za-z]{2,}-\d+)")
+
+
+def key_from_branch(available: list[str], cwd: Path | None = None) -> str | None:
+    """The key this checkout is on, or ``None`` when the branch does not say.
+
+    A key with artifacts already on disk wins over one merely spelled in the
+    branch name: the artifacts are what a next step reads.
+    """
+    here = cwd or Path.cwd()
+    name = gitctx.branch(gitctx.repo_root(here) or here)
+    if not name:
+        return None
+
+    # Longest first, and on a boundary. Plain substring matching made ABC-1
+    # match "feature/ABC-12-thing", so whichever of the two had been touched
+    # more recently won -- the precise failure this resolution exists to avoid.
+    for key in sorted(available, key=len, reverse=True):
+        if _spelled_in(key, name):
+            return key
+    return None
+
+
+def _spelled_in(key: str, branch: str) -> bool:
+    """``key`` appears in ``branch`` as a whole token, not as a prefix of a longer one."""
+    return re.search(rf"(?:^|[^A-Za-z0-9]){re.escape(key)}(?![A-Za-z0-9])", branch, re.IGNORECASE) is not None
+
+
+def pick(key: str | None = None, cwd: Path | None = None) -> tuple[Status, str] | None:
+    """The one piece of work a session should act on, and why it was chosen.
+
+    Explicit key, then a branch naming work that exists, then the most recently
+    touched ticket, and only then a key read out of the branch name. Narrowest
+    evidence first: an argument always wins, a checkout on a ticket branch never
+    reports a different ticket, and a guessed key never displaces real work --
+    it is the answer only when there is nothing else to answer with.
+    """
+    if key:
+        return read(key, cwd), "named"
+
+    available = keys(cwd)
+    from_branch = key_from_branch(available, cwd)
+    if from_branch:
+        return read(from_branch, cwd), "branch"
+    if available:
+        return read(available[0], cwd), "most recent"
+
+    here = cwd or Path.cwd()
+    name = gitctx.branch(gitctx.repo_root(here) or here) or ""
+    match = _KEY_IN_BRANCH.search(name)
+    if match:
+        return read(match.group(1).upper(), cwd), "branch"
+    return None
 
 
 def read(key: str, cwd: Path | None = None) -> Status:
@@ -257,6 +320,43 @@ def render(status: Status, *, width: int = 9) -> str:
     else:
         lines.append("  next: nothing outstanding")
     return "\n".join(lines)
+
+
+def _lines(*parts: str) -> str:
+    return "\n".join(parts)
+
+
+def render_next(status: Status, origin: str) -> str:
+    """One line of state, one line of command. Nothing an agent has to parse.
+
+    ``render`` prints eight stages because a person reading it wants the shape
+    of the work. A session that only wants the next move pays for eight lines
+    to use one, every time it asks.
+    """
+    stage = status.blocked or status.next_stage
+    head = f"{status.key}"
+    if origin != "named":
+        head += f"  ({origin})"
+    if stage is None:
+        return _lines(f"{head}  complete", "  next: nothing outstanding")
+
+    state = "BLOCKED" if status.blocked else stage.state
+    detail = f"  {stage.detail}" if stage.detail else ""
+    command = stage.command or "(no command; the next step is a skill, not the CLI)"
+    return _lines(f"{head}  {stage.name} {state}{detail}", f"  next: {command}")
+
+
+def next_dict(status: Status, origin: str) -> dict:
+    stage = status.blocked or status.next_stage
+    return {
+        "schema": 1,
+        "key": status.key,
+        "origin": origin,
+        "stage": stage.name if stage else "",
+        "state": "blocked" if status.blocked else (stage.state if stage else "complete"),
+        "reason": stage.detail if stage else "",
+        "command": stage.command if stage else "",
+    }
 
 
 def summarise(items: list[Status]) -> dict:

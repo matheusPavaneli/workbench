@@ -174,6 +174,25 @@ $ wb task clean --older-than 30d
 remove them: wb task clean --older-than 30d --force
 ```
 
+`wb surface` prints every group, action and flag, read off the live parser
+rather than a list kept by hand. `wb surface <group>` narrows it, `--json` is
+the form a session reads before composing an unfamiliar call:
+
+```
+$ wb surface pr
+wb pr context   branch, commits, plan summary, verification verdict
+  key   [positional; required]
+  --base <value>
+  --target <value>
+wb pr check   reject filler, empty sections and placeholders in a draft
+  --file <value>   [required]
+  --shape <value>   [one of: trivial, small, large]
+```
+
+This is the schema MCP publishes for every tool in every session. Here it costs
+nothing until something asks: no skill names it, and a flag that was never in
+the parser cannot appear in it.
+
 ### Rigour proportional to risk
 
 Ceremony has a cost that is not measured in minutes: a process too heavy for a

@@ -11,6 +11,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -201,6 +202,91 @@ class TaskClean(CliBase):
         code, _, err = run("task", "clean", "ABC-123", "--force")
         self.assertEqual(EXIT_NOT_FOUND, code)
         self.assertIn("wb status", err)
+
+    def test_it_refuses_to_guess_what_to_clean(self) -> None:
+        code, _, err = run("task", "clean")
+        self.assertEqual(EXIT_USAGE, code)
+        self.assertIn("--merged", err)
+
+    def test_a_key_and_a_selector_together_are_refused(self) -> None:
+        self.seed("ABC-123")
+        code, _, err = run("task", "clean", "ABC-123", "--merged", "--force")
+        self.assertEqual(EXIT_USAGE, code)
+        self.assertTrue((self.root / ".workflow" / "ABC-123").is_dir())
+
+    def test_older_than_selects_only_what_is_stale(self) -> None:
+        old = self.seed("ABC-1")
+        fresh = self.seed("ABC-2")
+        self._age(old, days=40)
+
+        out = run("task", "clean", "--older-than", "30d")[1]
+        self.assertIn("ABC-1", out)
+        self.assertNotIn("ABC-2", out)
+        self.assertIn("1 ticket(s)", out)
+
+    def test_a_plan_edited_in_place_counts_as_touched(self) -> None:
+        """The directory's own timestamp does not move when a file is rewritten."""
+        directory = self.seed("ABC-1", "sdd.json")
+        self._age(directory, days=40)
+        os.utime(directory / "sdd.json", None)
+
+        self.assertIn("no ticket has been untouched", run("task", "clean", "--older-than", "30d")[1])
+
+    def test_a_nonsense_age_is_refused(self) -> None:
+        for bad in ("soon", "0d", "-3d"):
+            with self.subTest(bad=bad):
+                self.assertEqual(EXIT_USAGE, run("task", "clean", "--older-than", bad)[0])
+
+    def test_merged_needs_both_shipped_and_branchless(self) -> None:
+        """The half that matters: no branch alone also describes work never started."""
+        self.seed("ABC-1", "pr.md")          # shipped, branch gone
+        self.seed("ABC-2", "pr.md")          # shipped, branch still there
+        self.seed("ABC-3", "triage.json")    # never branched at all
+
+        with mock.patch("workbench.gitctx.remote_branches", return_value=["origin/ABC-2-thing"]):
+            out = run("task", "clean", "--merged")[1]
+
+        self.assertIn("ABC-1", out)
+        self.assertNotIn("ABC-2", out)
+        self.assertNotIn("ABC-3", out)
+
+    def test_a_selector_matching_nothing_is_not_an_error(self) -> None:
+        self.seed("ABC-1", "triage.json")
+        with mock.patch("workbench.gitctx.remote_branches", return_value=[]):
+            code, out, _ = run("task", "clean", "--merged")
+        self.assertEqual(0, code)
+        self.assertIn("no ticket has shipped", out)
+
+    def test_the_listing_says_which_stage_unfinished_work_stopped_at(self) -> None:
+        directory = self.seed("ABC-1")
+        (directory / "triage.json").write_text(json.dumps({"provider": "local", "type": "feature"}), "utf-8")
+        self._age(directory, days=40)
+
+        out = run("task", "clean", "--older-than", "30d")[1]
+        self.assertIn("still at plan", out, "triage is done, so the next thing owed is the plan")
+
+    def test_a_selector_removes_every_match_and_no_sibling(self) -> None:
+        self.use_local()
+        run("task", "new", "Do the thing")
+        self._age(self.seed("ABC-1"), days=40)
+        self._age(self.seed("ABC-2"), days=40)
+        kept = self.seed("ABC-3")
+
+        code, out, _ = run("task", "clean", "--older-than", "30d", "--force")
+
+        self.assertEqual(0, code)
+        self.assertIn("2 ticket(s) removed", out)
+        self.assertFalse((self.root / ".workflow" / "ABC-1").exists())
+        self.assertFalse((self.root / ".workflow" / "ABC-2").exists())
+        self.assertTrue(kept.is_dir())
+        self.assertTrue((self.root / ".workflow" / "config.json").is_file())
+        self.assertTrue((self.root / ".workflow" / "tasks" / "WB-1.json").is_file())
+
+    def _age(self, directory: Path, *, days: int) -> Path:
+        stamp = time.time() - days * 86400
+        for path in [*directory.rglob("*"), directory]:
+            os.utime(path, (stamp, stamp))
+        return directory
 
     def test_work_that_started_before_a_ticket_cleans_the_same_way(self) -> None:
         directory = self.seed("idea-dashboard", "frame.md")

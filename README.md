@@ -135,6 +135,27 @@ a snapshot of where work is stuck now, and a history from a local command log
 of where this repo keeps losing time — a stage that always passes on the second
 attempt is invisible in the snapshot and the most expensive thing in the log.
 
+`wb task clean <KEY>` removes one ticket's artifacts once the work is done with.
+It lists and removes nothing; `--force` is a second command, because a plan and
+its evidence can be produced again and a frame or a handover was written once,
+by hand:
+
+```
+$ wb task clean ABC-123
+/repo/.workflow/ABC-123
+  triage.json
+  sdd.json
+  frame.md   hand-written, not regenerable
+
+3 file(s), nothing removed
+remove them: wb task clean ABC-123 --force
+```
+
+The key resolves through the same validation as every other artifact path, so
+the context binding, the local backlog and the event log sitting beside the
+ticket directories are not names the command avoids — they are names it cannot
+produce.
+
 ### Rigour proportional to risk
 
 Ceremony has a cost that is not measured in minutes: a process too heavy for a

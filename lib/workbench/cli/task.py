@@ -12,13 +12,20 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 
 from .. import artifacts, contexts, providers
-from ..errors import UsageError
+from ..errors import NotFoundError, UsageError, WbError
 from ..providers import local
 
-ACTIONS = ["list", "get", "new", "done"]
+ACTIONS = ["list", "get", "new", "done", "clean"]
 DEFAULT_LIST_LIMIT = 20
+
+# Artifacts a skill wrote from a conversation rather than from the tracker.
+# Everything else in a ticket directory can be produced again -- `wb task get`,
+# a re-plan, a re-verify -- so these are the only lines in the listing that
+# describe a decision rather than a chore.
+UNRECOVERABLE = ("frame.md", "handover.md")
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:
@@ -62,11 +69,19 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         help="the status to move to; defaults to done",
     )
 
+    clean = actions.add_parser("clean", help="remove one ticket's .workflow/<KEY>/ artifacts")
+    clean.add_argument("key")
+    clean.add_argument(
+        "--force",
+        action="store_true",
+        help="actually remove them; without this the files are only listed",
+    )
+
 
 def run(args: argparse.Namespace) -> int:
     if not args.action:
         raise UsageError("wb task needs an action", fix=[f"actions: {', '.join(ACTIONS)}"])
-    return {"list": _list, "get": _get, "new": _new, "done": _done}[args.action](args)
+    return {"list": _list, "get": _get, "new": _new, "done": _done, "clean": _clean}[args.action](args)
 
 
 def _list(args: argparse.Namespace) -> int:
@@ -103,6 +118,51 @@ def _done(args: argparse.Namespace) -> int:
         print(f"{data['key']}  already {data['status']}")
         return 0
     print(f"{data['key']}  {previous} -> {data['status']}  {data['title']}")
+    return 0
+
+
+def _clean(args: argparse.Namespace) -> int:
+    """Remove one ticket's scratch, and nothing that is a sibling of it.
+
+    The guard is structural rather than a list of names to avoid. Every path
+    here is resolved through ``artifacts.ticket_dir``, which routes the key
+    through ``validate_key`` -- and neither the key pattern nor the slug pattern
+    can produce ``tasks``, ``config.json`` or ``.events.jsonl``. Those three sit
+    beside the ticket directories under the same root, and two of them are
+    committed, so a blacklist that drifted would be the whole risk of the
+    command. There is nothing to drift.
+
+    Listing is the default because there is no undo: a plan and its evidence can
+    be produced again, but a frame or a handover was written once, by hand.
+    """
+    directory = artifacts.ticket_dir(args.key)
+    if not directory.is_dir():
+        raise NotFoundError(
+            f"{directory} does not exist",
+            fix=["wb status   # the keys that do have artifacts in this checkout"],
+        )
+
+    files = sorted(path for path in directory.rglob("*") if path.is_file())
+
+    if not args.force:
+        print(directory)
+        for path in files:
+            name = path.relative_to(directory).as_posix()
+            note = "   hand-written, not regenerable" if name in UNRECOVERABLE else ""
+            print(f"  {name}{note}")
+        print(f"\n{len(files)} file(s), nothing removed")
+        print(f"remove them: wb task clean {args.key} --force")
+        return 0
+
+    try:
+        shutil.rmtree(directory)
+    except OSError as exc:
+        raise WbError(
+            f"could not remove {directory}: {exc}",
+            fix=["close anything holding a file open in that directory, then run it again"],
+        ) from exc
+
+    print(f"removed {directory}  ({len(files)} file(s))")
     return 0
 
 

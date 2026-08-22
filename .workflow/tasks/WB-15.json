@@ -1,0 +1,16 @@
+{
+  "key": "WB-15",
+  "title": "wb task clean -- remove one ticket's workflow artifacts",
+  "type": "feature",
+  "status": "done",
+  "desc": "PROBLEM: .workflow/ accumulates a directory per ticket and nothing removes one. The workaround, rm -rf .workflow/<KEY>, sits one slip away from config.json (the committed context binding) and tasks/ (the committed local backlog). Framed in .workflow/idea-dashboard/frame.md, which rejected the dashboard and server+DB shapes and kept this slice.\n\nSCOPE: wb task clean <KEY> lists what would be removed and exits 0. --force removes .workflow/<KEY>/ and nothing else. Refuses config.json, tasks/, .events.jsonl, and an unknown key. Key validated through artifacts.validate_key, so idea-* and incident-* slugs work too.\n\nMETRIC: directories under .workflow/ stop growing monotonically; today 6.\n\nACCEPTANCE:\n- dry-run is the default and names every file, flagging frame.md and handover.md as unrecoverable (no rollback for those; triage.json, sdd.json and evidence.json are regenerable)\n- --force removes only the ticket directory; a test asserts config.json, tasks/ and .events.jsonl survive\n- a test asserts a key outside .workflow/ (traversal, absolute path) is rejected before any filesystem write\n- no new skill, no change to MAX_TOTAL_DESCRIPTION_CHARS in tests/test_plugin.py\n- README's wb task section documents it; no SKILL.md mentions it",
+  "created": "2026-08-22T15:41:46Z",
+  "updated": "2026-08-22T15:55:26Z",
+  "comments": [],
+  "linked": [
+    {
+      "key": "WB-7",
+      "type": "relates"
+    }
+  ]
+}

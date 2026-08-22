@@ -132,6 +132,82 @@ class TaskGet(CliBase):
         self.assertIn("comments:page2", err)
 
 
+class TaskClean(CliBase):
+    """Removing one ticket's scratch, and provably nothing beside it.
+
+    `.workflow/` holds the ticket directories, the committed context binding,
+    the committed local backlog and the event log side by side. The command is
+    only safe if the last three cannot be reached, so they are asserted present
+    after a real removal rather than assumed out of range.
+    """
+
+    def seed(self, key: str, *names: str) -> Path:
+        directory = self.root / ".workflow" / key
+        directory.mkdir(parents=True, exist_ok=True)
+        for name in names or ("triage.json",):
+            (directory / name).write_text("{}", encoding="utf-8")
+        return directory
+
+    def test_it_lists_without_removing_anything(self) -> None:
+        directory = self.seed("ABC-123", "triage.json", "sdd.json")
+        code, out, _ = run("task", "clean", "ABC-123")
+        self.assertEqual(0, code)
+        self.assertTrue(directory.is_dir())
+        self.assertIn("triage.json", out)
+        self.assertIn("sdd.json", out)
+        self.assertIn("nothing removed", out)
+
+    def test_the_listing_marks_only_what_cannot_be_produced_again(self) -> None:
+        self.seed("ABC-123", "triage.json", "frame.md")
+        out = run("task", "clean", "ABC-123")[1]
+        frame = next(line for line in out.splitlines() if "frame.md" in line)
+        triage = next(line for line in out.splitlines() if "triage.json" in line)
+        self.assertIn("not regenerable", frame)
+        self.assertNotIn("not regenerable", triage)
+
+    def test_force_removes_the_ticket_and_leaves_its_siblings(self) -> None:
+        self.use_local()
+        run("task", "new", "Do the thing")
+        events = self.root / ".workflow" / ".events.jsonl"
+        events.write_text('{"group": "task"}\n', encoding="utf-8")
+        directory = self.seed("ABC-123")
+
+        code, out, _ = run("task", "clean", "ABC-123", "--force")
+
+        self.assertEqual(0, code)
+        self.assertFalse(directory.exists())
+        self.assertIn("removed", out)
+        self.assertTrue((self.root / ".workflow" / "config.json").is_file())
+        self.assertTrue((self.root / ".workflow" / "tasks" / "WB-1.json").is_file())
+        self.assertTrue(events.is_file())
+
+    def test_a_malformed_key_is_refused_before_anything_is_written(self) -> None:
+        """Seeded on purpose: an empty directory cannot show that nothing was removed."""
+        self.use_local()
+        run("task", "new", "Do the thing")
+        workflow = self.root / ".workflow"
+        (workflow / ".events.jsonl").write_text('{"group": "task"}\n', encoding="utf-8")
+        self.seed("ABC-123")
+        before = sorted(path.name for path in workflow.rglob("*"))
+        self.assertIn("config.json", before)
+
+        for bad in ("../..", "tasks", "config.json", ".events.jsonl"):
+            with self.subTest(bad=bad):
+                self.assertEqual(EXIT_USAGE, run("task", "clean", bad, "--force")[0])
+
+        self.assertEqual(before, sorted(path.name for path in workflow.rglob("*")))
+
+    def test_a_key_with_no_artifacts_is_not_reported_as_a_success(self) -> None:
+        code, _, err = run("task", "clean", "ABC-123", "--force")
+        self.assertEqual(EXIT_NOT_FOUND, code)
+        self.assertIn("wb status", err)
+
+    def test_work_that_started_before_a_ticket_cleans_the_same_way(self) -> None:
+        directory = self.seed("idea-dashboard", "frame.md")
+        self.assertEqual(0, run("task", "clean", "idea-dashboard", "--force")[0])
+        self.assertFalse(directory.exists())
+
+
 class Status(CliBase):
     def test_an_empty_repo_says_so_and_suggests_a_start(self) -> None:
         code, out, _ = run("status")

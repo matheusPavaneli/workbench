@@ -5,6 +5,8 @@ does not say what it produces will not chain, and a SKILL.md that has quietly
 grown to two hundred lines costs tokens in every session that triggers it.
 """
 
+from __future__ import annotations
+
 import json
 import re
 import unittest
@@ -25,6 +27,32 @@ MAX_DESCRIPTION_CHARS = 260
 MAX_TOTAL_DESCRIPTION_CHARS = 2100
 
 FRONTMATTER = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
+
+
+def changelog_heading(changelog: str, version: str) -> str | None:
+    """The changelog heading for ``version``, or ``None`` when it has none.
+
+    Matched on a boundary, so 0.6.0 does not answer for a section headed 0.6.01.
+    """
+    match = re.search(rf"^##\s+{re.escape(version)}\b.*$", changelog, re.MULTILINE)
+    return match.group(0) if match else None
+
+
+class ChangelogHeading(unittest.TestCase):
+    """The gate below is only worth having if it fails on the case it exists for."""
+
+    def test_it_finds_a_released_section(self) -> None:
+        self.assertEqual("## 0.6.0", changelog_heading("# Changelog\n\n## 0.6.0\n\n### Added\n", "0.6.0"))
+
+    def test_it_carries_an_unreleased_marker_back_to_the_caller(self) -> None:
+        heading = changelog_heading("## 0.5.0 — unreleased\n", "0.5.0")
+        self.assertIn("unreleased", (heading or "").lower())
+
+    def test_a_missing_section_is_none(self) -> None:
+        self.assertIsNone(changelog_heading("## 0.4.0\n", "0.5.0"))
+
+    def test_a_longer_number_does_not_answer_for_a_shorter_one(self) -> None:
+        self.assertIsNone(changelog_heading("## 0.6.01\n", "0.6.0"))
 
 
 def _skills():
@@ -237,6 +265,34 @@ class Manifests(unittest.TestCase):
         from workbench import __version__
 
         self.assertRegex(__version__, r"^\d+\.\d+\.\d+$")
+
+    def test_the_declared_version_has_been_released(self) -> None:
+        """A version string that does not move is a release nobody receives.
+
+        `wb task clean` shipped under 0.5.0 with no bump, so the marketplace
+        compared 0.5.0 against 0.5.0, reported the plugin already current, and
+        left every installed copy without the command. The test above holds the
+        four declared versions to each other; nothing held them to the changelog,
+        where 0.5.0 was still marked unreleased the whole time it was shipping.
+
+        Declared is distributable, and distributable is released.
+        """
+        from workbench import __version__
+
+        changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        heading = changelog_heading(changelog, __version__)
+
+        self.assertIsNotNone(
+            heading,
+            f"CHANGELOG.md has no '## {__version__}' section; write one, or bump the version",
+        )
+        self.assertNotIn(
+            "unreleased",
+            (heading or "").lower(),
+            f"{__version__} is declared in the package and both manifests but is still marked"
+            " unreleased in CHANGELOG.md; drop the marker once it ships, or declare the version"
+            " that actually shipped",
+        )
 
     def test_shared_references_exist_where_skills_point(self) -> None:
         pattern = re.compile(r"\$\{CLAUDE_PLUGIN_ROOT\}/([\w./-]+\.md)")

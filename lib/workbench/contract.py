@@ -34,6 +34,7 @@ VERSIONS: dict[str, int] = {
     "review.context": 1,
     "review.gates": 1,
     "pr.context": 1,
+    "surface": 1,
 }
 
 # The keys a consumer may rely on being present. Recorded rather than described,

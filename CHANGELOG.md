@@ -11,6 +11,61 @@ command's own output, and one that removes it. A `--json` payload that loses or
 renames a key raises its `schema` number in the same release, and
 `contract.VERSIONS` is asserted against the real output so it cannot drift.
 
+## 0.7.0
+
+### Added
+
+- `wb surface` — prints every group, action and flag, walked off `build_parser()`
+  rather than a list kept by hand. `wb surface <group>` narrows it; `--json` is
+  the form a session reads before composing an unfamiliar call. It carries what
+  invented calls get wrong: which arguments are positional, which are required,
+  which take no value, and the closed set a choice flag allows. Nothing names it,
+  so it costs nothing until something asks.
+- `wb status --stats --global` — reads `~/.workbench/events.jsonl`, the same
+  tracked lines appended once per machine with the checkout's name, and adds a
+  `by checkout` breakdown. The log under `.workflow/` answers "where does this
+  repo lose time" and structurally cannot answer "where do I lose time"; a stage
+  that is fine here and terrible in four other checkouts looks fine from inside
+  any one of them. Same three rules as the local log: outcomes and never
+  arguments, capped by rewriting, every failure swallowed. `--global` without
+  `--stats` is refused rather than ignored, because only `--stats` reports the
+  history.
+- `wb task clean --merged` and `--older-than <duration>` — clean a checkout
+  rather than a ticket. `--merged` takes every ticket that reached a commit or a
+  PR and has no branch left on the remote; both halves are load-bearing, since
+  "no branch names this key" on its own also describes work that was never
+  branched at all. `--older-than 30d` measures from the newest file in the
+  ticket, not the directory's own timestamp, because editing a plan in place
+  leaves the directory alone. The listing says which stage each ticket stopped
+  at, so a selector that caught live work is visible while it is still only a
+  listing. A key and a selector together are refused rather than merged.
+
+### Fixed
+
+- `wb pr context` graded a three-file feature as trivial when asked after the
+  commit, because it read the working tree for files while building its commit
+  list from the branch against its base. `wb status` had the same root cause and
+  reported `0 of 3 planned file(s) changed` for finished work. Both now use
+  `gitctx.changed_since`, three dots, so commits the base collected after the
+  branch left it are not counted as this branch's doing, and an unknown base
+  contributes nothing rather than failing. `pr context` also took its base from
+  the local `flow.source.branch`; it now goes through `flow.carry_base`, which
+  resolves `origin/<source>` when it exists. `status` resolves the set once per
+  command rather than once per ticket.
+
+### Changed
+
+- The declared version is now held to a released changelog section, so a version
+  named in the package may not still carry an unreleased marker. `wb task clean`
+  shipped under 0.5.0 with no bump: the marketplace compared 0.5.0 against 0.5.0,
+  reported the plugin current, and left every installed copy on four `wb task`
+  actions. 634 tests did not notice.
+
+No breaking change: every existing group, action, flag and exit code behaves as
+it did in 0.6.0, and no `--json` payload lost or renamed a key — `surface` is a
+new payload at `schema` 1, and `status --stats --global` adds a key rather than
+moving one.
+
 ## 0.6.0
 
 ### Added

@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Ticket-to-PR development workflow skills. Jira, Azure DevOps and GitHub Issues, or a backlog in the repo when there is no tracker at all.",
-    "version": "0.6.0"
+    "version": "0.7.0"
   },
   "plugins": [
     {

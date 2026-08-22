@@ -1,6 +1,6 @@
 {
   "name": "workbench",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Ticket-to-PR development workflow: triage, plan with verified citations, implement inside the plan, review, commit, PR. Pluggable issue trackers (Jira, Azure DevOps, GitHub Issues) or a backlog in the repo, so it works with no tracker at all.",
   "author": {
     "name": "matheusPavaneli",

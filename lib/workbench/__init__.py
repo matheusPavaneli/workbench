@@ -5,4 +5,4 @@ subcommand from a closed set; they never compose a query, a URL or a field
 list. Anything a model could invent is something this package decides.
 """
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"

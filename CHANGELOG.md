@@ -11,7 +11,25 @@ command's own output, and one that removes it. A `--json` payload that loses or
 renames a key raises its `schema` number in the same release, and
 `contract.VERSIONS` is asserted against the real output so it cannot drift.
 
-## 0.5.0 — unreleased
+## 0.6.0
+
+### Added
+
+- `wb task clean <KEY>` — removes one ticket's `.workflow/<KEY>/` artifacts.
+  Lists and removes nothing; `--force` is a second command, because a plan and
+  its evidence can be produced again while a frame or a handover was written
+  once by hand, and the listing marks which is which. The key resolves through
+  the same validation as every other artifact path, so the context binding, the
+  local backlog and the event log sitting beside the ticket directories are not
+  names the command avoids — they are names it cannot produce.
+
+No breaking change: the four existing `wb task` actions, every other group and
+every artifact schema behave exactly as they did in 0.5.0.
+
+## 0.5.0
+
+Distributed as 0.5.0 without being marked released here. The section below is
+what shipped in it.
 
 ### Added
 
@@ -37,13 +55,6 @@ renames a key raises its `schema` number in the same release, and
   `extra`. `wb doctor` reports a mapping that names a destination nothing reads.
 - `wb next --json` and `wb status --json` now name the **skill** for each stage,
   not only the command.
-- `wb task clean <KEY>` — removes one ticket's `.workflow/<KEY>/` artifacts.
-  Lists and removes nothing; `--force` is a second command, because a plan and
-  its evidence can be produced again while a frame or a handover was written
-  once by hand, and the listing marks which is which. The key resolves through
-  the same validation as every other artifact path, so the context binding, the
-  local backlog and the event log sitting beside the ticket directories are not
-  names the command avoids — they are names it cannot produce.
 
 ### Fixed
 

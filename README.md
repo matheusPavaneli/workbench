@@ -3,7 +3,7 @@
 Ticket-to-PR development workflow skills for Claude Code, with pluggable issue
 trackers (Jira Cloud, Azure DevOps, GitHub Issues, or a backlog in the repo).
 
-Ten skills, one CLI, 599 tests, no third-party dependencies.
+Ten skills, one CLI, 634 tests, no third-party dependencies.
 
 ## Two design rules
 

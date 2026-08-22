@@ -37,6 +37,7 @@ from workbench.cli import review as review_cli  # noqa: E402
 from workbench.cli import route as route_cli  # noqa: E402
 from workbench.cli import sdd as sdd_cli  # noqa: E402
 from workbench.cli import status as status_cli  # noqa: E402
+from workbench.cli import surface as surface_cli  # noqa: E402
 from workbench.cli import task as task_cli  # noqa: E402
 from workbench.errors import EXIT_USAGE, UsageError, WbError  # noqa: E402
 
@@ -56,6 +57,7 @@ GROUPS = {
     "commit": commit_cli,
     "pr": pr_cli,
     "git": git_cli,
+    "surface": surface_cli,
 }
 
 

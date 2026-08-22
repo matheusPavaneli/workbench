@@ -43,7 +43,8 @@ def _stats(args: argparse.Namespace) -> int:
     keeps losing time. A stage that always passes on the second attempt looks
     fine in the snapshot and is the most expensive thing in the log.
     """
-    snapshot = status_lib.summarise([status_lib.read(key) for key in status_lib.keys()])
+    changed = status_lib.branch_changes()
+    snapshot = status_lib.summarise([status_lib.read(key, changed=changed) for key in status_lib.keys()])
     history = events.summarise(events.read())
 
     if args.json:
@@ -72,7 +73,8 @@ def _all(args: argparse.Namespace) -> int:
         print("start one: wb task list, or wb task get <KEY>")
         return 0
 
-    items = [status_lib.read(key) for key in keys]
+    changed = status_lib.branch_changes()
+    items = [status_lib.read(key, changed=changed) for key in keys]
     if args.json:
         print(json.dumps([s.to_dict() for s in items], indent=2, ensure_ascii=False))
         return 0

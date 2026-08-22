@@ -97,6 +97,27 @@ def changed_files(cwd: Path, *, staged: bool = False) -> list[str]:
     return sorted(path for path in normalised if not _is_noise(path))
 
 
+def changed_since(cwd: Path, base: str, *, staged: bool = False) -> list[str]:
+    """Everything this branch changed against ``base``: committed, and not yet.
+
+    ``changed_files`` answers "what is uncommitted", which is the whole truth
+    only until the first commit. After one it reads a finished change as no
+    change at all -- `wb pr context` called a three-file feature trivial because
+    it asked a minute too late, and `wb status` reported nothing done for work
+    that was.
+
+    Three dots, so commits the base collected after this branch left it are not
+    counted as this branch's doing. An unknown base contributes nothing rather
+    than failing: the working tree is still an answer.
+    """
+    committed = _git(["diff", "--name-only", f"{base}...HEAD"], cwd) or ""
+    paths = {line.strip() for line in committed.splitlines() if line.strip()}
+    paths.update(changed_files(cwd, staged=staged))
+
+    normalised = (path.replace("\\", "/") for path in paths)
+    return sorted(path for path in normalised if not _is_noise(path))
+
+
 def is_ignored(cwd: Path, path: str) -> bool | None:
     """Whether git ignores ``path``. ``None`` when git could not answer.
 

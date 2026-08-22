@@ -32,6 +32,18 @@ class EventsBase(unittest.TestCase):
 
         os.environ.pop("WORKBENCH_NO_EVENTS", None)
 
+        # The global log lives under the home directory, so without this every
+        # run of this suite would append to the developer's own history.
+        previous = os.environ.get("WORKBENCH_HOME")
+        os.environ["WORKBENCH_HOME"] = str(self.root / "home")
+        self.addCleanup(self._restore_home, previous)
+
+    def _restore_home(self, previous) -> None:
+        if previous is None:
+            os.environ.pop("WORKBENCH_HOME", None)
+        else:
+            os.environ["WORKBENCH_HOME"] = previous
+
 
 class Recording(EventsBase):
     def test_a_tracked_command_is_recorded(self) -> None:
@@ -106,6 +118,70 @@ class Summary(unittest.TestCase):
 
     def test_an_empty_history_renders_without_failing(self) -> None:
         self.assertEqual("no history yet", events.render(events.summarise([])))
+
+    def test_a_local_log_reports_no_checkouts(self) -> None:
+        """Nothing in a per-repo log knows which repo it is; the section is skipped."""
+        summary = events.summarise(self._log(("sdd", "audit", 0)))
+        self.assertEqual({}, summary["repos"])
+        self.assertNotIn("by checkout", events.render(summary))
+
+    def test_it_separates_a_bad_stage_from_a_bad_checkout(self) -> None:
+        """The one thing a per-repo log structurally cannot answer."""
+        entries = [
+            {"group": "sdd", "action": "audit", "exit": 7, "ms": 10, "repo": "billing"},
+            {"group": "sdd", "action": "audit", "exit": 7, "ms": 10, "repo": "billing"},
+            {"group": "sdd", "action": "audit", "exit": 0, "ms": 10, "repo": "docs"},
+        ]
+        summary = events.summarise(entries)
+        self.assertEqual({"runs": 2, "failed": 2}, summary["repos"]["billing"])
+        self.assertEqual({"runs": 1, "failed": 0}, summary["repos"]["docs"])
+        self.assertIn("by checkout", events.render(summary))
+
+
+class Everywhere(EventsBase):
+    """The history kept once per machine rather than once per checkout."""
+
+    def test_one_command_lands_in_both_logs(self) -> None:
+        events.record("sdd", "audit", "ABC-1", 0, 12)
+        self.assertEqual(1, len(events.read()))
+        self.assertEqual(1, len(events.read(everywhere=True)))
+
+    def test_only_the_global_copy_says_which_checkout(self) -> None:
+        events.record("sdd", "audit", "ABC-1", 0, 12)
+        self.assertNotIn("repo", events.read()[0])
+        self.assertEqual(self.root.name, events.read(everywhere=True)[0]["repo"])
+
+    def test_two_checkouts_accumulate_in_one_place(self) -> None:
+        events.record("sdd", "audit", "ABC-1", 7, 12)
+        with mock.patch("workbench.gitctx.repo_root", return_value=self.root / "other"):
+            events.record("sdd", "audit", "ABC-2", 0, 12)
+
+        summary = events.summarise(events.read(everywhere=True))
+        self.assertEqual({self.root.name, "other"}, set(summary["repos"]))
+        self.assertEqual(1, len(events.read()), "the local log still only holds this checkout")
+
+    def test_turning_events_off_turns_both_off(self) -> None:
+        os.environ["WORKBENCH_NO_EVENTS"] = "1"
+        events.record("sdd", "audit", "ABC-1", 0, 12)
+        self.assertEqual([], events.read())
+        self.assertEqual([], events.read(everywhere=True))
+
+    def test_the_global_log_is_capped_too(self) -> None:
+        payload = json.dumps({"group": "sdd", "action": "audit", "exit": 0, "ms": 1})
+        target = events.global_path()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("\n".join([payload] * (events.MAX_GLOBAL_EVENTS + 50)) + "\n", encoding="utf-8")
+
+        events.record("sdd", "audit", "ABC-1", 0, 1)
+        self.assertLessEqual(len(events.read(everywhere=True)), events.MAX_GLOBAL_EVENTS)
+
+    def test_an_unwritable_global_log_never_fails_a_command(self) -> None:
+        """The rule the whole module is held to, at the new write site."""
+        with mock.patch("workbench.events.global_path", side_effect=OSError("no")):
+            with self.assertRaises(OSError):
+                events.global_path()
+            events.record("sdd", "audit", "ABC-1", 0, 12)
+        self.assertEqual(1, len(events.read()), "the local log was still written")
 
 
 if __name__ == "__main__":

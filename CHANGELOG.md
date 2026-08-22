@@ -37,6 +37,13 @@ renames a key raises its `schema` number in the same release, and
   `extra`. `wb doctor` reports a mapping that names a destination nothing reads.
 - `wb next --json` and `wb status --json` now name the **skill** for each stage,
   not only the command.
+- `wb task clean <KEY>` — removes one ticket's `.workflow/<KEY>/` artifacts.
+  Lists and removes nothing; `--force` is a second command, because a plan and
+  its evidence can be produced again while a frame or a handover was written
+  once by hand, and the listing marks which is which. The key resolves through
+  the same validation as every other artifact path, so the context binding, the
+  local backlog and the event log sitting beside the ticket directories are not
+  names the command avoids — they are names it cannot produce.
 
 ### Fixed
 

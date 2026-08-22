@@ -31,6 +31,15 @@ LOG_NAME = ".events.jsonl"
 MAX_EVENTS = 2000
 TRIM_TO = 1500
 
+# The same record, kept once per machine rather than once per checkout. The
+# per-repo log answers "where does *this* repo lose time"; it cannot answer
+# "where do I lose time", which is the question worth acting on -- a stage that
+# is fine here and terrible in four other checkouts looks fine from inside any
+# of them. Same rules apply: outcomes only, capped, never load-bearing.
+GLOBAL_LOG_NAME = "events.jsonl"
+MAX_GLOBAL_EVENTS = 8000
+TRIM_GLOBAL_TO = 6000
+
 # Commands whose outcome says something about the workflow. Reads that are
 # pure inspection are skipped: logging every `status` would drown the signal
 # in the command run to look at the signal.
@@ -50,8 +59,15 @@ def path(cwd: Path | None = None) -> Path:
     return artifacts.root(cwd) / LOG_NAME
 
 
+def global_path() -> Path:
+    """Imported late: ``contexts`` is a heavier module than this one needs to be."""
+    from . import contexts
+
+    return contexts.home() / GLOBAL_LOG_NAME
+
+
 def record(group: str, action: str, key: str | None, exit_code: int, duration_ms: int) -> None:
-    """Append one event. Never raises."""
+    """Append one event, here and once per machine. Never raises."""
     if (group, action) not in TRACKED:
         return
     if os.environ.get("WORKBENCH_NO_EVENTS"):
@@ -67,20 +83,43 @@ def record(group: str, action: str, key: str | None, exit_code: int, duration_ms
     if key:
         entry["key"] = key
 
+    _append(_here, entry, MAX_EVENTS, TRIM_TO)
+    _append(_everywhere, entry, MAX_GLOBAL_EVENTS, TRIM_GLOBAL_TO)
+
+
+def _here(entry: dict) -> tuple[Path, dict]:
+    return path(), entry
+
+
+def _everywhere(entry: dict) -> tuple[Path, dict]:
+    # The checkout's own name, not its path: a path is a fact about this
+    # machine's disk, and the log is meant to be read rather than mapped.
+    return global_path(), {**entry, "repo": artifacts.root().parent.name}
+
+
+def _append(resolve, entry: dict, cap: int, trim_to: int) -> None:
+    """One line, or nothing at all.
+
+    ``resolve`` is called in here rather than by the caller because working out
+    *where* to write can fail too -- reading a home directory, shelling out to
+    git for the repo root. A log that cannot work out where it lives must still
+    never be the reason a command failed.
+    """
     try:
-        target = path()
+        target, payload = resolve(entry)
         target.parent.mkdir(parents=True, exist_ok=True)
         with target.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
-        _trim(target)
-    except OSError:
-        pass  # deliberate: a lost statistic is not a failure worth surfacing
+            handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        _trim(target, cap, trim_to)
+    except Exception:  # noqa: BLE001 - deliberate, and the point of the module docstring
+        pass  # a lost statistic is not a failure worth surfacing
 
 
-def read(cwd: Path | None = None) -> list[dict]:
+def read(cwd: Path | None = None, *, everywhere: bool = False) -> list[dict]:
     """Every readable event. A malformed line is skipped, not fatal."""
+    source = global_path() if everywhere else path(cwd)
     try:
-        text = path(cwd).read_text(encoding="utf-8")
+        text = source.read_text(encoding="utf-8")
     except OSError:
         return []
 
@@ -128,7 +167,26 @@ def summarise(events: list[dict]) -> dict:
         "events": len(events),
         "commands": dict(ordered),
         "most_retried": retried[0][0] if retried else "",
+        "repos": _by_repo(events),
     }
+
+
+def _by_repo(events: list[dict]) -> dict:
+    """Runs and failures per checkout, worst first. Empty for a local log.
+
+    The one thing the global log knows that a local one cannot: whether a stage
+    fails everywhere, which is a bad stage, or only here, which is this repo.
+    """
+    counts: dict[str, dict] = {}
+    for entry in events:
+        name = str(entry.get("repo") or "")
+        if not name:
+            continue
+        row = counts.setdefault(name, {"runs": 0, "failed": 0})
+        row["runs"] += 1
+        if int(entry.get("exit") or 0) != 0:
+            row["failed"] += 1
+    return dict(sorted(counts.items(), key=lambda kv: (kv[1]["failed"], kv[1]["runs"]), reverse=True))
 
 
 def render(summary: dict) -> str:
@@ -141,6 +199,14 @@ def render(summary: dict) -> str:
         failed = f"{row['failed']} failed" if row["failed"] else "clean"
         lines.append(f"  {name:<{width}}  {row['runs']:>3} run(s)  {failed:<10} {row['avg_ms']:>6} ms avg")
 
+    repos = summary.get("repos") or {}
+    if repos:
+        lines.append("\nby checkout:")
+        width = max(len(name) for name in repos)
+        for name, row in repos.items():
+            failed = f"{row['failed']} failed" if row["failed"] else "clean"
+            lines.append(f"  {name:<{width}}  {row['runs']:>3} run(s)  {failed}")
+
     if summary["most_retried"]:
         lines.append(
             f"\n{summary['most_retried']} fails and then passes most often"
@@ -149,15 +215,15 @@ def render(summary: dict) -> str:
     return "\n".join(lines)
 
 
-def _trim(target: Path) -> None:
+def _trim(target: Path, cap: int = MAX_EVENTS, trim_to: int = TRIM_TO) -> None:
     """Cap by rewriting. A log that grows without bound is a log nobody keeps."""
     try:
         lines = target.read_text(encoding="utf-8").splitlines()
     except OSError:
         return
-    if len(lines) <= MAX_EVENTS:
+    if len(lines) <= cap:
         return
     try:
-        target.write_text("\n".join(lines[-TRIM_TO:]) + "\n", encoding="utf-8")
+        target.write_text("\n".join(lines[-trim_to:]) + "\n", encoding="utf-8")
     except OSError:
         pass  # deliberate: an uncapped log is a slowdown, never a failed command

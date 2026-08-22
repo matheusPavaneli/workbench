@@ -24,9 +24,20 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     parser.add_argument("key", nargs="?", help="a ticket key; omit to list everything in flight")
     parser.add_argument("--json", action="store_true", help="machine-readable, for a skill rather than a person")
     parser.add_argument("--stats", action="store_true", help="aggregate across tickets: where work is piling up")
+    parser.add_argument(
+        "--global",
+        dest="everywhere",
+        action="store_true",
+        help="with --stats, read the history of every checkout on this machine, not just this one",
+    )
 
 
 def run(args: argparse.Namespace) -> int:
+    if args.everywhere and not args.stats:
+        raise UsageError(
+            "--global reads the command history, which only --stats reports",
+            fix=["wb status --stats --global"],
+        )
     if args.stats:
         if args.key:
             raise UsageError("--stats aggregates every ticket", fix=["drop the key, or drop --stats"])
@@ -45,7 +56,7 @@ def _stats(args: argparse.Namespace) -> int:
     """
     changed = status_lib.branch_changes()
     snapshot = status_lib.summarise([status_lib.read(key, changed=changed) for key in status_lib.keys()])
-    history = events.summarise(events.read())
+    history = events.summarise(events.read(everywhere=args.everywhere))
 
     if args.json:
         print(json.dumps({"snapshot": snapshot, "history": history}, indent=2))
@@ -53,6 +64,10 @@ def _stats(args: argparse.Namespace) -> int:
 
     print(status_lib.render_summary(snapshot))
     print()
+    if args.everywhere:
+        # Said plainly, because the snapshot above is still this checkout only:
+        # one command printing two scopes has to say which is which.
+        print(f"history across every checkout on this machine ({events.global_path()}):")
     print(events.render(history))
     return 0
 

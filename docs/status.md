@@ -83,6 +83,11 @@ The log is held to three rules:
   customer name would end up.
 - **Local and capped.** It lives under the ignored `.workflow/`, is trimmed by
   rewriting at `MAX_EVENTS`, and goes nowhere. `WORKBENCH_NO_EVENTS=1` disables it.
+- **Kept twice.** The same line also appends to `~/.workbench/events.jsonl` with
+  the checkout's name, because a per-repo log cannot tell a bad stage from a bad
+  repo: a step that fails everywhere is the step, and one that fails only here is
+  this checkout. `wb status --stats --global` reads that one and adds a
+  `by checkout` breakdown. Same rules -- outcomes only, capped, swallowed.
 - **Never load-bearing.** Every failure is swallowed. A log that cannot be
   written is a lost statistic, never a failed command.
 

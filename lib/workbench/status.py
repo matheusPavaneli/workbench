@@ -183,7 +183,26 @@ def pick(key: str | None = None, cwd: Path | None = None) -> tuple[Status, str] 
     return None
 
 
-def read(key: str, cwd: Path | None = None) -> Status:
+def branch_changes(cwd: Path | None = None) -> set[str]:
+    """Everything this checkout's branch changed, committed against its base or not.
+
+    Resolved once per command rather than once per ticket: `wb status` with no
+    key reads every ticket, and a git call each is how an instant command stops
+    being one. Configuration that cannot be resolved falls back to the working
+    tree -- a narrower answer, never a failed command.
+    """
+    here = cwd or Path.cwd()
+    root = gitctx.repo_root(here) or here
+    try:
+        from . import flow as flow_lib
+
+        base = flow_lib.carry_base(root, flow_lib.resolve(root).source.branch)
+    except Exception:  # noqa: BLE001 - status is what a stuck session runs first
+        return set(gitctx.changed_files(root))
+    return set(gitctx.changed_since(root, base))
+
+
+def read(key: str, cwd: Path | None = None, *, changed: set[str] | None = None) -> Status:
     key = artifacts.validate_key(key)
     directory = artifacts.ticket_dir(key, cwd)
     root = gitctx.repo_root(cwd or Path.cwd()) or (cwd or Path.cwd())
@@ -204,7 +223,7 @@ def read(key: str, cwd: Path | None = None) -> Status:
         _intake(key, directory, triage, frame),
         _plan(key, plan),
         _audit(key, audit, plan),
-        _scope(key, plan, audit, root),
+        _scope(key, plan, audit, root, changed),
         _evidence(key, evidence, audit),
         _handover(key, directory, plan, status.kind),
         _artifact(directory / "commit.txt", "commit", f"wb commit check {key}"),
@@ -258,8 +277,19 @@ def _audit(key: str, audit: dict | None, plan: dict | None) -> Stage:
     return Stage("audit", FAIL, detail, f"fix the plan, then: wb sdd audit {key}")
 
 
-def _scope(key: str, plan: dict | None, audit: dict | None, root: Path) -> Stage:
-    """Derived, not stored: the working tree is the only truth about scope."""
+def _scope(
+    key: str, plan: dict | None, audit: dict | None, root: Path, changed: set[str] | None = None
+) -> Stage:
+    """Derived, not stored: the branch is the only truth about scope.
+
+    The branch, not the working tree. Reading the tree alone made a committed
+    change read as no change, so a session resuming after a commit was told the
+    work it had finished was never started.
+
+    Resolved here only when a caller did not resolve it once for every ticket,
+    and only after the audit passed -- so a checkout full of unplanned work
+    still costs no git call.
+    """
     if not plan or not audit or audit.get("verdict") != "pass":
         return Stage("scope", TODO, "", "")
 
@@ -268,7 +298,8 @@ def _scope(key: str, plan: dict | None, audit: dict | None, root: Path) -> Stage
     if not planned:
         return Stage("scope", SKIP, "the plan lists no files", "")
 
-    changed = set(gitctx.changed_files(root))
+    if changed is None:
+        changed = branch_changes(root)
     touched = changed & planned
     stray = changed - planned
 

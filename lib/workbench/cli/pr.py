@@ -65,7 +65,10 @@ def _context(args: argparse.Namespace) -> int:
         base = flow.target(args.target).branch
     else:
         base = args.base or flow.source.branch
-    changed = gitctx.changed_files(root)
+    # The remote ref, like everything else in the flow: a local base is only as
+    # fresh as the last checkout of it, and a stale one widens the range.
+    base = flow_lib.carry_base(root, base)
+    changed = gitctx.changed_since(root, base)
 
     payload: dict = {
         "key": key,

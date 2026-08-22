@@ -22,6 +22,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -304,6 +305,105 @@ class IsTheTreeDirty(ConsistencyBase):
 
 def _gate_lines(output: str) -> list[str]:
     return sorted(line.strip(" -") for line in output.splitlines() if line.startswith("  - "))
+
+
+class ScopeAndPrAgreeOnWhatChanged(unittest.TestCase):
+    """Two commands, one question: what has this branch changed?
+
+    They answered it two ways. `wb pr context` read the working tree, so a
+    committed feature came back as `changed: []` and was graded trivial; `wb
+    status` read the same tree and reported nothing done for finished work.
+    Both now measure the branch against its base, and this holds them together
+    -- a real checkout, because the divergence was invisible against mocks.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name).resolve()
+        self.addCleanup(self._tmp.cleanup)
+
+        self._cwd = os.getcwd()
+        os.chdir(self.root)
+        self.addCleanup(lambda: os.chdir(self._cwd))
+
+        for name, value in (("WORKBENCH_HOME", str(self.root / "home")), ("WORKBENCH_NO_EVENTS", "1")):
+            previous = os.environ.get(name)
+            os.environ[name] = value
+            self.addCleanup(self._restore, name, previous)
+
+        self._git("init", "-q", ".")
+        self._git("config", "user.email", "t@example.com")
+        self._git("config", "user.name", "T")
+        (self.root / "src").mkdir()
+        (self.root / "src" / "untouched.py").write_text("one\n", encoding="utf-8")
+        self._git("add", "-A")
+        self._git("commit", "-qm", "init")
+        self.base = gitctx.branch(self.root) or "master"
+
+        config = self.root / ".workflow" / "config.json"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        config.write_text(
+            json.dumps({"provider": "local", "preset": "solo-saas", "flow": {"source": self.base}}),
+            encoding="utf-8",
+        )
+
+        directory = self.root / ".workflow" / "ABC-1"
+        directory.mkdir(parents=True)
+        (directory / "sdd.json").write_text(
+            json.dumps({"key": "ABC-1", "files": [{"path": "src/feature.py", "change": "add"}]}),
+            encoding="utf-8",
+        )
+        (directory / "audit.json").write_text(json.dumps({"verdict": "pass"}), encoding="utf-8")
+
+    def _restore(self, name: str, previous) -> None:
+        if previous is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = previous
+
+    def _git(self, *args: str) -> None:
+        subprocess.run(["git", *args], cwd=str(self.root), capture_output=True, text=True, check=False)
+
+    def _cli(self, *argv: str) -> str:
+        out = io.StringIO()
+        with redirect_stdout(out):
+            wb.main(list(argv))
+        return out.getvalue()
+
+    def _commit_the_planned_file(self) -> None:
+        self._git("switch", "-c", "ABC-1-feature", "-q")
+        (self.root / "src" / "feature.py").write_text("work\n", encoding="utf-8")
+        self._git("add", "-A")
+        self._git("commit", "-qm", "feat: the thing")
+
+    def test_scope_still_counts_a_planned_file_after_it_is_committed(self) -> None:
+        self._commit_the_planned_file()
+        self.assertIn("all 1 planned file(s) changed", self._cli("status", "ABC-1"))
+
+    def test_pr_context_sees_what_the_branch_committed(self) -> None:
+        self._commit_the_planned_file()
+        payload = json.loads(self._cli("pr", "context", "ABC-1"))
+        self.assertEqual(["src/feature.py"], payload["changed"])
+
+    def test_both_commands_name_the_same_files(self) -> None:
+        self._commit_the_planned_file()
+        (self.root / "src" / "stray.py").write_text("also\n", encoding="utf-8")
+
+        payload = json.loads(self._cli("pr", "context", "ABC-1"))
+        status = self._cli("status", "ABC-1")
+
+        self.assertEqual(["src/feature.py", "src/stray.py"], payload["changed"])
+        # status grades the same set against the plan: one planned, one not.
+        self.assertIn("1 file(s) outside the plan", status)
+
+    def test_uncommitted_work_reads_exactly_as_it_did_before(self) -> None:
+        """The branch has no commits above the base; only the tree has anything."""
+        self._git("switch", "-c", "ABC-1-feature", "-q")
+        (self.root / "src" / "feature.py").write_text("work\n", encoding="utf-8")
+
+        payload = json.loads(self._cli("pr", "context", "ABC-1"))
+        self.assertEqual(["src/feature.py"], payload["changed"])
+        self.assertIn("all 1 planned file(s) changed", self._cli("status", "ABC-1"))
 
 
 def _source_branch(root: Path, flow, key: str) -> str:

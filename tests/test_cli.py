@@ -208,6 +208,54 @@ class TaskClean(CliBase):
         self.assertFalse(directory.exists())
 
 
+class Surface_(CliBase):
+    """What a session should read instead of inventing a flag from prose.
+
+    `wb pr check --key ABC-1` was composed that way and refused by argparse,
+    because --key was inferred from a SKILL.md rather than from the CLI.
+    """
+
+    def test_every_group_is_listed(self) -> None:
+        payload = json.loads(run("surface", "--json")[1])
+        listed = {entry["group"] for entry in payload["groups"]}
+        self.assertEqual(set(wb.GROUPS), listed)
+
+    def test_it_names_the_flags_a_command_actually_takes(self) -> None:
+        payload = json.loads(run("surface", "pr", "--json")[1])
+        check = next(a for a in payload["groups"][0]["actions"] if a["action"] == "check")
+        names = {argument["name"] for argument in check["arguments"]}
+        self.assertEqual({"--file", "--shape"}, names)
+        self.assertNotIn("--key", names)
+
+    def test_a_switch_is_marked_as_taking_no_value(self) -> None:
+        payload = json.loads(run("surface", "task", "--json")[1])
+        clean = next(a for a in payload["groups"][0]["actions"] if a["action"] == "clean")
+        force = next(a for a in clean["arguments"] if a["name"] == "--force")
+        self.assertFalse(force["takes_value"])
+
+    def test_a_closed_choice_travels_with_the_flag(self) -> None:
+        payload = json.loads(run("surface", "pr", "--json")[1])
+        check = next(a for a in payload["groups"][0]["actions"] if a["action"] == "check")
+        shape = next(a for a in check["arguments"] if a["name"] == "--shape")
+        self.assertEqual(["trivial", "small", "large"], shape["choices"])
+
+    def test_naming_a_group_does_not_dispatch_to_it(self) -> None:
+        """Regression: the positional was named `group`, the dest the top-level
+        parser already owns, so `wb surface task` ran `wb task` instead."""
+        code, out, _ = run("surface", "task")
+        self.assertEqual(0, code)
+        self.assertIn("wb task clean", out)
+
+    def test_an_unknown_group_is_refused_with_the_real_ones(self) -> None:
+        code, _, err = run("surface", "nope")
+        self.assertEqual(EXIT_USAGE, code)
+        self.assertIn("status", err)
+
+    def test_it_needs_no_context_and_no_checkout(self) -> None:
+        """The command a session runs when it is lost must not need setup."""
+        self.assertEqual(0, run("surface")[0])
+
+
 class Status(CliBase):
     def test_an_empty_repo_says_so_and_suggests_a_start(self) -> None:
         code, out, _ = run("status")

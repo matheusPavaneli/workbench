@@ -156,6 +156,24 @@ the context binding, the local backlog and the event log sitting beside the
 ticket directories are not names the command avoids — they are names it cannot
 produce.
 
+Two selectors clean a checkout rather than a ticket. `--merged` takes everything
+that reached a commit or a PR and has no branch left on the remote;
+`--older-than 30d` takes everything untouched since then. Both halves of
+`--merged` matter — "no branch names this key" on its own also describes work
+that was never branched at all, which is in flight rather than finished. Either
+way the listing says which stage each ticket stopped at, so a selector that
+caught live work is visible before `--force` rather than after:
+
+```
+$ wb task clean --older-than 30d
+/repo/.workflow/ABC-7   still at scope (BLOCKED)
+  sdd.json
+  triage.json
+
+1 ticket(s), 2 file(s), nothing removed
+remove them: wb task clean --older-than 30d --force
+```
+
 `wb surface` prints every group, action and flag, read off the live parser
 rather than a list kept by hand. `wb surface <group>` narrows it, `--json` is
 the form a session reads before composing an unfamiliar call:

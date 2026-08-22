@@ -1,11 +1,13 @@
-"""``wb task`` -- read work from the tracker.
+"""``wb task`` -- read work from the tracker, and tidy up after it.
 
-Two commands, deliberately unequal. ``list`` is the most frequent question and
-the one that needs the least detail, so it answers in four columns. ``get``
-distils one task and writes the artifact everything downstream reads.
+Deliberately unequal. ``list`` is the most frequent question and the one that
+needs the least detail, so it answers in four columns. ``get`` distils one task
+and writes the artifact everything downstream reads. ``new`` and ``done`` write
+to a local backlog and refuse on a repo whose tracker owns its own state.
+``clean`` removes a ticket's artifacts once nobody needs them.
 
-Neither takes a query. There is no --jql, no --wiql, no --fields: the query is
-built in the provider, from the resolved context.
+None of them takes a query. There is no --jql, no --wiql, no --fields: the
+query is built in the provider, from the resolved context.
 """
 
 from __future__ import annotations
@@ -13,8 +15,10 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import time
+from pathlib import Path
 
-from .. import artifacts, contexts, providers
+from .. import artifacts, contexts, gitctx, providers, status as status_lib
 from ..errors import NotFoundError, UsageError, WbError
 from ..providers import local
 
@@ -69,8 +73,19 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         help="the status to move to; defaults to done",
     )
 
-    clean = actions.add_parser("clean", help="remove one ticket's .workflow/<KEY>/ artifacts")
-    clean.add_argument("key")
+    clean = actions.add_parser("clean", help="remove finished tickets' .workflow/<KEY>/ artifacts")
+    clean.add_argument("key", nargs="?", help="one ticket; omit it and name a selector instead")
+    clean.add_argument(
+        "--merged",
+        action="store_true",
+        help="every ticket that reached a commit or a PR and has no branch left on the remote",
+    )
+    clean.add_argument(
+        "--older-than",
+        dest="older_than",
+        metavar="Nd",
+        help="every ticket untouched for longer than this, e.g. 30d",
+    )
     clean.add_argument(
         "--force",
         action="store_true",
@@ -122,7 +137,7 @@ def _done(args: argparse.Namespace) -> int:
 
 
 def _clean(args: argparse.Namespace) -> int:
-    """Remove one ticket's scratch, and nothing that is a sibling of it.
+    """Remove finished tickets' scratch, and nothing that is a sibling of it.
 
     The guard is structural rather than a list of names to avoid. Every path
     here is resolved through ``artifacts.ticket_dir``, which routes the key
@@ -133,37 +148,160 @@ def _clean(args: argparse.Namespace) -> int:
     command. There is nothing to drift.
 
     Listing is the default because there is no undo: a plan and its evidence can
-    be produced again, but a frame or a handover was written once, by hand.
+    be produced again, but a frame or a handover was written once, by hand. The
+    listing also says which stage each ticket stopped at, because a selector
+    matching work still in flight is the mistake worth catching before --force.
     """
-    directory = artifacts.ticket_dir(args.key)
-    if not directory.is_dir():
-        raise NotFoundError(
-            f"{directory} does not exist",
-            fix=["wb status   # the keys that do have artifacts in this checkout"],
-        )
-
-    files = sorted(path for path in directory.rglob("*") if path.is_file())
+    keys = _selected(args)
+    if not keys:
+        print(_nothing_matched(args))
+        return 0
 
     if not args.force:
-        print(directory)
+        return _list_what_would_go(keys, args)
+
+    removed = 0
+    for key in keys:
+        directory = artifacts.ticket_dir(key)
+        try:
+            shutil.rmtree(directory)
+        except OSError as exc:
+            raise WbError(
+                f"could not remove {directory}: {exc}",
+                fix=["close anything holding a file open in that directory, then run it again"],
+            ) from exc
+        print(f"removed {directory}")
+        removed += 1
+
+    print(f"\n{removed} ticket(s) removed")
+    return 0
+
+
+def _selected(args: argparse.Namespace) -> list[str]:
+    """The tickets this invocation names, by key or by selector.
+
+    One at a time: a key answers for itself, and mixing it with a selector reads
+    as "this one as well", which is not what either does.
+    """
+    chosen = [name for name, given in (("a key", args.key), ("--merged", args.merged),
+                                       ("--older-than", args.older_than)) if given]
+    if len(chosen) > 1:
+        raise UsageError(
+            f"{' and '.join(chosen)} select different things",
+            fix=["name one ticket, or use one selector"],
+        )
+    if not chosen:
+        raise UsageError(
+            "wb task clean needs a ticket or a selector",
+            fix=["wb task clean ABC-123", "wb task clean --merged", "wb task clean --older-than 30d"],
+        )
+
+    if args.key:
+        directory = artifacts.ticket_dir(args.key)
+        if not directory.is_dir():
+            raise NotFoundError(
+                f"{directory} does not exist",
+                fix=["wb status   # the keys that do have artifacts in this checkout"],
+            )
+        return [artifacts.validate_key(args.key)]
+
+    if args.older_than:
+        return _stale(_days(args.older_than))
+    return _merged()
+
+
+def _days(raw: str) -> int:
+    text = raw.strip().lower()
+    text = text[:-1] if text.endswith("d") else text
+    if not text.isdigit() or int(text) < 1:
+        raise UsageError(f"--older-than {raw!r} is not a number of days", fix=["use a whole number, e.g. 30d"])
+    return int(text)
+
+
+def _stale(days: int) -> list[str]:
+    """Tickets untouched for longer than ``days``, newest file in each one.
+
+    The directory's own timestamp is not enough: editing a plan in place leaves
+    it alone, so a ticket worked on yesterday could read as months old.
+    """
+    cutoff = time.time() - days * 86400
+    return [key for key in status_lib.keys() if _touched(artifacts.ticket_dir(key)) < cutoff]
+
+
+def _touched(directory: Path) -> float:
+    stamps = [directory.stat().st_mtime]
+    stamps.extend(path.stat().st_mtime for path in directory.rglob("*") if path.is_file())
+    return max(stamps)
+
+
+def _merged() -> list[str]:
+    """Tickets whose work shipped and whose branch is no longer on the remote.
+
+    Both halves are needed. "No branch names this key" alone also matches a
+    ticket that was triaged and never branched at all -- which is work in
+    flight, not work finished, and deleting it would be exactly backwards. A
+    ``commit.txt`` or a ``pr.md`` is the evidence that a branch once existed.
+    """
+    root = gitctx.repo_root(Path.cwd()) or Path.cwd()
+    branches = gitctx.remote_branches(root)
+
+    selected = []
+    for key in status_lib.keys():
+        directory = artifacts.ticket_dir(key)
+        if not (directory / "commit.txt").is_file() and not (directory / "pr.md").is_file():
+            continue
+        if any(status_lib._spelled_in(key, name) for name in branches):
+            continue
+        selected.append(key)
+    return selected
+
+
+def _list_what_would_go(keys: list[str], args: argparse.Namespace) -> int:
+    total = 0
+    for key in keys:
+        directory = artifacts.ticket_dir(key)
+        files = sorted(path for path in directory.rglob("*") if path.is_file())
+        total += len(files)
+
+        print(f"{directory}{_unfinished(key)}")
         for path in files:
             name = path.relative_to(directory).as_posix()
             note = "   hand-written, not regenerable" if name in UNRECOVERABLE else ""
             print(f"  {name}{note}")
-        print(f"\n{len(files)} file(s), nothing removed")
-        print(f"remove them: wb task clean {args.key} --force")
-        return 0
 
-    try:
-        shutil.rmtree(directory)
-    except OSError as exc:
-        raise WbError(
-            f"could not remove {directory}: {exc}",
-            fix=["close anything holding a file open in that directory, then run it again"],
-        ) from exc
-
-    print(f"removed {directory}  ({len(files)} file(s))")
+    print(f"\n{len(keys)} ticket(s), {total} file(s), nothing removed")
+    print(f"remove them: {_invocation(args)} --force")
     return 0
+
+
+def _unfinished(key: str) -> str:
+    """What the pipeline still expects, said next to the directory about to go.
+
+    A selector is a guess about which work is over. This is the sentence that
+    lets somebody notice the guess was wrong while it is still only a listing.
+    """
+    try:
+        status = status_lib.read(key)
+    except Exception:  # noqa: BLE001 - a listing must not fail on one unreadable ticket
+        return ""
+    stage = status.blocked or status.next_stage
+    if stage is None:
+        return ""
+    return f"   still at {stage.name}" + (" (BLOCKED)" if status.blocked else "")
+
+
+def _invocation(args: argparse.Namespace) -> str:
+    if args.key:
+        return f"wb task clean {args.key}"
+    if args.older_than:
+        return f"wb task clean --older-than {args.older_than}"
+    return "wb task clean --merged"
+
+
+def _nothing_matched(args: argparse.Namespace) -> str:
+    if args.older_than:
+        return f"no ticket has been untouched for {args.older_than}"
+    return "no ticket has shipped and lost its branch"
 
 
 def _require_local(what: str) -> None:

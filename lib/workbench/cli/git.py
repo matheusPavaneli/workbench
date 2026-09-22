@@ -41,9 +41,7 @@ def run(args: argparse.Namespace) -> int:
 
 def _ctx(_: argparse.Namespace) -> int:
     cwd = Path.cwd()
-    root = gitctx.repo_root(cwd)
-    if root is None:
-        raise UsageError("not a git repository", fix=["run this inside a checkout"])
+    root = gitctx.require_checkout(cwd)
 
     remote = gitctx.origin(cwd)
     print(f"root      {root}")
@@ -63,13 +61,6 @@ def _ctx(_: argparse.Namespace) -> int:
         print(f"\nmismatch  context {context.name!r} expects {wanted.get('name', '?')} <{wanted['email']}>")
         print("          commits from this checkout would carry the wrong address")
     return 0
-
-
-def _root() -> Path:
-    root = gitctx.repo_root(Path.cwd())
-    if root is None:
-        raise UsageError("not a git repository", fix=["run this inside a checkout"])
-    return root
 
 
 def _protected(root: Path) -> list[str]:
@@ -102,7 +93,7 @@ def _commit(args: argparse.Namespace) -> int:
     which is the whole point of contexts: work commits carry the work address
     without anyone remembering to switch.
     """
-    root = _root()
+    root = gitctx.require_checkout()
     key = artifacts.validate_key(args.key)
     message = artifacts.ticket_dir(key, root) / "commit.txt"
     if not message.is_file():
@@ -146,7 +137,7 @@ def _push(args: argparse.Namespace) -> int:
     has an upstream, the recovery from a bad push is a force-push -- and a
     force-push should never be something this tool can reach.
     """
-    root = _root()
+    root = gitctx.require_checkout()
     branch = gitctx.branch(root)
     if not branch:
         raise UsageError("no current branch", fix=["check out a branch first"])
@@ -161,9 +152,7 @@ def _push(args: argparse.Namespace) -> int:
 
 def _diff(args: argparse.Namespace) -> int:
     cwd = Path.cwd()
-    root = gitctx.repo_root(cwd)
-    if root is None:
-        raise UsageError("not a git repository", fix=["run this inside a checkout"])
+    root = gitctx.require_checkout(cwd)
 
     files = gitctx.changed_files(root, staged=args.staged)
     if not files:

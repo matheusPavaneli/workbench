@@ -105,12 +105,11 @@ def _warn_unconfirmed_preset() -> None:
     preset that nobody reviewed is not wrong, it is unexamined -- and the
     difference only shows up much later, in a plan that met the wrong bar.
     """
-    from pathlib import Path
 
     from .. import gitctx, profile as profile_lib
 
     try:
-        root = gitctx.repo_root(Path.cwd()) or Path.cwd()
+        root = gitctx.checkout()
         resolved = profile_lib.resolve(root)
     except Exception:  # noqa: BLE001 - a status listing must never fail on this
         return

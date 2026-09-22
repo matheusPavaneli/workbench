@@ -34,7 +34,9 @@ from . import redact
 
 # Keys whose values are structural: the code branches on them, so a fixture with
 # them scrambled tests nothing. These keep their real values, and none of them
-# carries free text about a person or a product.
+# carries free text about a person or a product. `key` is the one exception:
+# the code branches on a key's *shape*, never on the tenant's project letters,
+# so those are replaced and the shape is kept.
 STRUCTURAL = frozenset(
     {
         "id", "key", "self", "expand", "startAt", "maxResults", "total", "isLast",
@@ -66,6 +68,10 @@ PEOPLE = frozenset(
     }
 )
 
+# The fields that hold a ticket key, as opposed to merely something shaped like
+# one. Structural everywhere else, so the substitution is anchored to these.
+KEY_FIELDS = frozenset({"key"})
+
 _EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
 _URL = re.compile(r"https?://[^\s\"'<>)]+")
 _KEYISH = re.compile(r"\b[A-Z][A-Z0-9]{1,9}-\d+\b")
@@ -76,6 +82,7 @@ _WORDS = (
 ).split()
 
 _NAMES = ("Ana Ruiz", "Bruno Vale", "Cora Lima", "Davi Sena", "Elis Moura", "Fabio Reis")
+_PROJECTS = ("ACME", "BOLT", "CRUX", "DELT", "ECHO", "FLUX")
 
 
 class Anonymiser:
@@ -112,6 +119,12 @@ class Anonymiser:
         # and quietly make every fixture useless.
         if key in PEOPLE:
             return self.person(value)
+        # Before STRUCTURAL, which `key` is otherwise a member of. Anchored,
+        # because the pattern is loose enough to fire on a status named
+        # "UTF-8 encoding" or a field holding "CVE-2021-44228" -- and those
+        # are structural values the code really does branch on.
+        if key in KEY_FIELDS and _KEYISH.fullmatch(value):
+            return self._key(value)
         if key in STRUCTURAL:
             return self._scrub_embedded(value)
         if _looks_like_person(key):
@@ -165,12 +178,45 @@ class Anonymiser:
         value = _URL.sub(self._url, value)
         return value
 
+    def _key(self, value: str) -> str:
+        """A ticket key names the tenant's project. The letters are the leak;
+        the shape is what providers parse, so only the letters are replaced."""
+        project, _, number = value.partition("-")
+        return f"{self._project(project)}-{number}"
+
+    def _project(self, code: str) -> str:
+        """One fake project code per real one, still a valid project code.
+
+        Namespaced in the same mapping as the people, so the encounter-order
+        assignment stays injective across both, and suffixed without a space so
+        the result still matches what a key is allowed to look like.
+
+        A pool of plausible codes assigned by position can hand a tenant its
+        own code straight back, which is the whole leak. The input itself and
+        anything already handed out move to the next slot.
+        """
+        slot = f"project:{code}"
+        if slot not in self._seen:
+            taken = set(self._seen.values())
+            index = len(self._seen)
+            while True:
+                name = _PROJECTS[index % len(_PROJECTS)]
+                if index >= len(_PROJECTS):
+                    name = f"{name}{index // len(_PROJECTS) + 1}"
+                if name != code and name not in taken:
+                    break
+                index += 1
+            self._seen[slot] = name
+        return self._seen[slot]
+
     def _url(self, match: re.Match) -> str:
         url = match.group(0)
         # Keep the shape of the path, which providers branch on; drop the host.
         tail = url.split("://", 1)[-1]
         path = tail.split("/", 1)[1] if "/" in tail else ""
-        return f"https://example.invalid/{path}"
+        # A browse link carries the key the `key` field carries; mapping both
+        # through the same table is what keeps the fixture one ticket.
+        return f"https://example.invalid/{_KEYISH.sub(lambda m: self._key(m.group(0)), path)}"
 
     def _stable(self, value: str, pool: tuple[str, ...]) -> str:
         """One pseudonym per input, and never the same one for two inputs.

@@ -8,7 +8,6 @@ that was produced; one written from memory cites evidence that was hoped for.
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -56,9 +55,7 @@ def _check(args: argparse.Namespace) -> int:
 
 def _context(args: argparse.Namespace) -> int:
     key = artifacts.validate_key(args.key)
-    root = gitctx.repo_root(Path.cwd())
-    if root is None:
-        raise UsageError("not a git repository", fix=["run this inside a checkout"])
+    root = gitctx.require_checkout()
 
     flow = flow_lib.resolve(root)
     if args.target:

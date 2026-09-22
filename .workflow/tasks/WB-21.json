@@ -1,0 +1,11 @@
+{
+  "key": "WB-21",
+  "title": "remove dead symbols: merge_base, SUBJECT_COMFORTABLE, _PATTERN_FIELD, two unused imports",
+  "type": "chore",
+  "status": "open",
+  "desc": "AST sweep over lib/ (719 top-level defs) found 6 symbols with zero references anywhere in lib, tests, docs or skills.\n\nDEAD, safe to remove:\n- gitctx.py:239 merge_base() -- never called; subjects_since/commits_between pass the base ref straight to git.\n- commitmsg.py:16 SUBJECT_COMFORTABLE = 50 -- only SUBJECT_LIMIT (72) is enforced, at :144 and :175.\n- flow.py:37 _PATTERN_FIELD -- superseded by validate_pattern at :194, which inlines the same regex.\n- cli/flow.py:18 imports WbError, unused.\n- cli/pr.py:11 imports json, unused.\n\nNOT dead, tracked separately: anonymise.py:71 _KEYISH is a sibling of _EMAIL/_URL but is never applied in _scrub_embedded, so wb ctx record leaves the tenant's ticket keys verbatim in a committed fixture.\n\nClean elsewhere: no unreachable statements, no assigned-never-read locals, no orphan modules. One triplicated helper (_root/_repo_root in cli/commit.py, cli/flow.py, cli/git.py).",
+  "created": "2026-09-22T12:55:33Z",
+  "updated": "2026-09-22T12:55:33Z",
+  "comments": [],
+  "linked": []
+}

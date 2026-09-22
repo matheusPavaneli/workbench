@@ -189,7 +189,7 @@ def _assemble(name: str, data: dict[str, Any], provider: str, base_url: str, pre
 
 
 def _from_repo_config(cwd: Path) -> Resolution | None:
-    root = gitctx.repo_root(cwd) or cwd
+    root = gitctx.checkout(cwd)
     path = root / REPO_CONFIG
     if not path.is_file():
         return None

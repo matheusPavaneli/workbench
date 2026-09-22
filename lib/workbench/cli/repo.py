@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 
 from .. import contract, gitctx, profile as profile_lib
 from ..errors import UsageError
@@ -42,7 +41,7 @@ def run(args: argparse.Namespace) -> int:
 
 
 def _profile(args: argparse.Namespace) -> int:
-    root = gitctx.repo_root(Path.cwd()) or Path.cwd()
+    root = gitctx.checkout()
 
     if args.preset or args.confirm:
         chosen = args.preset or profile_lib.resolve(root).preset
@@ -86,7 +85,7 @@ def _profile(args: argparse.Namespace) -> int:
 
 def _gates(args: argparse.Namespace) -> int:
     """Resolved for the files a plan touches, not for the repo as a whole."""
-    root = gitctx.repo_root(Path.cwd()) or Path.cwd()
+    root = gitctx.checkout()
     resolved = profile_lib.resolve(root)
     preset, hits = profile_lib.resolve_for(args.paths, profile_lib.preset_paths(root), resolved.preset)
     gates = profile_lib.gates_for(preset, args.paths)

@@ -12,6 +12,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from .errors import UsageError
+
 
 ARTIFACT_DIR = ".workflow"
 
@@ -66,8 +68,33 @@ def _git_raw(args: list[str], cwd: Path) -> str | None:
 
 
 def repo_root(cwd: Path) -> Path | None:
+    """The raw detector. Callers want ``checkout`` or ``require_checkout``."""
     root = _git(["rev-parse", "--show-toplevel"], cwd)
     return Path(root) if root else None
+
+
+def checkout(cwd: Path | None = None) -> Path:
+    """The repo this is running in, or the directory it was run from.
+
+    Most commands read and write next to the work, so a directory that is not a
+    checkout is a narrower answer, never a failed command. It lives here so
+    that answer has one definition rather than a copy per caller.
+    """
+    here = cwd or Path.cwd()
+    return repo_root(here) or here
+
+
+def require_checkout(cwd: Path | None = None, *, fix: list[str] | None = None) -> Path:
+    """The repo, or a refusal, for a command whose answer needs one.
+
+    A branch to carry, a commit to check against the history, a push to
+    compose: outside a checkout these have no answer, and inventing one is
+    worse than saying so.
+    """
+    root = repo_root(cwd or Path.cwd())
+    if root is None:
+        raise UsageError("not a git repository", fix=fix or ["run this inside a checkout"])
+    return root
 
 
 def origin(cwd: Path) -> Remote | None:
@@ -234,10 +261,6 @@ def file_at(cwd: Path, ref: str, path: str) -> str | None:
     if not ref or not path:
         return None
     return _git_raw(["show", f"{ref}:{path.replace(chr(92), '/')}"], cwd)
-
-
-def merge_base(cwd: Path, base: str) -> str | None:
-    return _git(["merge-base", "HEAD", base], cwd)
 
 
 def subjects_since(cwd: Path, base: str, limit: int = 50) -> list[str]:

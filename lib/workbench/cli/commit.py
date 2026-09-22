@@ -41,15 +41,8 @@ def run(args: argparse.Namespace) -> int:
     return {"convention": _convention, "check": _check}[args.action](args)
 
 
-def _repo_root() -> Path:
-    root = gitctx.repo_root(Path.cwd())
-    if root is None:
-        raise UsageError("not a git repository", fix=["run this inside a checkout"])
-    return root
-
-
 def _convention(args: argparse.Namespace) -> int:
-    root = _repo_root()
+    root = gitctx.require_checkout()
 
     if args.style:
         commitmsg.declare(root, args.style)
@@ -77,7 +70,7 @@ def _convention(args: argparse.Namespace) -> int:
 
 
 def _check(args: argparse.Namespace) -> int:
-    root = _repo_root()
+    root = gitctx.require_checkout()
     path = Path(args.file)
     if not path.is_file():
         raise UsageError(f"no such file: {args.file}", fix=["write the draft message to a file first"])

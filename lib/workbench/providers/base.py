@@ -47,11 +47,10 @@ class Provider:
         dropped: ``wb doctor`` reports them, and a typo in a config must not
         stop a ticket being read.
         """
-        from pathlib import Path
 
         from .. import fields as fields_lib, gitctx, profile
 
-        root = gitctx.repo_root(Path.cwd()) or Path.cwd()
+        root = gitctx.checkout()
         configured = profile.repo_config(root).get("field_map")
         if not isinstance(configured, dict) or fields_lib.validate(configured):
             return {

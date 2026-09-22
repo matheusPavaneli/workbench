@@ -15,7 +15,7 @@ import json
 from pathlib import Path
 
 from .. import artifacts, contexts, contract, flow as flow_lib, gitctx, gitrun
-from ..errors import UsageError, WbError
+from ..errors import UsageError
 
 ACTIONS = ["show", "start", "carry", "set"]
 
@@ -52,15 +52,8 @@ def run(args: argparse.Namespace) -> int:
     return {"show": _show, "start": _start, "carry": _carry, "set": _set}[args.action](args)
 
 
-def _root() -> Path:
-    root = gitctx.repo_root(Path.cwd())
-    if root is None:
-        raise UsageError("not a git repository", fix=["run this inside a checkout"])
-    return root
-
-
 def _show(args: argparse.Namespace) -> int:
-    root = _root()
+    root = gitctx.require_checkout()
     flow = flow_lib.resolve(root)
 
     if args.json:
@@ -85,7 +78,7 @@ def _show(args: argparse.Namespace) -> int:
 
 
 def _start(args: argparse.Namespace) -> int:
-    root = _root()
+    root = gitctx.require_checkout()
     flow = flow_lib.resolve(root)
     key = artifacts.validate_key(args.key)
 
@@ -102,7 +95,7 @@ def _start(args: argparse.Namespace) -> int:
 
 
 def _carry(args: argparse.Namespace) -> int:
-    root = _root()
+    root = gitctx.require_checkout()
     flow = flow_lib.resolve(root)
     key = artifacts.validate_key(args.key)
     target = flow.target(args.to)
@@ -207,7 +200,7 @@ def _source_branch(root: Path, flow: flow_lib.Flow, key: str) -> str:
 
 
 def _set(args: argparse.Namespace) -> int:
-    root = _root()
+    root = gitctx.require_checkout()
     pattern = flow_lib.validate_pattern(args.branch_pattern) if args.branch_pattern else None
 
     config: dict = {

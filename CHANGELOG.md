@@ -11,6 +11,46 @@ command's own output, and one that removes it. A `--json` payload that loses or
 renames a key raises its `schema` number in the same release, and
 `contract.VERSIONS` is asserted against the real output so it cannot drift.
 
+## 0.7.1
+
+### Fixed
+
+- `wb ctx record` wrote the tenant's ticket keys, verbatim, into the fixtures it
+  produced. A recording is a file people commit, and a key names the project it
+  came from, so `SAAS-123` identified the company as surely as the hostname the
+  anonymiser had always stripped. The module had been written to replace keys —
+  it says so, and the pattern for it was sitting beside the ones for emails and
+  URLs — but nothing ever applied it. Only the letters are replaced, and one
+  real project maps to one fake one for the length of a run: the shape is what
+  the providers parse and what the fixtures exist to exercise, so `ABC-123` in
+  the `key` field and the same key inside a link still read as one ticket. The
+  substitution is anchored to the fields that hold a key, not to anything
+  key-shaped, because the pattern has to be loose enough for project codes that
+  vary and a status named `UTF-8 encoding` is not a ticket. A tenant is also
+  never handed its own code back, which a pool of plausible codes assigned by
+  position can otherwise do.
+
+### Changed
+
+- The repo root is resolved in one place. `gitctx.checkout()` falls back to the
+  working directory, `gitctx.require_checkout()` refuses, and the structural
+  guard that already held `profile.detect` and `flow.load` behind their
+  resolvers now holds `gitctx.repo_root` behind these two. The fallback had been
+  spelled out at twenty call sites and the refusal at eight, three of them as a
+  private helper copied byte for byte between `wb commit`, `wb flow` and
+  `wb git`, so "what happens outside a checkout" had two answers and no single
+  place to change either. Every command answers exactly as it did, `wb doctor`
+  included: it reports whether this is a checkout, so it keeps reading the raw
+  detector and the guard records why.
+- Dead code removed: `gitctx.merge_base`, `commitmsg.SUBJECT_COMFORTABLE`,
+  `flow._PATTERN_FIELD` — superseded by `validate_pattern`, which inlines the
+  same expression — and six unused imports. An AST sweep over the package now
+  finds nothing unreferenced that is not a framework callback.
+
+No breaking change: no command, flag, exit code or `--json` payload changed.
+`wb ctx record` writes a different fixture than it did in 0.7.0, which is the
+point; recordings made before this release still load, and should be re-made.
+
 ## 0.7.0
 
 ### Added

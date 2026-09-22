@@ -53,7 +53,7 @@ def register(subparsers: argparse._SubParsersAction) -> None:
 
 
 def run(args: argparse.Namespace) -> int:
-    root = gitctx.repo_root(Path.cwd()) or Path.cwd()
+    root = gitctx.checkout()
     key = _key(args)
 
     doc = _plan(key, root)

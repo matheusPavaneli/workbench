@@ -35,9 +35,7 @@ def register(subparsers: argparse._SubParsersAction) -> None:
 
 
 def run(args: argparse.Namespace) -> int:
-    root = gitctx.repo_root(Path.cwd())
-    if root is None:
-        raise UsageError("not a git repository", fix=["run this inside a checkout, or: git init"])
+    root = gitctx.require_checkout(fix=["run this inside a checkout, or: git init"])
 
     path = root / contexts.REPO_CONFIG
     existing = profile_lib.repo_config(root)

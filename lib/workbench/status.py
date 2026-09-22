@@ -138,7 +138,7 @@ def key_from_branch(available: list[str], cwd: Path | None = None) -> str | None
     branch name: the artifacts are what a next step reads.
     """
     here = cwd or Path.cwd()
-    name = gitctx.branch(gitctx.repo_root(here) or here)
+    name = gitctx.branch(gitctx.checkout(here))
     if not name:
         return None
 
@@ -176,7 +176,7 @@ def pick(key: str | None = None, cwd: Path | None = None) -> tuple[Status, str] 
         return read(available[0], cwd), "most recent"
 
     here = cwd or Path.cwd()
-    name = gitctx.branch(gitctx.repo_root(here) or here) or ""
+    name = gitctx.branch(gitctx.checkout(here)) or ""
     match = _KEY_IN_BRANCH.search(name)
     if match:
         return read(match.group(1).upper(), cwd), "branch"
@@ -192,7 +192,7 @@ def branch_changes(cwd: Path | None = None) -> set[str]:
     tree -- a narrower answer, never a failed command.
     """
     here = cwd or Path.cwd()
-    root = gitctx.repo_root(here) or here
+    root = gitctx.checkout(here)
     try:
         from . import flow as flow_lib
 
@@ -205,7 +205,7 @@ def branch_changes(cwd: Path | None = None) -> set[str]:
 def read(key: str, cwd: Path | None = None, *, changed: set[str] | None = None) -> Status:
     key = artifacts.validate_key(key)
     directory = artifacts.ticket_dir(key, cwd)
-    root = gitctx.repo_root(cwd or Path.cwd()) or (cwd or Path.cwd())
+    root = gitctx.checkout(cwd)
 
     triage = _json(directory / "triage.json")
     frame = directory / "frame.md"

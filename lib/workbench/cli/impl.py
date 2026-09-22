@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-from pathlib import Path
 
 from .. import artifacts, gitctx, profile as profile_lib, scope as scope_lib, verify as verify_lib
 from ..errors import EXIT_AUDIT, UsageError, WbError
@@ -38,7 +37,7 @@ def run(args: argparse.Namespace) -> int:
 def _check(args: argparse.Namespace) -> int:
     key = artifacts.validate_key(args.key)
     doc = _audited_plan(key)
-    root = gitctx.repo_root(Path.cwd()) or Path.cwd()
+    root = gitctx.checkout()
 
     planned = {str(item.get("path", "")).replace("\\", "/") for item in doc.get("files") or []}
     planned.discard("")
@@ -91,7 +90,7 @@ def _check(args: argparse.Namespace) -> int:
 def _verify(args: argparse.Namespace) -> int:
     key = artifacts.validate_key(args.key)
     doc = _audited_plan(key)
-    root = gitctx.repo_root(Path.cwd()) or Path.cwd()
+    root = gitctx.checkout()
 
     commands = verify_lib.require_commands(doc.get("verify"))
     for command in commands:

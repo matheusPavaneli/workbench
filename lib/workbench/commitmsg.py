@@ -13,7 +13,6 @@ from dataclasses import dataclass, field
 from . import redact
 
 SUBJECT_LIMIT = 72
-SUBJECT_COMFORTABLE = 50
 SAMPLE_SIZE = 50
 # Below this share of matching history, a pattern is coincidence, not a house style.
 ADOPTION_THRESHOLD = 0.6

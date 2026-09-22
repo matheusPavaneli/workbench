@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from workbench import gitctx
+from workbench.errors import UsageError
 
 
 def _git(args: list[str], cwd: Path) -> None:
@@ -116,6 +117,33 @@ class WorkingTree(unittest.TestCase):
 
     def test_branch_is_reported(self) -> None:
         self.assertIsNotNone(gitctx.branch(self.root))
+
+
+class OutsideACheckout(unittest.TestCase):
+    """The two answers the package is allowed to give, in one place each.
+
+    Both used to be inlined per caller -- the fallback twenty times, the
+    refusal eight -- so changing either meant finding every spelling of it.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.plain = Path(self._tmp.name)
+
+    def test_checkout_falls_back_to_the_directory_it_was_given(self) -> None:
+        self.assertEqual(self.plain.resolve(), gitctx.checkout(self.plain).resolve())
+
+    def test_require_checkout_refuses_instead_of_inventing_a_root(self) -> None:
+        with self.assertRaises(UsageError) as caught:
+            gitctx.require_checkout(self.plain)
+        self.assertIn("not a git repository", str(caught.exception))
+
+    def test_a_caller_can_say_what_to_do_about_it(self) -> None:
+        """`wb init` is the one command whose fix is `git init`."""
+        with self.assertRaises(UsageError) as caught:
+            gitctx.require_checkout(self.plain, fix=["run this inside a checkout, or: git init"])
+        self.assertIn("git init", caught.exception.render())
 
 
 if __name__ == "__main__":

@@ -25,8 +25,17 @@ sys.path.insert(0, str(LIB))
 # entire difference between "what this repo looks like" and "what this repo has
 # decided", and the source of three separate bugs.
 BEHIND_A_RESOLVER = {
-    ("profile", "detect"): "profile.resolve",
-    ("flow", "load"): "flow.resolve",
+    ("profile", "detect"): ("profile.resolve()", "the repo's own config is not skipped"),
+    ("flow", "load"): ("flow.resolve()", "the repo's own config is not skipped"),
+    # Not a recorded decision like the two above, but the same failure: the
+    # fallback was spelled `repo_root(Path.cwd()) or Path.cwd()` in twenty
+    # places and the refusal in eight, so "what happens outside a checkout"
+    # had two answers and no single place to change either.
+    ("gitctx", "repo_root"): (
+        "gitctx.checkout() to fall back to the working directory, or "
+        "gitctx.require_checkout() to refuse",
+        "outside a checkout has one answer",
+    ),
 }
 
 # Where the raw form is legitimate: inside the resolver itself, and in the tests
@@ -34,6 +43,9 @@ BEHIND_A_RESOLVER = {
 ALLOWED_IN = {
     "profile.py": {("profile", "detect")},
     "flow.py": {("flow", "load")},
+    # `wb doctor` reports whether this is a checkout; it is the one caller for
+    # which "no" is an answer rather than a fallback or a refusal.
+    "doctor.py": {("gitctx", "repo_root")},
 }
 
 
@@ -64,9 +76,10 @@ class Resolvers(unittest.TestCase):
                 module = receiver.replace("_lib", "")
                 key = (module, attribute)
                 if key in BEHIND_A_RESOLVER and key not in allowed:
+                    instead, why = BEHIND_A_RESOLVER[key]
                     offences.append(
                         f"{path.relative_to(ROOT)}:{line} calls {receiver}.{attribute}(); "
-                        f"use {BEHIND_A_RESOLVER[key]}() so the repo's own config is not skipped"
+                        f"use {instead} so {why}"
                     )
 
         self.assertEqual([], offences, "\n" + "\n".join(offences))
@@ -79,6 +92,12 @@ class Resolvers(unittest.TestCase):
         self.assertTrue(callable(profile.detect))
         self.assertTrue(callable(flow.resolve))
         self.assertTrue(callable(flow.load))
+
+        from workbench import gitctx
+
+        self.assertTrue(callable(gitctx.checkout))
+        self.assertTrue(callable(gitctx.require_checkout))
+        self.assertTrue(callable(gitctx.repo_root))
 
 
 class PythonFloor(unittest.TestCase):

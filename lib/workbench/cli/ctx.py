@@ -164,7 +164,7 @@ def _use(args: argparse.Namespace) -> int:
     cwd = Path.cwd().resolve()
 
     if args.remember == "repo":
-        root = gitctx.repo_root(cwd) or cwd
+        root = gitctx.checkout(cwd)
         path = root / contexts.REPO_CONFIG
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps({"context": args.name}, indent=2) + "\n", encoding="utf-8")
@@ -333,7 +333,7 @@ def _write_fixtures(captured: list, provider: str, out: Path) -> list[str]:
 
 
 def _default_out(provider: str) -> Path:
-    root = gitctx.repo_root(Path.cwd()) or Path.cwd()
+    root = gitctx.checkout()
     return root / "tests" / "fixtures" / provider / "local"
 
 

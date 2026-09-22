@@ -70,7 +70,7 @@ def _baseline(key: str, root: Path, *, rebaseline: bool) -> str | None:
 def _audit(args: argparse.Namespace) -> int:
     key = artifacts.validate_key(args.key)
     doc = artifacts.read_json(key, "sdd.json")
-    root = gitctx.repo_root(Path.cwd()) or Path.cwd()
+    root = gitctx.checkout()
 
     baseline = _baseline(key, root, rebaseline=args.rebaseline)
     report = audit_lib.run(doc, root, baseline)
@@ -140,7 +140,7 @@ def _handover(args: argparse.Namespace) -> int:
 def _gates(args: argparse.Namespace) -> int:
     preset = args.preset
     if not preset:
-        root = gitctx.repo_root(Path.cwd()) or Path.cwd()
+        root = gitctx.checkout()
         preset = profile_lib.resolve(root).preset
     print(f"preset {preset}")
     for gate in sdd_lib.gates_for(preset):

@@ -34,7 +34,6 @@ SLUG_MAX = 32
 COMMON_SOURCES = ("main", "master", "trunk")
 COMMON_VALIDATION = ("homolog", "homologacao", "staging", "stage", "beta", "qa", "uat", "develop", "development", "dev")
 
-_PATTERN_FIELD = re.compile(r"\{(key|slug|type)\}")
 _SLUG_CLEAN = re.compile(r"[^a-z0-9]+")
 
 

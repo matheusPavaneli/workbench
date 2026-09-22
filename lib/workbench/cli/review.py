@@ -39,9 +39,7 @@ def run(args: argparse.Namespace) -> int:
 
 
 def _gates(args: argparse.Namespace) -> int:
-    root = gitctx.repo_root(Path.cwd())
-    if root is None:
-        raise UsageError("not a git repository", fix=["run this inside a checkout"])
+    root = gitctx.require_checkout()
 
     changed = gitctx.changed_files(root, staged=args.staged)
     added = gitctx.added_lines(root, staged=args.staged)
@@ -86,9 +84,7 @@ def _gates(args: argparse.Namespace) -> int:
 
 def _context(args: argparse.Namespace) -> int:
     cwd = Path.cwd()
-    root = gitctx.repo_root(cwd)
-    if root is None:
-        raise UsageError("not a git repository", fix=["run this inside a checkout"])
+    root = gitctx.require_checkout(cwd)
 
     changed = gitctx.changed_files(root, staged=args.staged)
     if not changed:

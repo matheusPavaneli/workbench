@@ -50,7 +50,7 @@ def validate_key(key: str) -> str:
 
 def root(cwd: Path | None = None) -> Path:
     cwd = (cwd or Path.cwd()).resolve()
-    return (gitctx.repo_root(cwd) or cwd) / WORKFLOW_DIR
+    return gitctx.checkout(cwd) / WORKFLOW_DIR
 
 
 def ticket_dir(key: str, cwd: Path | None = None) -> Path:

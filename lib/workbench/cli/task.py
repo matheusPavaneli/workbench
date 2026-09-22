@@ -242,7 +242,7 @@ def _merged() -> list[str]:
     flight, not work finished, and deleting it would be exactly backwards. A
     ``commit.txt`` or a ``pr.md`` is the evidence that a branch once existed.
     """
-    root = gitctx.repo_root(Path.cwd()) or Path.cwd()
+    root = gitctx.checkout()
     branches = gitctx.remote_branches(root)
 
     selected = []

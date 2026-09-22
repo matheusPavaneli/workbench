@@ -82,6 +82,17 @@ class NothingIdentifiableSurvives(unittest.TestCase):
     def test_no_account_id_survives(self) -> None:
         self.assertNotIn(SECRETS["account"], self.output)
 
+    def test_no_project_code_survives(self) -> None:
+        """A ticket key names the tenant's project, and a recording is made by
+        naming one: `wb ctx record SAAS-123` used to write that key, verbatim,
+        into a file people commit."""
+        written = json.dumps(
+            anonymise.Anonymiser().payload(
+                {"key": "SAAS-123", "fields": {"description": "blocked by SAAS-120"}}
+            )
+        )
+        self.assertNotIn("SAAS", written)
+
     def test_a_registered_secret_never_reaches_the_file(self) -> None:
         payload = {"fields": {"description": f"use token {SECRETS['token']} to retry"}}
         written = json.dumps(anonymise.Anonymiser().payload(payload))
@@ -111,12 +122,62 @@ class TheShapeSurvives(unittest.TestCase):
 
     def test_structural_values_the_code_branches_on_are_untouched(self) -> None:
         fields = self.result["fields"]
-        self.assertEqual("ABC-123", self.result["key"])
         self.assertEqual("10042", self.result["id"])
         self.assertEqual("Bug", fields["issuetype"]["name"])
         self.assertEqual("In Progress", fields["status"]["name"])
         self.assertEqual("indeterminate", fields["status"]["statusCategory"]["key"])
         self.assertFalse(fields["issuetype"]["subtask"])
+
+    def test_a_key_keeps_its_shape_but_not_the_tenants_project(self) -> None:
+        """The project letters name the tenant; the shape is what the providers
+        parse. Replacing the whole key would make every key-shaped branch
+        untestable, keeping it leaks which company the recording came from."""
+        key = self.result["key"]
+        self.assertRegex(key, r"^[A-Z][A-Z0-9]{1,9}-123$")
+        self.assertNotEqual("ABC-123", key)
+
+    def test_a_structural_value_shaped_like_a_key_is_not_one(self) -> None:
+        """The pattern is loose on purpose -- project codes vary -- so it is
+        anchored to the field instead. Unanchored it rewrote a status named
+        `UTF-8 encoding` and a field holding `CVE-2021-44228`, which is the
+        class of value the whole STRUCTURAL set exists to protect."""
+        result = anonymise.Anonymiser().payload(
+            {"type": "CVE-2021-44228", "fields": {"status": {"name": "UTF-8 encoding"}}}
+        )
+        self.assertEqual("CVE-2021-44228", result["type"])
+        self.assertEqual("UTF-8 encoding", result["fields"]["status"]["name"])
+
+    def test_a_tenant_never_gets_its_own_project_code_back(self) -> None:
+        """The pool holds plausible real codes and is assigned by position, so
+        the tenant whose code is in it could be handed it back -- a fixture
+        that reads as anonymised while naming the company."""
+        for code in anonymise._PROJECTS:
+            with self.subTest(code=code):
+                result = anonymise.Anonymiser().payload({"key": f"{code}-5"})
+                self.assertNotEqual(f"{code}-5", result["key"])
+                self.assertRegex(result["key"], r"^[A-Z][A-Z0-9]{1,9}-5$")
+
+    def test_two_projects_never_collide_on_one_pseudonym(self) -> None:
+        """Skipping a slot to avoid handing a code back must not hand the
+        skipped one to the next project instead."""
+        codes = [f"{code}-1" for code in anonymise._PROJECTS]
+        result = anonymise.Anonymiser().payload({"linked": [{"key": key} for key in codes]})
+        mapped = [entry["key"] for entry in result["linked"]]
+        self.assertEqual(len(codes), len(set(mapped)))
+
+    def test_the_same_key_maps_the_same_way_everywhere_in_one_payload(self) -> None:
+        """A fixture where the same ticket reads as two different tickets is
+        incoherent in a way that is hard to notice and easy to reason wrongly
+        from -- the same reason people are mapped consistently."""
+        result = anonymise.Anonymiser().payload(
+            {
+                "key": "ABC-123",
+                "self": "https://acme.atlassian.net/browse/ABC-123",
+                "fields": {"parent": {"key": "ABC-123"}},
+            }
+        )
+        self.assertEqual(result["key"], result["fields"]["parent"]["key"])
+        self.assertTrue(result["self"].endswith(result["key"]), result["self"])
 
     def test_list_lengths_are_preserved(self) -> None:
         self.assertEqual(2, len(self.result["fields"]["comment"]["comments"]))

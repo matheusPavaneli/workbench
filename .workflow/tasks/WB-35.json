@@ -2,10 +2,10 @@
   "key": "WB-35",
   "title": "verify asks for a new approval on every ticket for the same command",
   "type": "bug",
-  "status": "open",
+  "status": "done",
   "desc": "Every ticket asks for a fresh verify approval even when nothing new would run. A plan's verify list typically ends with `python lib/wb.py sdd audit <KEY>`; approvals are verbatim strings (verify.entries), so WB-26, WB-27 and WB-29 each stopped on an approval for the same command with a different key. An approval that is asked for every time for the same thing trains people to approve without reading -- the failure the gate exists to prevent.\n\nTwo routes, and why the obvious one is wrong:\n- Treating `wb` itself as pre-approved is unsafe: `python lib/wb.py` in a checkout is whatever file that repo ships, not this plugin. Only this repo happens to be the tool.\n- Recommended: approve with the ticket's own key abstracted. When a command contains the key of the plan being verified as a whole token, the approval entry records it as `<KEY>` (e.g. `python lib/wb.py sdd audit <KEY>`), and matching substitutes only that plan's key. A different key, or the key inside a longer token, is a different command and asks again.\n\nACCEPTANCE:\n- verify.entries renders the plan's own key as <KEY> in each entry; unapproved() and approve() match on that form\n- an approval given for WB-1 covers WB-2 running the same command with its own key, and nothing else (another key, a changed flag, a changed env value all ask again)\n- the key is replaced only as a whole token (ABC-1 inside ABC-12 or foo-ABC-1 is left alone)\n- the --approve call printed by impl verify names the <KEY> form, so the person approves what will be stored\n- existing verbatim approvals keep working\n- regression tests for each rule; docs/execution.md approval section updated",
   "created": "2026-09-25T23:01:29Z",
-  "updated": "2026-09-25T23:01:29Z",
+  "updated": "2026-09-25T23:38:14Z",
   "comments": [],
   "linked": []
 }

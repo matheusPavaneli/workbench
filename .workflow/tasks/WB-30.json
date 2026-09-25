@@ -2,10 +2,10 @@
   "key": "WB-30",
   "title": "audit file:line citations in any artifact, and a read-only ask path that uses it",
   "type": "feature",
-  "status": "open",
+  "status": "done",
   "desc": "Only sdd.json is audited. review-diff findings, the trace-incident chain and address-review replies are told to quote file:line, but nothing checks it. There is also no entry point for the most common daily task: asking a question about the code and getting an answer whose citations are verified.\n\nACCEPTANCE:\n- wb cite check <file.md> extracts `path:line` references with their quoted text and reuses audit._check; exit 7 on any unverified citation, output in the audit's format\n- the same provenance rules as the audit apply (committed content, no .workflow, no ignored files)\n- review-diff, trace-incident and address-review end with wb cite check on what they wrote\n- an ask flow writes .workflow/ask-<slug>.md and must pass wb cite check before the answer is presented; the skill-description budget test still passes (fold into an existing skill or shared reference if a new skill breaks the ceiling)\n- regression tests for the extractor and for each verdict",
   "created": "2026-09-25T19:32:52Z",
-  "updated": "2026-09-25T19:32:52Z",
+  "updated": "2026-09-25T23:47:00Z",
   "comments": [],
   "linked": []
 }

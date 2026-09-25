@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -48,6 +49,10 @@ ARTIFACT = "artifact"
 # uncommitted edit. A session can write any line it likes to disk and then
 # quote it, so only committed code counts as evidence.
 UNCOMMITTED = "uncommitted"
+# An absence claim whose search matched: the thing said not to exist does.
+FOUND = "found"
+# How many matching files a failed absence claim names.
+FOUND_SHOWN = 5
 
 # Why a passing verdict no longer stands: the plan beside it is not the one
 # it was reached on. Named, because callers answer it differently.
@@ -104,6 +109,9 @@ class Report:
     findings: list[Finding] = field(default_factory=list)
     structure: list[str] = field(default_factory=list)
     missing_paths: list[str] = field(default_factory=list)
+    # Every search an absence claim made the audit run, as run. Recorded for
+    # passing claims too: "no match" is only worth what the search covered.
+    searches: list[dict] = field(default_factory=list)
 
     @property
     def passing(self) -> set:
@@ -132,6 +140,7 @@ class Report:
             "findings": [f.to_dict() for f in self.findings if f.verdict not in self.passing],
             "structure": self.structure,
             "missing_paths": self.missing_paths,
+            "searches": self.searches,
         }
 
 
@@ -159,6 +168,9 @@ def run(doc: dict, root: Path, baseline: str | None = None) -> Report:
     report.structure = sdd.validate(doc)
 
     for index, item in enumerate(doc.get("evidence") or []):
+        if isinstance(item, dict) and item.get("kind") == sdd.ABSENCE:
+            report.findings.append(_check_absence(index, item, root, report.baseline, report.searches))
+            continue
         report.findings.append(_check(index, item, root, report.baseline, under_way=report.under_way))
 
     # A plan may only claim to edit files that exist. Claiming to edit a file
@@ -375,6 +387,53 @@ def _check(index: int, item: dict, root: Path, anchor: str = "", *, under_way: b
 
     finding.verdict = MISMATCH
     finding.detail = f"line {line_number} reads: {' '.join(lines[line_number - 1].split())[:120]!r}"
+    return finding
+
+
+def _check_absence(index: int, item: dict, root: Path, anchor: str, searches: list[dict]) -> Finding:
+    """Run the search an absence claim rests on, at the anchor commit.
+
+    The anchor, not the working tree, for the reason citations use it: a
+    claim about the code is a claim about committed code, and a session must
+    not be able to make one true by deleting a caller it has not committed.
+    Under way the anchor is the baseline, so the claim is held to the code it
+    was made about.
+    """
+    claim = str(item.get("claim", ""))
+    finding = Finding(index=index, verdict=OK, file="", line=0, claim=claim)
+    search = item.get("search")
+    if not isinstance(search, dict) or not isinstance(search.get("pattern"), str):
+        # validate() reports the shape; this pass must not raise on it.
+        finding.verdict = UNREADABLE
+        finding.detail = "absence claim has no search to run"
+        return finding
+    if not anchor:
+        finding.verdict = UNREADABLE
+        finding.detail = "an absence claim needs a commit to search; this is not a git checkout"
+        return finding
+
+    pattern = search["pattern"]
+    paths = [str(path).replace("\\", "/") for path in search.get("paths") or []]
+    allowed = {str(path).replace("\\", "/") for path in search.get("allow") or []}
+    word = search.get("word") is True
+    command = shlex.join(["git", *gitctx.grep_command(anchor, pattern, paths, word=word)])
+
+    matched = gitctx.grep_files(root, anchor, pattern, paths, word=word)
+    if matched is None:
+        searches.append({"index": index, "command": command, "error": True})
+        finding.verdict = UNREADABLE
+        finding.detail = f"the search failed to run: {command}"
+        return finding
+
+    outside = [path for path in matched if path not in allowed]
+    searches.append(
+        {"index": index, "command": command, "matched": len(matched), "allowed": len(matched) - len(outside)}
+    )
+    if outside:
+        shown = ", ".join(outside[:FOUND_SHOWN])
+        more = f" and {len(outside) - FOUND_SHOWN} more" if len(outside) > FOUND_SHOWN else ""
+        finding.verdict = FOUND
+        finding.detail = f"{pattern!r} occurs in {shown}{more}; the claim is false, or allow the file and say why"
     return finding
 
 

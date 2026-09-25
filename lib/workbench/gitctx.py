@@ -332,6 +332,48 @@ def file_at(cwd: Path, ref: str, path: str) -> str | None:
     return _git_raw(["show", f"{ref}:{path.replace(chr(92), '/')}"], cwd)
 
 
+def grep_command(ref: str, pattern: str, paths: list[str], *, word: bool = False) -> list[str]:
+    """The git arguments ``grep_files`` runs, for the caller to record verbatim.
+
+    Fixed-string, binary files skipped, ``.workflow`` excluded: a plan's own
+    notes mention the very names its absence claims are about.
+    """
+    args = ["grep", "-l", "-I", "-F"]
+    if word:
+        args.append("-w")
+    return [*args, "-e", pattern, ref, "--", *(paths or ["."]), f":(exclude){ARTIFACT_DIR}"]
+
+
+def grep_files(cwd: Path, ref: str, pattern: str, paths: list[str], *, word: bool = False) -> list[str] | None:
+    """Files at ``ref`` containing ``pattern``: ``[]`` for none, ``None`` if git failed.
+
+    Its own call rather than ``_git_raw``: git grep exits 1 for "no match",
+    which is the answer an absence claim hopes for, not a failure.
+    """
+    if not ref or not pattern:
+        return None
+    try:
+        completed = subprocess.run(
+            ["git", *grep_command(ref, pattern, paths, word=word)],
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode == 1 and not completed.stderr.strip():
+        return []
+    if completed.returncode != 0:
+        return None
+    prefix = f"{ref}:"
+    found = (line[len(prefix) :] if line.startswith(prefix) else line for line in completed.stdout.splitlines())
+    return sorted({path for path in found if path})
+
+
 def subjects_since(cwd: Path, base: str, limit: int = 50) -> list[str]:
     """Commit subjects on this branch that the base does not have."""
     output = _git(["log", f"{base}..HEAD", "--no-merges", f"--max-count={limit}", "--format=%s"], cwd)

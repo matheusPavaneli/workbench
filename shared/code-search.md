@@ -42,7 +42,15 @@ right the first time is cheaper than being caught.
 
 Before claiming a change is contained, ask the index who calls it. "Nothing else
 uses this" is a claim like any other: it needs `get_callers` or an equivalent
-search behind it, and it belongs in `evidence` with what you ran.
+search behind it. It cannot be cited — a real line proves nothing about the
+lines that are not there — so it goes in `evidence` as `"kind": "absence"`
+with the search itself, which `wb sdd audit` runs again against the commit:
+
+```json
+{ "kind": "absence", "claim": "only checkout calls create_charge",
+  "search": { "pattern": "create_charge(", "paths": ["src"],
+              "allow": ["src/billing/checkout.py"] } }
+```
 
 For a change to a public contract — an exported function, a route, a schema, an
 event — the callers you cannot see (other repos, other teams) are the ones that

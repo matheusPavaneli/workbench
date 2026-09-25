@@ -11,6 +11,21 @@ command's own output, and one that removes it. A `--json` payload that loses or
 renames a key raises its `schema` number in the same release, and
 `contract.VERSIONS` is asserted against the real output so it cannot drift.
 
+## Unreleased
+
+### Added
+
+- **Absence claims are searches the audit runs.** "Nothing else calls this"
+  used to pass by citing a real line, which proved nothing about the lines
+  that are not there. An `evidence` item may now be `"kind": "absence"` with a
+  `search` (`pattern`, optional `paths`, `allow`, `word`). `wb sdd audit` runs
+  `git grep -l -F` against the anchor commit -- HEAD, or the baseline once
+  under way, `.workflow/` excluded -- and fails with the new verdict `found`,
+  naming the files, when anything matches outside `allow`. Every search is
+  recorded as run under `searches` in `audit.json`. Outside a checkout an
+  absence claim fails as `unreadable`. The pattern and paths are validated:
+  fixed text only, no pathspec magic, nothing that leaves the repo.
+
 ## 0.9.0
 
 ### Added

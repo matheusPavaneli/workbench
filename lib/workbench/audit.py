@@ -255,6 +255,16 @@ def _preset_problems(doc: dict, root: Path) -> list[str]:
     ]
 
 
+def verify_citation(item: dict, root: Path, anchor: str = "") -> Finding:
+    """One ``{file, line, quote}`` citation with no plan around it.
+
+    ``anchor`` is the commit to read the file at; empty reads the working
+    tree. Either way the provenance rules hold: nothing under ``.workflow/``,
+    and with an anchor, nothing that commit lacks.
+    """
+    return _check(0, item, root, anchor)
+
+
 def _check(index: int, item: dict, root: Path, anchor: str = "", *, under_way: bool = False) -> Finding:
     """Decide one citation's verdict. ``anchor`` is the commit the audit runs
     against -- HEAD on a first audit, the recorded baseline after it -- and is

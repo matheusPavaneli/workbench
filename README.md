@@ -355,6 +355,11 @@ It is a script, deliberately, and not a second pass by the model: a model
 auditing its own work confirms its own errors. `implement-change` refuses to run
 on a plan whose audit did not pass.
 
+The same check runs on anything else that quotes code. Review findings, an
+incident's chain from symptom to cause, replies to a reviewer and answers to a
+question about the code cite as `` `path:line` — `the line` ``, and
+`wb cite check <file>` reopens each one; a reference with no quoted line fails.
+
 ## Command surface
 
 ```
@@ -370,6 +375,7 @@ wb sdd     audit [--rebaseline] | get | render | handover | gates
 wb flow    show | start | carry | set        start, carry take --execute
 wb impl    check | verify
 wb review  context | gates
+wb cite    check <file> [--worktree]      citations outside a plan
 wb commit  convention | check
 wb pr      context | check
 wb git     ctx | diff | commit | push        commit, push take --execute

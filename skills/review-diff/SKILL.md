@@ -37,16 +37,18 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
    secrets are held to a higher standard than the preset otherwise sets. In
    those files, read every changed line and its error path.
 
-6. **Report findings**, most severe first:
+6. **Write the findings**, most severe first, to `.workflow/<KEY>/review.md`:
 
    ```
-   path/to/file.py:42  high  Coupon is validated after the charge is created.
-                             An expired coupon charges the card, then errors.
+   - high  `src/checkout.py:42` — `charge = create_charge(total)`
+     Coupon is validated after the charge. An expired coupon charges, then errors.
    ```
 
    Severity: **high** — wrong behaviour, data loss, or a security hole.
    **medium** — will break under a plausible input or state. **low** — real but
    contained. Skip formatting and taste unless it changes meaning.
+   Then `cite check .workflow/<KEY>/review.md --worktree`, and report only once
+   it passes: a finding whose line is not there is withdrawn, not reworded.
 
 7. **Say when it is clean.** "No findings" is a result. Do not manufacture a
    finding to look thorough.

@@ -41,8 +41,9 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
 6. **Re-review your own diff.** `review context` on the new changes.
 
 7. **Write the replies** to `.workflow/<KEY>/review-response.md`, one per
-   comment, each saying what was done or why not. Show them; posting is the
-   user's call.
+   comment, each saying what was done or why not, citing code as
+   `` `path:line` — `the line` ``. `cite check` that file (`--worktree` for
+   uncommitted changes) before showing it; posting is the user's call.
 
 ## Rules
 

@@ -57,6 +57,18 @@ HANDOVER_REQUIRED = ("symptom_plain", "qa_steps")
 CHANGE_KINDS = ["edit", "add", "delete", "rename"]
 TEST_KINDS = ["unit", "regression", "integration", "e2e", "property"]
 
+# Evidence is a citation -- a line that is there -- unless it says otherwise.
+# An absence claim ("nothing else calls this") cannot be cited: a real line
+# proves nothing about the lines that are not. It is stated as a search
+# instead, which the audit runs itself.
+CITATION = "citation"
+ABSENCE = "absence"
+EVIDENCE_KINDS = [CITATION, ABSENCE]
+# Short patterns match everything and prove nothing; long ones are prose.
+MIN_PATTERN_CHARS = 3
+MAX_PATTERN_CHARS = 200
+MAX_SEARCH_PATHS = 20
+
 # ---- rigour tiers -------------------------------------------------------
 #
 # A seven-section plan for a one-line change costs more than the change, and a
@@ -158,6 +170,13 @@ def validate(doc: dict) -> list[str]:
             # an audit that crashes teaches people to skip the audit.
             problems.append(f"evidence[{index}] must be an object, not {type(item).__name__}")
             continue
+        kind = item.get("kind", CITATION)
+        if kind == ABSENCE:
+            problems.extend(_absence_problems(index, item))
+            continue
+        if kind != CITATION:
+            problems.append(f"evidence[{index}].kind must be one of: {', '.join(EVIDENCE_KINDS)}")
+            continue
         for required in ("claim", "file", "line"):
             if not item.get(required):
                 problems.append(f"evidence[{index}] has no {required}")
@@ -239,6 +258,56 @@ def validate(doc: dict) -> list[str]:
     return problems
 
 
+def _absence_problems(index: int, item: dict) -> list[str]:
+    """Shape of an absence claim. The search is data a model wrote and git runs,
+    so its pattern and paths are bounded here rather than trusted."""
+    where = f"evidence[{index}]"
+    problems = []
+    if not str(item.get("claim", "")).strip():
+        problems.append(f"{where} has no claim")
+    search = item.get("search")
+    if not isinstance(search, dict):
+        return [*problems, f"{where}.search must be an object with a pattern"]
+
+    pattern = search.get("pattern")
+    if not isinstance(pattern, str) or not MIN_PATTERN_CHARS <= len(pattern.strip()) <= MAX_PATTERN_CHARS:
+        problems.append(
+            f"{where}.search.pattern must be {MIN_PATTERN_CHARS} to {MAX_PATTERN_CHARS} characters of fixed text"
+        )
+    elif any(ord(character) < 32 for character in pattern):
+        problems.append(f"{where}.search.pattern must be one line of text")
+
+    for name in ("paths", "allow"):
+        value = search.get(name, [])
+        if not isinstance(value, list) or len(value) > MAX_SEARCH_PATHS:
+            problems.append(f"{where}.search.{name} must be a list of at most {MAX_SEARCH_PATHS} paths")
+            continue
+        for path in value:
+            reason = _search_path_problem(path)
+            if reason:
+                problems.append(f"{where}.search.{name}: {path!r} {reason}")
+
+    if not isinstance(search.get("word", False), bool):
+        problems.append(f"{where}.search.word must be true or false")
+    return problems
+
+
+def _search_path_problem(path: object) -> str | None:
+    """Why a path may not be handed to git grep, or ``None``.
+
+    A leading ':' is git's pathspec magic, which can widen or invert the search;
+    a leading '-' could read as an option. Neither belongs in a plan.
+    """
+    if not isinstance(path, str) or not path.strip():
+        return "is not a path"
+    text = path.replace("\\", "/")
+    if text.startswith(("/", ":", "-")) or (len(text) > 1 and text[1] == ":"):
+        return "must be relative to the repo, with no pathspec magic"
+    if ".." in text.split("/"):
+        return "must not leave the repo"
+    return None
+
+
 def needs_handover(doc: dict) -> bool:
     """Support work owes an answer to the person who raised it.
 
@@ -284,6 +353,13 @@ def render(doc: dict) -> str:
 
     lines += ["## Evidence", ""]
     for item in doc.get("evidence") or []:
+        if item.get("kind") == ABSENCE:
+            search = item.get("search") or {}
+            where = ", ".join(f"`{path}`" for path in search.get("paths") or []) or "the repo"
+            allowed = search.get("allow") or []
+            except_in = f", except {', '.join(f'`{path}`' for path in allowed)}" if allowed else ""
+            lines.append(f"- {item.get('claim')}  \n  no match for `{search.get('pattern')}` in {where}{except_in}")
+            continue
         lines.append(f"- {item.get('claim')}  \n  `{item.get('file')}:{item.get('line')}` — `{item.get('quote')}`")
     lines.append("")
 

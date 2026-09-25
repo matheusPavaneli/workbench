@@ -61,6 +61,7 @@ so a wrong `line` or an invented `quote` fails here rather than in review.
 |---|---|
 | `evidence[].quote` | The **actual text of that line**, copied. The audit compares it after collapsing whitespace. Do not paraphrase, do not reconstruct from memory. Only committed code counts: the first audit reads the file at HEAD, and a citation into `.workflow/`, an untracked or ignored file, a file the plan adds, or an uncommitted edit fails. |
 | `evidence[].line` | 1-indexed. If the audit says `moved`, correct the number — do not loosen the quote. |
+| `evidence[].kind` | Omit for a citation. `"absence"` for a claim that something does **not** exist ("nothing else calls this"): no `file`/`line`/`quote`, a `search` instead — `pattern` (fixed text, 3–200 chars), optional `paths` and `allow` (repo-relative), optional `word`. The audit runs `git grep` on the commit and fails with `found` on any match outside `allow`. |
 | `files[]` | Every file the change touches, before any of it is touched. `implement-change` refuses a file that is not listed. `change` is one of `edit`, `add`, `delete`, `rename`. A listed `edit` whose path does not exist fails the audit. |
 | `zones` | From `wb repo zones`. Do not hand-write it. |
 | `tests[].asserts` | What must hold, not what to call. "calls validate()" is not an assertion; "rejects a coupon whose expiry is past" is. |

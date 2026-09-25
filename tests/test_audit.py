@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import os
 import subprocess
@@ -432,6 +434,106 @@ class Provenance(GitCase):
         self.assertIn("no quote", report.findings[0].detail)
 
 
+def _absence(pattern: str, **search) -> dict:
+    return {"kind": "absence", "claim": f"nothing else uses {pattern}", "search": {"pattern": pattern, **search}}
+
+
+class Absence(GitCase):
+    """A negative claim is a search the audit runs, not a line it reads.
+
+    "Nothing else calls charge()" used to pass by citing `def charge(...)`: the
+    quote was real, and the claim was never checked at all."""
+
+    def audit(self, *evidence: dict, baseline: str | None = None) -> audit.Report:
+        return audit.run(_doc(evidence=list(evidence)), self.root, baseline)
+
+    def test_a_true_absence_passes_and_records_its_search(self) -> None:
+        report = self.audit(_absence("refund_everything", paths=["src"]))
+        self.assertTrue(report.passed, report.to_dict())
+        (search,) = report.to_dict()["searches"]
+        self.assertIn("grep", search["command"])
+        self.assertIn("refund_everything", search["command"])
+        self.assertEqual(0, search["matched"])
+
+    def test_a_false_absence_fails_naming_the_file(self) -> None:
+        report = self.audit(_absence("create_charge", paths=["src"]))
+        self.assertFalse(report.passed)
+        self.assertEqual(audit.FOUND, report.findings[0].verdict)
+        self.assertIn("src/checkout.py", report.findings[0].detail)
+
+    def test_an_allowed_file_is_excused_and_nothing_else_is(self) -> None:
+        allowed = _absence("create_charge", allow=["src/checkout.py"])
+        self.assertTrue(self.audit(allowed).passed)
+        self.write("src/api.py", "def handler(total):\n    return create_charge(total)\n")
+        self.commit()
+        report = self.audit(allowed)
+        self.assertEqual(audit.FOUND, report.findings[0].verdict)
+        self.assertIn("src/api.py", report.findings[0].detail)
+        self.assertNotIn("src/checkout.py", report.findings[0].detail)
+        self.assertEqual(1, report.to_dict()["searches"][0]["allowed"])
+
+    def test_the_search_reads_the_commit_not_the_disk(self) -> None:
+        """Deleting a caller without committing must not make the claim true."""
+        (self.root / "src" / "checkout.py").unlink()
+        self.assertEqual(audit.FOUND, self.audit(_absence("create_charge")).findings[0].verdict)
+        self.write("src/new.py", "refund_everything()\n")
+        self.assertEqual(audit.OK, self.audit(_absence("refund_everything")).findings[0].verdict)
+
+    def test_under_way_the_claim_is_held_to_the_baseline(self) -> None:
+        """Implementation adds the callers; the claim was about the code before."""
+        self.write("src/refund.py", "def refund_everything():\n    pass\n")
+        self.commit()
+        self.assertTrue(self.audit(_absence("refund_everything"), baseline=self.baseline).passed)
+        self.assertFalse(self.audit(_absence("refund_everything")).passed)
+
+    def test_word_matching_ignores_longer_names(self) -> None:
+        self.assertTrue(self.audit(_absence("create", word=True, paths=["src"])).passed)
+        self.assertFalse(self.audit(_absence("create", paths=["src"])).passed)
+
+    def test_citations_and_absence_claims_mix(self) -> None:
+        citation = _doc()["evidence"][0]
+        report = self.audit(citation, _absence("refund_everything"))
+        self.assertTrue(report.passed, report.to_dict())
+        self.assertEqual(2, report.to_dict()["citations_checked"])
+
+    def test_the_rendered_plan_states_the_search(self) -> None:
+        text = sdd.render(_doc(evidence=[_absence("create_charge", paths=["src"], allow=["src/checkout.py"])]))
+        self.assertIn("no match for `create_charge` in `src`, except `src/checkout.py`", text)
+
+
+class AbsenceShape(AuditCase):
+    def problems(self, item: dict) -> list[str]:
+        return [p for p in sdd.validate(_doc(evidence=[item])) if p.startswith("evidence[0]")]
+
+    def test_a_well_formed_absence_claim_has_no_problems(self) -> None:
+        self.assertEqual([], self.problems(_absence("create_charge", paths=["src"], allow=["src/a.py"], word=True)))
+
+    def test_an_unknown_kind_is_refused(self) -> None:
+        self.assertTrue(self.problems({"kind": "hunch", "claim": "c"}))
+
+    def test_a_pattern_too_short_to_mean_anything_is_refused(self) -> None:
+        self.assertTrue(self.problems(_absence("ab")))
+
+    def test_a_missing_search_is_refused(self) -> None:
+        self.assertTrue(self.problems({"kind": "absence", "claim": "c"}))
+
+    def test_a_multi_line_pattern_is_refused(self) -> None:
+        self.assertTrue(self.problems(_absence("create\ncharge")))
+
+    def test_paths_that_leave_the_repo_or_use_pathspec_magic_are_refused(self) -> None:
+        for path in ("../other", "/etc", ":(exclude)src", "-x", "C:/Windows", ""):
+            with self.subTest(path=path):
+                self.assertTrue(self.problems(_absence("create_charge", paths=[path])))
+                self.assertTrue(self.problems(_absence("create_charge", allow=[path])))
+
+    def test_word_must_be_a_boolean(self) -> None:
+        self.assertTrue(self.problems(_absence("create_charge", word="yes")))
+
+    def test_a_malformed_absence_claim_fails_the_audit_without_raising(self) -> None:
+        report = audit.run(_doc(evidence=[{"kind": "absence", "claim": "c", "search": "create_charge"}]), self.root)
+        self.assertFalse(report.passed)
+
+
 class Standing(AuditCase):
     """Whether a plan may be implemented from is a property of the plan *and*
     its audit. The verdict alone was trusted, so a plan edited after it passed
@@ -548,6 +650,11 @@ class OutsideGit(unittest.TestCase):
         )
         report = audit.run(doc, self.root)
         self.assertEqual(audit.ARTIFACT, report.findings[0].verdict)
+
+    def test_an_absence_claim_needs_a_commit_to_search(self) -> None:
+        report = audit.run(_doc(evidence=[_absence("refund_everything")]), self.root)
+        self.assertFalse(report.passed)
+        self.assertEqual(audit.UNREADABLE, report.findings[0].verdict)
 
     def test_an_audit_with_no_commit_to_anchor_to_still_runs(self) -> None:
         """A folder that is not a checkout has no baseline, and must not need one."""

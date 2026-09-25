@@ -28,6 +28,32 @@ class WorkingTree(unittest.TestCase):
         # init.defaultBranch differs between machines; the tests need the name.
         self.base = gitctx.branch(self.root) or "master"
 
+    def test_grep_files_names_the_files_that_match_at_a_ref(self) -> None:
+        (self.root / "src" / "b.py").write_text("one more\n", encoding="utf-8")
+        _git(["add", "-A"], self.root)
+        _git(["commit", "-qm", "b"], self.root)
+        self.assertEqual(["src/a.py", "src/b.py"], gitctx.grep_files(self.root, "HEAD", "one", []))
+        self.assertEqual(["src/b.py"], gitctx.grep_files(self.root, "HEAD", "one more", ["src"]))
+
+    def test_grep_files_reports_no_match_as_empty_not_as_failure(self) -> None:
+        self.assertEqual([], gitctx.grep_files(self.root, "HEAD", "nowhere_at_all", []))
+
+    def test_grep_files_can_match_whole_words(self) -> None:
+        (self.root / "src" / "a.py").write_text("someone\n", encoding="utf-8")
+        _git(["commit", "-qam", "longer"], self.root)
+        self.assertEqual([], gitctx.grep_files(self.root, "HEAD", "one", [], word=True))
+        self.assertEqual(["src/a.py"], gitctx.grep_files(self.root, "HEAD", "one", []))
+
+    def test_grep_files_never_searches_workflow(self) -> None:
+        (self.root / ".workflow").mkdir()
+        (self.root / ".workflow" / "notes.md").write_text("nothing else calls one\n", encoding="utf-8")
+        _git(["add", "-A", "-f"], self.root)
+        _git(["commit", "-qm", "notes"], self.root)
+        self.assertEqual(["src/a.py"], gitctx.grep_files(self.root, "HEAD", "one", []))
+
+    def test_grep_files_is_none_when_git_fails(self) -> None:
+        self.assertIsNone(gitctx.grep_files(self.root, "no-such-ref", "one", []))
+
     def test_file_at_returns_a_non_ascii_line_intact(self) -> None:
         """Decoded with the locale's encoding it came back as mojibake on
         Windows (cp1252), so the audit could never match such a quote."""

@@ -250,6 +250,22 @@ class TaskClean(CliBase):
         self.assertNotIn("ABC-2", out)
         self.assertNotIn("ABC-3", out)
 
+    def test_merged_takes_a_done_ticket_whose_branch_a_squash_merge_left(self) -> None:
+        """WB-24: squash merges keep the branch, so --merged selected nothing."""
+        self.use_local()
+        run("task", "new", "Shipped")
+        run("task", "new", "Still open")
+        run("task", "done", "WB-1")
+        self.seed("WB-1", "pr.md")
+        self.seed("WB-2", "pr.md")
+        branches = ["origin/WB-1-shipped", "origin/WB-2-still-open"]
+
+        with mock.patch("workbench.gitctx.remote_branches", return_value=branches):
+            out = run("task", "clean", "--merged")[1]
+
+        self.assertIn("WB-1", out)
+        self.assertNotIn("WB-2", out)
+
     def test_a_selector_matching_nothing_is_not_an_error(self) -> None:
         self.seed("ABC-1", "triage.json")
         with mock.patch("workbench.gitctx.remote_branches", return_value=[]):

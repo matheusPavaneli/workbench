@@ -235,12 +235,16 @@ def _touched(directory: Path) -> float:
 
 
 def _merged() -> list[str]:
-    """Tickets whose work shipped and whose branch is no longer on the remote.
+    """Tickets whose work shipped and that are over: branch gone, or closed.
 
     Both halves are needed. "No branch names this key" alone also matches a
     ticket that was triaged and never branched at all -- which is work in
     flight, not work finished, and deleting it would be exactly backwards. A
     ``commit.txt`` or a ``pr.md`` is the evidence that a branch once existed.
+
+    A ticket the local backlog records as done is over whatever the remote
+    says: a squash merge leaves its branch behind, and until then this
+    selected nothing in a repo that merges that way.
     """
     root = gitctx.checkout()
     branches = gitctx.remote_branches(root)
@@ -250,7 +254,7 @@ def _merged() -> list[str]:
         directory = artifacts.ticket_dir(key)
         if not (directory / "commit.txt").is_file() and not (directory / "pr.md").is_file():
             continue
-        if any(status_lib._spelled_in(key, name) for name in branches):
+        if not status_lib.closed(key) and any(status_lib._spelled_in(key, name) for name in branches):
             continue
         selected.append(key)
     return selected

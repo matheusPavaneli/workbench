@@ -9,6 +9,7 @@ lands on the right next command.
 import json
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -153,6 +154,69 @@ class Robustness(StatusBase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("{}", encoding="utf-8")
         self.assertEqual([], status_lib.keys())
+
+
+class Closed(StatusBase):
+    """WB-24: a shipped ticket kept its artifacts, and status read them alone,
+    so every merged ticket stayed listed at its last stage -- or as blocked."""
+
+    def close(self, key: str, status: str = "done") -> None:
+        path = self.root / ".workflow" / "tasks" / f"{key}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"key": key, "status": status}), encoding="utf-8")
+
+    def shipped(self, key: str) -> None:
+        self.write(key, "triage.json", {"title": "t", "type": "feature", "provider": "local"})
+        self.write(key, "commit.txt", "fix: a thing")
+
+    def test_a_done_ticket_with_a_commit_reads_as_done_with_nothing_next(self) -> None:
+        self.shipped("ABC-1")
+        self.close("ABC-1")
+        status = status_lib.read("ABC-1")
+
+        self.assertTrue(status.closed)
+        self.assertEqual("done", status.headline)
+        self.assertEqual("", status.next_command)
+        self.assertIn("complete", status_lib.render_next(status, "named"))
+        self.assertTrue(status.to_dict()["closed"])
+
+    def test_a_done_ticket_is_never_blocked(self) -> None:
+        self.write("ABC-1", "triage.json", {"title": "t", "type": "feature"})
+        self.write("ABC-1", "sdd.json", {"files": [{"path": "a.py"}]})
+        self.write("ABC-1", "audit.json", {"verdict": "fail", "citations_checked": 1, "citations_failed": 1})
+        self.close("ABC-1")
+
+        status = status_lib.read("ABC-1")
+        self.assertIsNone(status.blocked)
+        self.assertNotIn("BLOCKED", status_lib.render_list([status]))
+        self.assertEqual({}, status_lib.summarise([status])["blocked_at"])
+
+    def test_an_open_ticket_with_the_same_artifacts_is_unchanged(self) -> None:
+        self.shipped("ABC-1")
+        self.close("ABC-1", status="open")
+        status = status_lib.read("ABC-1")
+
+        self.assertFalse(status.closed)
+        self.assertEqual("commit", status.headline)
+        self.assertNotEqual("", status.next_command)
+
+    def test_the_most_recent_fallback_skips_a_closed_ticket(self) -> None:
+        self.shipped("ABC-1")
+        self.shipped("ABC-2")
+        self.close("ABC-2")
+        old = time.time() - 3600
+        os.utime(self.root / ".workflow" / "ABC-1", (old, old))
+
+        with mock.patch("workbench.gitctx.branch", return_value=None):
+            picked, origin = status_lib.pick()
+        self.assertEqual(("ABC-1", "most recent"), (picked.key, origin))
+
+    def test_a_closed_ticket_is_still_the_answer_when_it_is_the_only_one(self) -> None:
+        self.shipped("ABC-1")
+        self.close("ABC-1")
+        with mock.patch("workbench.gitctx.branch", return_value=None):
+            picked, _ = status_lib.pick()
+        self.assertEqual("ABC-1", picked.key)
 
 
 class Aggregate(StatusBase):

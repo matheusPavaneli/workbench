@@ -11,6 +11,23 @@ command's own output, and one that removes it. A `--json` payload that loses or
 renames a key raises its `schema` number in the same release, and
 `contract.VERSIONS` is asserted against the real output so it cannot drift.
 
+## 0.7.4
+
+### Fixed
+
+- `wb status` read a ticket's state off its artifacts alone, so a ticket that
+  had shipped and been closed stayed listed at its last stage for as long as
+  its files were on disk -- `commit` or `pr`, or `BLOCKED at audit` if an audit
+  had once failed. A ticket the local backlog records as `done` now reads as
+  `done`: never blocked, no next command, counted as complete by `--stats`,
+  and passed over by `wb next` in favour of open work. `--json` gains a
+  `closed` key. Jira, Azure DevOps and GitHub tickets are unchanged: their
+  state names are their own, and status does not call the network.
+- `wb task clean --merged` selected only tickets whose branch was gone from
+  the remote. A squash merge leaves the branch, so in a repo that merges that
+  way it selected nothing. A shipped ticket the local backlog records as
+  `done` is now selected whatever the remote holds.
+
 ## 0.7.3
 
 ### Fixed

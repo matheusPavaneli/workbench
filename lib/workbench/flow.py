@@ -277,13 +277,18 @@ def start_actions(name: str, base: str) -> list:
     Both forms came from the same computation before, but the rendering was
     duplicated -- and a duplicated rendering is how ``--execute`` ends up
     running something other than what it printed.
+
+    ``--no-track`` because branching from a remote-tracking ref makes that ref
+    the upstream under git's default ``branch.autoSetupMerge``, and ``wb git
+    push`` refuses a branch that has one: the start path could never reach the
+    publish path. The first push sets the upstream to the branch's own remote.
     """
     from . import gitrun
 
     return [
         fetch_action(),
         gitrun.Action(
-            ["switch", "-c", name, f"origin/{base}"],
+            ["switch", "--no-track", "-c", name, f"origin/{base}"],
             why=f"start {name} from {base}",
             precondition=gitrun.CLEAN_TREE,
         ),
@@ -301,7 +306,7 @@ def carry_actions(carry_branch: str, target: str, commits: list[str]) -> list:
     hashes = [line.split(" ", 1)[0] for line in commits]
     return [
         gitrun.Action(
-            ["switch", "-c", carry_branch, f"origin/{target}"],
+            ["switch", "--no-track", "-c", carry_branch, f"origin/{target}"],
             why=f"carry onto {target}",
             precondition=gitrun.CLEAN_TREE,
         ),

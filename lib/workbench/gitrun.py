@@ -41,7 +41,7 @@ OUTPUT_CAP = 2000
 # something that may already be pushed.
 ALLOWED: dict[str, frozenset[str]] = {
     "fetch": frozenset({"--prune", "origin"}),
-    "switch": frozenset({"-c", "--create"}),
+    "switch": frozenset({"-c", "--create", "--no-track"}),
     "cherry-pick": frozenset({"--continue", "--abort", "-x"}),
     "commit": frozenset({"-F", "--author"}),
     "push": frozenset({"-u", "--set-upstream", "origin"}),

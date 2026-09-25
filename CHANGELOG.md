@@ -11,6 +11,19 @@ command's own output, and one that removes it. A `--json` payload that loses or
 renames a key raises its `schema` number in the same release, and
 `contract.VERSIONS` is asserted against the real output so it cannot drift.
 
+## 0.7.3
+
+### Fixed
+
+- `wb git push --execute` refused every branch `wb flow start --execute` had
+  created, with `this branch already has an upstream`. The branch was made
+  from `origin/<source>`, and under git's default `branch.autoSetupMerge` that
+  makes `origin/<source>` its upstream -- so the tool's own start path could
+  never reach its own publish path. `flow start` and `flow carry` now branch
+  with `--no-track`, and the first push sets the upstream to the branch's own
+  remote. A branch started before upgrading: `git branch --unset-upstream`,
+  then push.
+
 ## 0.7.2
 
 ### Fixed

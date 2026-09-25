@@ -13,6 +13,17 @@ renames a key raises its `schema` number in the same release, and
 
 ## Unreleased
 
+### Fixed
+
+- **`wb impl verify` no longer asks again on every ticket for the same
+  command.** Approvals were verbatim, and a verify list usually names its own
+  ticket (`wb sdd audit ABC-1`), so each ticket stopped on an approval nobody
+  needed to read twice. The plan's own key, as a whole token, is now stored as
+  `<KEY>`; the printed `--approve` call shows that form, and the concrete
+  spelling is accepted and stored abstract. Any other difference -- another
+  key spelled out, a flag, an env value -- still asks. Approvals stored by
+  earlier releases keep covering their ticket.
+
 ### Added
 
 - **Absence claims are searches the audit runs.** "Nothing else calls this"

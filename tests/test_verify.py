@@ -218,6 +218,39 @@ class Approval(unittest.TestCase):
         changed = verify.entries(["pytest"], {"PYTHONPATH": "evil"})
         self.assertEqual(["env PYTHONPATH=evil"], verify.unapproved(self.repo, changed))
 
+    def test_the_plan_s_own_key_is_abstracted_as_a_whole_token(self) -> None:
+        cases = {
+            "python lib/wb.py sdd audit ABC-1": "python lib/wb.py sdd audit <KEY>",
+            "pytest .workflow/ABC-1/tests": "pytest .workflow/<KEY>/tests",
+            "pytest --key=ABC-1": "pytest --key=<KEY>",
+            "pytest ABC-12": "pytest ABC-12",
+            "pytest x-ABC-1": "pytest x-ABC-1",
+            "pytest ABC-1-x": "pytest ABC-1-x",
+            "pytest XABC-1": "pytest XABC-1",
+        }
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(expected, verify.abstract(text, "ABC-1"))
+
+    def test_without_a_key_nothing_is_abstracted(self) -> None:
+        self.assertEqual(["wb sdd audit ABC-1"], verify.entries(["wb sdd audit ABC-1"], {}))
+
+    def test_an_approval_covers_the_same_command_on_another_ticket(self) -> None:
+        verify.approve(self.repo, verify.entries(["wb sdd audit ABC-1"], {"P": "ABC-1"}, "ABC-1"))
+        self.assertEqual([], verify.unapproved(self.repo, verify.entries(["wb sdd audit ABC-2"], {"P": "ABC-2"}, "ABC-2"), "ABC-2"))
+
+    def test_the_abstract_approval_covers_nothing_else(self) -> None:
+        verify.approve(self.repo, verify.entries(["wb sdd audit ABC-1"], {"P": "lib"}, "ABC-1"))
+        # A different key spelled out, a changed flag, a changed env value.
+        self.assertTrue(verify.unapproved(self.repo, verify.entries(["wb sdd audit ABC-1"], {}, "ABC-2"), "ABC-2"))
+        self.assertTrue(verify.unapproved(self.repo, verify.entries(["wb sdd audit ABC-2 -x"], {}, "ABC-2"), "ABC-2"))
+        self.assertTrue(verify.unapproved(self.repo, verify.entries([], {"P": "evil"}, "ABC-2"), "ABC-2"))
+
+    def test_a_verbatim_approval_from_before_still_counts_for_its_ticket(self) -> None:
+        verify.approve(self.repo, ["wb sdd audit ABC-1"])
+        self.assertEqual([], verify.unapproved(self.repo, verify.entries(["wb sdd audit ABC-1"], {}, "ABC-1"), "ABC-1"))
+        self.assertTrue(verify.unapproved(self.repo, verify.entries(["wb sdd audit ABC-2"], {}, "ABC-2"), "ABC-2"))
+
     def test_approvals_live_outside_the_checkout(self) -> None:
         verify.approve(self.repo, ["pytest"])
         self.assertFalse(any(self.repo.rglob("*")))

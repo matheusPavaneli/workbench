@@ -496,6 +496,37 @@ class ImplVerifyApproval(CliBase):
         execute.assert_not_called()
         self.assertIn(shlex.quote(self.COMMANDS[1]), err)
 
+    def keyed_plan(self, key: str) -> None:
+        plan = {"key": key, "files": [{"path": "a.py"}], "verify": [f"python lib/wb.py sdd audit {key}"]}
+        directory = self.root / ".workflow" / key
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "sdd.json").write_text(json.dumps(plan), encoding="utf-8")
+        (directory / "audit.json").write_text(
+            json.dumps({"verdict": "pass", "plan_sha256": audit_lib.digest(plan)}), encoding="utf-8"
+        )
+
+    def test_the_approve_call_names_the_key_as_a_placeholder(self) -> None:
+        self.keyed_plan("ABC-7")
+        with mock.patch("workbench.verify._execute") as execute:
+            code, _, err = run("impl", "verify", "ABC-7")
+        self.assertEqual(EXIT_AUDIT, code)
+        execute.assert_not_called()
+        self.assertIn("--approve 'python lib/wb.py sdd audit <KEY>'", err)
+
+    def test_an_approval_on_one_ticket_covers_the_next(self) -> None:
+        """The regression: every ticket asked again for the same command."""
+        self.keyed_plan("ABC-7")
+        self.keyed_plan("ABC-8")
+        result = verify_lib.Result(command="x", exit_code=0, duration_ms=1, output="")
+        with mock.patch("workbench.verify._execute", return_value=result) as execute, \
+             mock.patch("workbench.gitctx.tree", return_value="tree-1"), \
+             mock.patch("workbench.gitctx.head", return_value="head-1"):
+            # Approved in the concrete spelling, stored in the abstract one.
+            self.assertEqual(0, run("impl", "verify", "ABC-7", "--approve", "python lib/wb.py sdd audit ABC-7")[0])
+            self.assertEqual(0, run("impl", "verify", "ABC-8")[0])
+            self.assertEqual(2, execute.call_count)
+            self.assertEqual("python lib/wb.py sdd audit ABC-8", execute.call_args[0][0])
+
     def test_approving_something_the_plan_does_not_name_is_refused(self) -> None:
         with mock.patch("workbench.verify._execute") as execute:
             code, _, err = run("impl", "verify", "ABC-1", "--approve", "python -c 'import os'")

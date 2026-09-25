@@ -102,18 +102,21 @@ def _verify(args: argparse.Namespace) -> int:
 
     commands = verify_lib.require_commands(doc.get("verify"))
     env, _ = verify_lib.resolve_env(doc.get("verify_env"))
-    wanted = verify_lib.entries(commands, env)
+    wanted = verify_lib.entries(commands, env, key)
 
-    stray = [entry for entry in args.approve if entry not in wanted]
+    # The printed <KEY> form, or the command as the plan spells it: either way
+    # what is stored is the <KEY> form, so the next ticket does not ask again.
+    given = [verify_lib.abstract(entry, key) for entry in args.approve]
+    stray = [entry for entry, form in zip(args.approve, given) if form not in wanted]
     if stray:
         raise UsageError(
             f"not in the plan for {key}: {', '.join(repr(entry) for entry in stray)}",
             fix=["--approve takes an entry exactly as wb impl verify printed it"],
         )
-    if args.approve:
-        verify_lib.approve(root, args.approve)
+    if given:
+        verify_lib.approve(root, given)
 
-    pending = verify_lib.unapproved(root, wanted)
+    pending = verify_lib.unapproved(root, wanted, key)
     if pending:
         # Nothing runs, and no evidence is written: a partial run would be a
         # verdict on a subset nobody chose.

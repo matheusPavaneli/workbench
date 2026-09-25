@@ -319,20 +319,46 @@ def approvals_path() -> Path:
     return contexts.home() / APPROVALS_NAME
 
 
-def entries(commands: list[str], env: dict) -> list[str]:
+KEY_PLACEHOLDER = "<KEY>"
+
+
+def abstract(text: str, key: str) -> str:
+    """``text`` with the plan's own key, as a whole token, written as ``<KEY>``.
+
+    A plan's verify list usually names its own ticket (``wb sdd audit ABC-1``),
+    so a verbatim approval asked again on every ticket for the same command --
+    and an approval asked for every time is one people learn to give unread.
+    Only the key of the plan being verified is abstracted, and only where no
+    letter, digit, ``_`` or ``-`` touches it: ``ABC-12`` or ``x-ABC-1`` is a
+    different string and stays one. ``<`` is refused in any command that runs,
+    so the placeholder can never be mistaken for real text.
+    """
+    if not key:
+        return text
+    return re.sub(rf"(?<![A-Za-z0-9_-]){re.escape(key)}(?![A-Za-z0-9_-])", KEY_PLACEHOLDER, text)
+
+
+def entries(commands: list[str], env: dict, key: str = "") -> list[str]:
     """What a person approves: each command verbatim, each variable as ``env NAME=value``.
 
     Verbatim, because the approval is only worth the attention it got. A digest
     would be approved unread; the string itself shows up in the permission
     prompt of whatever runs the approve call. One changed character is a
-    different entry, and asks again.
+    different entry, and asks again -- the plan's own key aside, see ``abstract``.
     """
-    return [*commands, *(f"env {name}={value}" for name, value in sorted(env.items()))]
+    items = [*commands, *(f"env {name}={value}" for name, value in sorted(env.items()))]
+    return [abstract(item, key) for item in items]
 
 
-def unapproved(root: Path, wanted: list[str]) -> list[str]:
+def unapproved(root: Path, wanted: list[str], key: str = "") -> list[str]:
+    """Entries not yet approved. An approval stored verbatim, before keys were
+    abstracted, still counts for the ticket it named."""
     approved = set(_approvals().get(_repo_id(root), []))
-    return [entry for entry in wanted if entry not in approved]
+    return [
+        entry
+        for entry in wanted
+        if entry not in approved and not (key and entry.replace(KEY_PLACEHOLDER, key) in approved)
+    ]
 
 
 def approve(root: Path, given: list[str]) -> None:

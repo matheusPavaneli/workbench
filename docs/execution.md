@@ -136,6 +136,15 @@ Each command is approved verbatim and each variable as `env NAME=value`, so the
 approve call's own permission prompt shows what will run; a digest would be
 approved unread. One changed character is a new entry and asks again.
 
+The one exception is the plan's own key. A verify list usually names its
+ticket (`wb sdd audit ABC-123`), and a verbatim approval then asked again on
+every ticket for the same command — which is how an approval becomes a
+reflex. The key, where it stands as a whole token, is written `<KEY>` in the
+entry, so `python lib/wb.py sdd audit <KEY>` approved once covers every ticket.
+`ABC-1234`, `x-ABC-123` or any other change is a different entry. `<` is
+refused in every command that runs, so the placeholder cannot be real text.
+Approvals stored verbatim by earlier releases still count for their ticket.
+
 Approvals live in `$WORKBENCH_HOME/approvals.json` (default `~/.workbench`),
 keyed by the checkout's path — never in the repo, where a plan could ship its
 own. A second clone asks again; keying by remote would let a fork inherit

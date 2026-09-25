@@ -1,0 +1,11 @@
+{
+  "key": "WB-26",
+  "title": "sdd audit verifies citations against files the plan's own author wrote, ignored files and the plan itself",
+  "type": "bug",
+  "status": "done",
+  "desc": "audit._check reads the raw working tree (audit.py _check / _resolve). Reproduced in a temp repo with audit.run():\n- a citation to an untracked file created in the same session (src/fake.py) verifies ok -- a model can invent a line, write it to disk, cite it and pass\n- a citation to a gitignored file (scratch/n.txt) verifies ok\n- a citation to .workflow/<KEY>/sdd.json -- the plan citing itself -- verifies ok\n_resolve only refuses paths outside the repo.\n\nACCEPTANCE:\n- the first (strict) audit resolves citations against committed content (HEAD via gitctx.file_at), not the working tree\n- a citation into .workflow/** is refused with its own verdict and detail\n- a citation into an ignored or untracked path is refused; a file the plan lists as change: add cannot serve as evidence\n- re-audits (under_way) keep the current baseline/moved behaviour for committed files\n- each case has a regression test that fails before the fix",
+  "created": "2026-09-25T19:32:51Z",
+  "updated": "2026-09-25T19:48:32Z",
+  "comments": [],
+  "linked": []
+}

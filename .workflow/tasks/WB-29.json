@@ -2,10 +2,10 @@
   "key": "WB-29",
   "title": "negative claims in a plan are executed by the audit, not taken on trust",
   "type": "feature",
-  "status": "open",
+  "status": "done",
   "desc": "\"Nothing else calls charge()\" passes today by citing a real line (def charge(total):) -- the quote is true and the claim is not checked. Absence and blast-radius claims are the most expensive hallucination class.\n\nACCEPTANCE:\n- evidence[] accepts kind: \"absence\" with search: {pattern, paths?, allow?} instead of file/line/quote\n- sdd audit runs the search itself (git grep -n, fixed-string by default, bounded output, tracked files only) and fails when a match exists outside allow\n- the pattern is validated and bounded (length, no shell); the command the audit ran is recorded in audit.json\n- plan-change references/sdd.md documents the kind; code-search.md points blast-radius claims at it\n- regression tests: a false absence claim fails, a true one passes, an allowed caller passes",
   "created": "2026-09-25T19:32:52Z",
-  "updated": "2026-09-25T19:32:52Z",
+  "updated": "2026-09-25T23:01:12Z",
   "comments": [],
   "linked": []
 }

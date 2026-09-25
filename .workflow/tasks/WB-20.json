@@ -1,0 +1,11 @@
+{
+  "key": "WB-20",
+  "title": "wb task clean cannot prune more than one ticket at a time",
+  "type": "feature",
+  "status": "done",
+  "desc": "Cleaning up a checkout means naming every finished ticket by hand. The two selectors worth having were cut from WB-15 deliberately and named in .workflow/idea-dashboard/frame.md as the full version.\n\nAlso: cli/task.py opens with 'Two commands, deliberately unequal' and now registers five actions. Prose has no CI, so it drifted.\n\nACCEPTANCE:\n- --merged selects every ticket whose branch is gone from the remote\n- --older-than <n>d selects by last modification\n- both list first; --force is still required to remove\n- a selector that matches nothing says so and exits 0\n- cleaning a ticket whose work is unfinished says which stage it is at, in the listing\n- the module docstring describes the actions that exist",
+  "created": "2026-08-22T16:46:47Z",
+  "updated": "2026-09-25T18:37:01Z",
+  "comments": [],
+  "linked": []
+}

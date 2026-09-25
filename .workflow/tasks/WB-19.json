@@ -1,0 +1,11 @@
+{
+  "key": "WB-19",
+  "title": "the event log cannot answer where time goes across repos",
+  "type": "feature",
+  "status": "done",
+  "desc": "events.path() is artifacts.root(cwd)/.events.jsonl, so history is per checkout. 'Where do I lose time across all my repos' is structurally unanswerable, which is the most useful question the log could answer. Framed in .workflow/idea-dashboard/frame.md as the ~20-line alternative to a dashboard with a database.\n\nACCEPTANCE:\n- each event also appends to ~/.workbench/events.jsonl (WORKBENCH_HOME aware) with a repo field\n- wb status --stats --global summarises that file instead of the local one\n- the global log is capped and trimmed the same way the local one is\n- WORKBENCH_NO_EVENTS=1 still disables both\n- every failure stays swallowed: the log is never load-bearing",
+  "created": "2026-08-22T16:46:45Z",
+  "updated": "2026-09-25T18:37:01Z",
+  "comments": [],
+  "linked": []
+}

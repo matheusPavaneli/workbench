@@ -1,0 +1,11 @@
+{
+  "key": "WB-17",
+  "title": "nothing asserts the declared version has been released",
+  "type": "bug",
+  "status": "done",
+  "desc": "wb task clean shipped under 0.5.0 with no version bump, so /plugin compared 0.5.0 against 0.5.0, reported 'already at the latest version' and left the installed copy on four wb task actions. test_plugin.py:216 asserts the package version and both manifests agree with each other; nothing asserts the declared version is a released one.\n\nACCEPTANCE:\n- a test fails when CHANGELOG.md has no '## <__version__>' section\n- the same test fails when that section is still marked unreleased\n- the failure message says what to do (bump, or mark the section released)",
+  "created": "2026-08-22T16:46:43Z",
+  "updated": "2026-09-25T18:37:01Z",
+  "comments": [],
+  "linked": []
+}

@@ -1,0 +1,11 @@
+{
+  "key": "WB-34",
+  "title": "CI runs lint and typecheck, not only the test suite",
+  "type": "chore",
+  "status": "open",
+  "desc": "tests.yml runs unittest on Linux/Windows x 3.9/3.12 and nothing else. Stdlib-only code is cheap to type-check.\n\nACCEPTANCE:\n- CI job with ruff check and mypy (or pyright) over lib/, pinned versions, non-blocking on first land then blocking once clean\n- no runtime dependency added; tools are dev-only\n- README Tests section mentions the commands",
+  "created": "2026-09-25T19:32:53Z",
+  "updated": "2026-09-25T19:32:53Z",
+  "comments": [],
+  "linked": []
+}

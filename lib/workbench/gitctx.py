@@ -7,8 +7,11 @@ can see and approve them.
 
 from __future__ import annotations
 
+import os
 import re
+import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -249,6 +252,54 @@ def default_branch(cwd: Path) -> str:
 def head(cwd: Path) -> str | None:
     """The commit the working tree is built on, or ``None`` outside a checkout."""
     return _git(["rev-parse", "HEAD"], cwd)
+
+
+def tree(cwd: Path) -> str | None:
+    """The git tree this working tree would commit as, or ``None`` if git cannot say.
+
+    HEAD alone does not identify what a test run saw: verification usually
+    happens before the commit, on uncommitted changes. This hashes what is on
+    disk -- tracked, modified and untracked, ignored files left out -- into the
+    tree object a ``git add -A && git commit`` would produce, so evidence
+    recorded before the commit still matches the commit that holds exactly that
+    code, and stops matching the moment anything else changes.
+
+    ``.workflow`` is left out: writing the evidence must not invalidate it.
+
+    Built in a scratch copy of the index, so the user's staging area is never
+    touched. The copy keeps git's stat cache, which is what keeps this cheap on
+    a large checkout. The one side effect is loose blobs in the object store,
+    which ``git gc`` collects like any other unreferenced object.
+    """
+    index = _git(["rev-parse", "--git-path", "index"], cwd)
+    if index is None:
+        return None
+    source = Path(index) if Path(index).is_absolute() else Path(cwd) / index
+
+    with tempfile.TemporaryDirectory() as scratch:
+        copy = Path(scratch) / "index"
+        if source.is_file():
+            shutil.copyfile(source, copy)
+        env = {**os.environ, "GIT_INDEX_FILE": str(copy)}
+        steps = (
+            ["add", "-A", "--", ".", f":(exclude){ARTIFACT_DIR}"],
+            ["rm", "-r", "--cached", "-q", "--ignore-unmatch", "--", ARTIFACT_DIR],
+        )
+        for args in steps:
+            if _git_env(args, cwd, env) is None:
+                return None
+        return _git_env(["write-tree"], cwd, env) or None
+
+
+def _git_env(args: list[str], cwd: Path, env: dict) -> str | None:
+    """As ``_git``, under an explicit environment; ``""`` for success with no output."""
+    try:
+        completed = subprocess.run(
+            ["git", *args], cwd=str(cwd), capture_output=True, text=True, timeout=60, check=False, env=env
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return completed.stdout.strip() if completed.returncode == 0 else None
 
 
 def file_at(cwd: Path, ref: str, path: str) -> str | None:

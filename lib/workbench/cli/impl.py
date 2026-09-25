@@ -8,6 +8,7 @@ letting the next step start anyway is how an unverified claim reaches a PR.
 from __future__ import annotations
 
 import argparse
+import shlex
 import sys
 
 from .. import artifacts, audit as audit_lib, gitctx, profile as profile_lib, scope as scope_lib, verify as verify_lib
@@ -26,6 +27,13 @@ def register(subparsers: argparse._SubParsersAction) -> None:
 
     verify = actions.add_parser("verify", help="run the plan's verify[] commands and record the output")
     verify.add_argument("key")
+    verify.add_argument(
+        "--approve",
+        action="append",
+        default=[],
+        metavar="ENTRY",
+        help="approve one command, or 'env NAME=value', on this machine; repeatable, exact text",
+    )
 
 
 def run(args: argparse.Namespace) -> int:
@@ -93,10 +101,39 @@ def _verify(args: argparse.Namespace) -> int:
     root = gitctx.checkout()
 
     commands = verify_lib.require_commands(doc.get("verify"))
+    env, _ = verify_lib.resolve_env(doc.get("verify_env"))
+    wanted = verify_lib.entries(commands, env)
+
+    stray = [entry for entry in args.approve if entry not in wanted]
+    if stray:
+        raise UsageError(
+            f"not in the plan for {key}: {', '.join(repr(entry) for entry in stray)}",
+            fix=["--approve takes an entry exactly as wb impl verify printed it"],
+        )
+    if args.approve:
+        verify_lib.approve(root, args.approve)
+
+    pending = verify_lib.unapproved(root, wanted)
+    if pending:
+        # Nothing runs, and no evidence is written: a partial run would be a
+        # verdict on a subset nobody chose.
+        print(f"not approved on this machine ({len(pending)}):", file=sys.stderr)
+        for entry in pending:
+            print(f"  {entry}", file=sys.stderr)
+        call = " ".join(f"--approve {shlex.quote(entry)}" for entry in pending)
+        print(
+            "\nRead them. These come from a plan, and they run with your permissions.\n"
+            f"To approve and run: wb impl verify {key} {call}",
+            file=sys.stderr,
+        )
+        return EXIT_AUDIT
+
     for command in commands:
         print(f"running: {command}", flush=True)
 
+    tree, head = gitctx.tree(root), gitctx.head(root)
     evidence = verify_lib.run(key, commands, root, doc.get("verify_env"))
+    evidence.tree, evidence.head, evidence.plan = tree, head, audit_lib.digest(doc)
     if evidence.env:
         print(f"environment: {', '.join(sorted(evidence.env))}", flush=True)
     artifacts.write_json(key, "evidence.json", evidence.to_dict())

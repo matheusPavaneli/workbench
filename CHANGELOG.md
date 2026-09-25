@@ -11,6 +11,35 @@ command's own output, and one that removes it. A `--json` payload that loses or
 renames a key raises its `schema` number in the same release, and
 `contract.VERSIONS` is asserted against the real output so it cannot drift.
 
+## 0.8.0
+
+### Changed
+
+- `wb impl verify` runs nothing until every command and `env` entry in the plan
+  has been approved on this machine. The commands come from a model-written
+  plan, the audit checks citations rather than commands, and the runner
+  allowlist admits `python -c` and `node -e` by construction -- so until now a
+  command no person had read ran with the user's permissions. The first run in
+  a checkout prints the entries and the exact
+  `wb impl verify <KEY> --approve '<command>' ...` call, executes nothing and
+  writes no evidence. Approvals are verbatim, kept in
+  `$WORKBENCH_HOME/approvals.json` keyed by checkout path, and one changed
+  character asks again. **Upgrade cost:** one approval per distinct command
+  per checkout, once. `--approve` is new.
+
+### Fixed
+
+- Verification evidence said nothing about which code it verified, so a pass
+  recorded before the last edit still read as a pass: `wb status` showed
+  verify ok and `wb pr context` handed the PR a verdict for code that never
+  ran. `evidence.json` now records `tree` (what the working tree would commit
+  as, `.workflow/` excluded), `head` and `plan_sha256`. A pass stands only
+  while the tree and the plan both match; committing exactly the verified tree
+  keeps it standing. Otherwise `wb status` reads verify as `stale` and offers
+  `wb impl verify` again, and `wb pr context`'s `verification` gains
+  `standing` and, when false, `stale`. Keys added only, so no schema bump.
+  Evidence written by earlier versions reads as stale.
+
 ## 0.7.4
 
 ### Fixed

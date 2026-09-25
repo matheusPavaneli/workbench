@@ -146,5 +146,73 @@ class OutsideACheckout(unittest.TestCase):
         self.assertIn("git init", caught.exception.render())
 
 
+class Tree(unittest.TestCase):
+    """What the tree fingerprint must hold for evidence to be bound to code."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        _git(["init", "-q", "."], self.root)
+        _git(["config", "user.email", "t@example.com"], self.root)
+        _git(["config", "user.name", "T"], self.root)
+        (self.root / ".gitignore").write_text("*.log\n", encoding="utf-8")
+        (self.root / "a.py").write_text("one\n", encoding="utf-8")
+        _git(["add", "-A"], self.root)
+        _git(["commit", "-qm", "init"], self.root)
+
+    def status(self) -> str:
+        return subprocess.run(
+            ["git", "status", "--porcelain"], cwd=str(self.root), capture_output=True, text=True, check=False
+        ).stdout
+
+    def test_it_is_stable_across_calls(self) -> None:
+        first = gitctx.tree(self.root)
+        self.assertTrue(first)
+        self.assertEqual(first, gitctx.tree(self.root))
+
+    def test_a_tracked_edit_changes_it(self) -> None:
+        before = gitctx.tree(self.root)
+        (self.root / "a.py").write_text("two\n", encoding="utf-8")
+        self.assertNotEqual(before, gitctx.tree(self.root))
+
+    def test_an_untracked_file_changes_it(self) -> None:
+        before = gitctx.tree(self.root)
+        (self.root / "b.py").write_text("new\n", encoding="utf-8")
+        self.assertNotEqual(before, gitctx.tree(self.root))
+
+    def test_workflow_and_ignored_files_do_not(self) -> None:
+        """Writing the evidence must not invalidate the evidence."""
+        before = gitctx.tree(self.root)
+        (self.root / ".workflow" / "ABC-1").mkdir(parents=True)
+        (self.root / ".workflow" / "ABC-1" / "evidence.json").write_text("{}", encoding="utf-8")
+        (self.root / "run.log").write_text("noise", encoding="utf-8")
+        self.assertEqual(before, gitctx.tree(self.root))
+
+    def test_committing_the_verified_tree_keeps_it(self) -> None:
+        """Verify before the commit, commit exactly that: the evidence still describes HEAD."""
+        (self.root / "a.py").write_text("two\n", encoding="utf-8")
+        (self.root / "b.py").write_text("new\n", encoding="utf-8")
+        verified = gitctx.tree(self.root)
+        _git(["add", "-A"], self.root)
+        _git(["commit", "-qm", "work"], self.root)
+        self.assertEqual(verified, gitctx.tree(self.root))
+        head_tree = subprocess.run(
+            ["git", "rev-parse", "HEAD^{tree}"], cwd=str(self.root), capture_output=True, text=True, check=False
+        ).stdout.strip()
+        self.assertEqual(head_tree, verified)
+
+    def test_the_staging_area_is_left_alone(self) -> None:
+        (self.root / "a.py").write_text("two\n", encoding="utf-8")
+        (self.root / "b.py").write_text("new\n", encoding="utf-8")
+        before = self.status()
+        gitctx.tree(self.root)
+        self.assertEqual(before, self.status())
+
+    def test_outside_a_checkout_it_is_none(self) -> None:
+        with tempfile.TemporaryDirectory() as plain:
+            self.assertIsNone(gitctx.tree(Path(plain)))
+
+
 if __name__ == "__main__":
     unittest.main()

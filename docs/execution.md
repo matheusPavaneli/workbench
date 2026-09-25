@@ -105,6 +105,53 @@ is exactly the failure mode the evidence file exists to close.
 Adding a runner to the allowlist is a deliberate change. The fallback — the user
 runs it and reports back — always works.
 
+### Approval
+
+The allowlist bounds which program runs, not what it is told to do: `python -c`
+and `node -e` pass it by construction, and the audit checks a plan's citations,
+not its commands. So nothing runs until a person has approved the exact string
+on this machine.
+
+```
+$ wb impl verify ABC-123
+not approved on this machine (2):
+  python -m unittest discover -s tests -q
+  env PYTHONPATH=lib
+
+To approve and run: wb impl verify ABC-123 --approve 'python -m unittest discover -s tests -q' --approve 'env PYTHONPATH=lib'
+```
+
+Nothing is executed and no evidence is written until every entry is approved.
+Each command is approved verbatim and each variable as `env NAME=value`, so the
+approve call's own permission prompt shows what will run; a digest would be
+approved unread. One changed character is a new entry and asks again.
+
+Approvals live in `$WORKBENCH_HOME/approvals.json` (default `~/.workbench`),
+keyed by the checkout's path — never in the repo, where a plan could ship its
+own. A second clone asks again; keying by remote would let a fork inherit
+upstream's approvals. `--approve` takes only entries the plan names.
+
+This is as strong as the permission prompt that shows the call. An agent can
+run it, and under a permission mode that approves everything it gates nothing.
+
+### Bound to the tree
+
+`evidence.json` records `tree` — the git tree the working tree would commit as,
+tracked, modified and untracked files included, ignored files and `.workflow/`
+left out — plus `head` and the plan's `plan_sha256`. The tree is taken before
+the first command runs, in a scratch copy of the index; the staging area is
+not touched.
+
+A pass stands only while both still match. Verifying before the commit and
+committing exactly that code keeps it standing, because the commit's tree is the
+one recorded. Any other edit, or an edited plan, makes `wb status` read verify
+as `stale` and offer the command again, and `wb pr context` reports
+`"standing": false` with the reason. Evidence written before 0.8.0 recorded no
+tree and reads as stale.
+
+A test run that leaves files neither tracked nor ignored changes the tree, so
+its own evidence reads stale. The fix is that repo's `.gitignore`.
+
 ### Environment
 
 Shell is refused, so `PYTHONPATH=lib python -m unittest` cannot be written as a

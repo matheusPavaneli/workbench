@@ -11,7 +11,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from .. import artifacts, contract, flow as flow_lib, gitctx, profile as profile_lib, prose, sdd as sdd_lib
+from .. import artifacts, audit as audit_lib, contract, flow as flow_lib, gitctx, profile as profile_lib, prose
+from .. import sdd as sdd_lib, verify as verify_lib
 from ..errors import UsageError, WbError
 
 ACTIONS = ["context", "check"]
@@ -81,7 +82,8 @@ def _context(args: argparse.Namespace) -> int:
 
     payload["plan"] = _optional(key, "sdd.json", lambda doc: sdd_lib.section(doc, "summary"))
     payload["questions"] = _optional(key, "sdd.json", lambda doc: doc.get("questions") or [])
-    payload["verification"] = _optional(key, "evidence.json", _verification)
+    plan = _optional(key, "sdd.json", audit_lib.digest)
+    payload["verification"] = _optional(key, "evidence.json", lambda evidence: _verification(evidence, plan, root))
 
     for name, value in (("plan", payload["plan"]), ("verification", payload["verification"])):
         if value is None:
@@ -95,16 +97,25 @@ def _context(args: argparse.Namespace) -> int:
     return 0
 
 
-def _verification(evidence: dict) -> dict:
-    """Only the verdict and the commands. Full output stays in evidence.md."""
-    return {
+def _verification(evidence: dict, plan: str | None, root: Path) -> dict:
+    """The verdict, the commands, and whether it still describes this code.
+
+    Full output stays in evidence.md. ``standing`` is what a description may
+    rely on: a pass recorded before the last edit is a claim about other code.
+    """
+    stale = verify_lib.standing(evidence, plan, gitctx.tree(root)) if evidence.get("verdict") == "pass" else None
+    result = {
         "verdict": evidence.get("verdict"),
         "commands": [
             {"command": result.get("command"), "exit_code": result.get("exit_code")}
             for result in evidence.get("results") or []
         ],
         "refused": [item.get("command") for item in evidence.get("refused") or []],
+        "standing": evidence.get("verdict") == "pass" and stale is None,
     }
+    if stale:
+        result["stale"] = stale
+    return result
 
 
 def _optional(key: str, name: str, extract):

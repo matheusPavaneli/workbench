@@ -1,3 +1,4 @@
+import os
 import sys
 import tempfile
 import unittest
@@ -154,3 +155,76 @@ class Environment(unittest.TestCase):
         evidence = verify.Evidence(key="ABC-1", env={"DATABASE_URL": "postgres://user:pw@host/db"})
         self.assertEqual(["DATABASE_URL"], evidence.to_dict()["env"])
         self.assertNotIn("postgres://", verify.render(evidence))
+
+
+class Standing(unittest.TestCase):
+    """A pass is a claim about one tree and one plan, not about whatever is on disk now."""
+
+    def evidence(self, **overrides) -> dict:
+        return {"verdict": "pass", "tree": "t1", "plan_sha256": "p1", **overrides}
+
+    def test_a_pass_on_the_same_plan_and_tree_stands(self) -> None:
+        self.assertIsNone(verify.standing(self.evidence(), "p1", "t1"))
+
+    def test_a_changed_tree_does_not_stand(self) -> None:
+        self.assertEqual(verify.STALE_TREE, verify.standing(self.evidence(), "p1", "t2"))
+
+    def test_a_changed_plan_does_not_stand(self) -> None:
+        self.assertEqual(verify.STALE_PLAN, verify.standing(self.evidence(), "p2", "t1"))
+
+    def test_evidence_that_recorded_no_tree_does_not_stand_in_a_checkout(self) -> None:
+        legacy = {"verdict": "pass", "plan_sha256": "p1"}
+        self.assertEqual(verify.STALE_TREE, verify.standing(legacy, "p1", "t1"))
+
+    def test_a_failed_run_never_stands(self) -> None:
+        self.assertIsNotNone(verify.standing(self.evidence(verdict="fail"), "p1", "t1"))
+        self.assertIsNotNone(verify.standing(None, "p1", "t1"))
+
+    def test_the_fingerprints_reach_the_evidence_file(self) -> None:
+        data = verify.Evidence(key="ABC-1", tree="t1", head="h1", plan="p1").to_dict()
+        self.assertEqual(("t1", "h1", "p1"), (data["tree"], data["head"], data["plan_sha256"]))
+
+
+class Approval(unittest.TestCase):
+    """Nothing a plan names runs until a person approved that exact string here."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        base = Path(self._tmp.name)
+        self.repo, self.other = base / "repo", base / "other"
+        self.repo.mkdir()
+        self.other.mkdir()
+        previous = os.environ.get("WORKBENCH_HOME")
+        os.environ["WORKBENCH_HOME"] = str(base / "home")
+        self.addCleanup(lambda: os.environ.pop("WORKBENCH_HOME", None) if previous is None
+                        else os.environ.__setitem__("WORKBENCH_HOME", previous))
+
+    def test_nothing_is_approved_to_begin_with(self) -> None:
+        self.assertEqual(["pytest -q"], verify.unapproved(self.repo, ["pytest -q"]))
+
+    def test_an_approved_command_is_approved_in_that_repo_only(self) -> None:
+        verify.approve(self.repo, ["pytest -q"])
+        self.assertEqual([], verify.unapproved(self.repo, ["pytest -q"]))
+        self.assertEqual(["pytest -q"], verify.unapproved(self.other, ["pytest -q"]))
+
+    def test_one_changed_character_asks_again(self) -> None:
+        verify.approve(self.repo, ["pytest -q"])
+        self.assertEqual(["pytest -x"], verify.unapproved(self.repo, ["pytest -x"]))
+
+    def test_an_env_entry_is_approved_by_name_and_value(self) -> None:
+        verify.approve(self.repo, verify.entries(["pytest"], {"PYTHONPATH": "lib"}))
+        self.assertEqual([], verify.unapproved(self.repo, verify.entries(["pytest"], {"PYTHONPATH": "lib"})))
+        changed = verify.entries(["pytest"], {"PYTHONPATH": "evil"})
+        self.assertEqual(["env PYTHONPATH=evil"], verify.unapproved(self.repo, changed))
+
+    def test_approvals_live_outside_the_checkout(self) -> None:
+        verify.approve(self.repo, ["pytest"])
+        self.assertFalse(any(self.repo.rglob("*")))
+        self.assertTrue(verify.approvals_path().is_file())
+
+    def test_an_unreadable_file_is_refused_rather_than_read_as_empty(self) -> None:
+        verify.approvals_path().parent.mkdir(parents=True)
+        verify.approvals_path().write_text("{not json", encoding="utf-8")
+        with self.assertRaises(verify.UsageError):
+            verify.unapproved(self.repo, ["pytest"])

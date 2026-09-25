@@ -251,14 +251,8 @@ class Sections(unittest.TestCase):
 
 
 
-class Baseline(unittest.TestCase):
-    """Correcting a plan while implementing it.
-
-    The audit reads the working tree, so once code has changed, every citation
-    written before the change fails -- and plan-change tells the author to fix
-    the plan exactly when the tree has already moved. The first audit records
-    the commit it ran against; every audit after it is anchored there.
-    """
+class GitCase(unittest.TestCase):
+    """A real checkout with one commit, which is what the audit anchors to."""
 
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
@@ -279,9 +273,24 @@ class Baseline(unittest.TestCase):
     def write(self, relative: str, content: str) -> None:
         (self.root / relative).write_text(content, encoding="utf-8")
 
+    def commit(self) -> None:
+        self._git(["add", "-A"])
+        self._git(["commit", "-qm", "more"])
+
+
+class Baseline(GitCase):
+    """Correcting a plan while implementing it.
+
+    The audit reads the working tree, so once code has changed, every citation
+    written before the change fails -- and plan-change tells the author to fix
+    the plan exactly when the tree has already moved. The first audit records
+    the commit it ran against; every audit after it is anchored there.
+    """
+
     def test_the_first_audit_is_strict_about_line_numbers(self) -> None:
         """A wrong number is a defect while the plan is still cheap to change."""
         self.write("src/checkout.py", "# a new first line\ndef pay(total):\n    charge = create_charge(total)\n")
+        self.commit()
         report = audit.run(_doc(), self.root)
         self.assertFalse(report.passed)
         self.assertEqual(audit.MOVED, report.findings[0].verdict)
@@ -331,6 +340,96 @@ class Baseline(unittest.TestCase):
     def test_an_unchanged_tree_still_verifies_at_the_cited_line(self) -> None:
         report = audit.run(_doc(), self.root, self.baseline)
         self.assertEqual(audit.OK, report.findings[0].verdict)
+
+
+class Provenance(GitCase):
+    """Evidence is committed code. The audit read whatever was on disk, so a
+    session could write a line, quote it and pass -- the one failure a citation
+    audit exists to rule out."""
+
+    def cite(self, path: str, line: int, quote: str) -> dict:
+        return _doc(evidence=[{"claim": "c", "file": path, "line": line, "quote": quote}])
+
+    def test_a_committed_citation_passes(self) -> None:
+        report = audit.run(_doc(), self.root)
+        self.assertTrue(report.passed, report.to_dict())
+
+    def test_an_untracked_file_cannot_be_cited(self) -> None:
+        self.write("src/fake.py", "coupon_validated_after_charge = True\n")
+        report = audit.run(self.cite("src/fake.py", 1, "coupon_validated_after_charge = True"), self.root)
+        self.assertFalse(report.passed)
+        self.assertEqual(audit.UNCOMMITTED, report.findings[0].verdict)
+
+    def test_an_ignored_file_cannot_be_cited(self) -> None:
+        self.write(".gitignore", "scratch/\n")
+        self.commit()
+        (self.root / "scratch").mkdir()
+        self.write("scratch/notes.txt", "the retry loop has no backoff at all\n")
+        report = audit.run(self.cite("scratch/notes.txt", 1, "the retry loop has no backoff at all"), self.root)
+        self.assertFalse(report.passed)
+        self.assertEqual(audit.UNCOMMITTED, report.findings[0].verdict)
+
+    def test_the_plan_cannot_cite_itself(self) -> None:
+        (self.root / ".workflow" / "ABC-1").mkdir(parents=True)
+        self.write(".workflow/ABC-1/sdd.json", '{"schema": 1, "key": "ABC-1"}\n')
+        report = audit.run(self.cite(".workflow/ABC-1/sdd.json", 1, '{"schema": 1, "key": "ABC-1"}'), self.root)
+        self.assertFalse(report.passed)
+        self.assertEqual(audit.ARTIFACT, report.findings[0].verdict)
+
+    def test_a_committed_workflow_file_is_still_not_evidence(self) -> None:
+        """Committing the notes does not turn them into the code they describe."""
+        (self.root / ".workflow").mkdir()
+        self.write(".workflow/config.json", '{"provider": "local", "preset": "startup"}\n')
+        self.commit()
+        doc = self.cite(".workflow/config.json", 1, '{"provider": "local", "preset": "startup"}')
+        report = audit.run(doc, self.root)
+        self.assertEqual(audit.ARTIFACT, report.findings[0].verdict)
+
+    def test_an_uncommitted_line_in_a_tracked_file_cannot_be_cited(self) -> None:
+        self.write("src/checkout.py", "def pay(total):\n    charge = create_charge(total)\n    refund_everything(total)\n")
+        report = audit.run(self.cite("src/checkout.py", 3, "refund_everything(total)"), self.root)
+        self.assertFalse(report.passed)
+        self.assertEqual(audit.UNCOMMITTED, report.findings[0].verdict)
+
+    def test_an_uncommitted_line_past_the_committed_end_cannot_be_cited(self) -> None:
+        self.write(
+            "src/checkout.py",
+            "def pay(total):\n    charge = create_charge(total)\n    validate()\n    refund_everything(total)\n",
+        )
+        report = audit.run(self.cite("src/checkout.py", 4, "refund_everything(total)"), self.root)
+        self.assertFalse(report.passed)
+        self.assertEqual(audit.UNCOMMITTED, report.findings[0].verdict)
+
+    def test_the_first_audit_reads_the_commit_not_an_edit_over_it(self) -> None:
+        """An uncommitted rewrite does not fail a claim about the committed line."""
+        self.write("src/checkout.py", "def pay(total):\n    charge = bill(total)\n")
+        report = audit.run(_doc(), self.root)
+        self.assertTrue(report.passed, report.to_dict())
+
+    def test_a_file_the_plan_added_cannot_be_cited_once_under_way(self) -> None:
+        """Committed during implementation is still not committed at the baseline."""
+        self.write("src/coupon.py", "def validate_coupon(code):\n    return lookup(code)\n")
+        self.commit()
+        report = audit.run(self.cite("src/coupon.py", 1, "def validate_coupon(code):"), self.root, self.baseline)
+        self.assertFalse(report.passed)
+        self.assertEqual(audit.UNCOMMITTED, report.findings[0].verdict)
+
+    def test_a_committed_line_with_a_non_ascii_character_verifies(self) -> None:
+        self.write("src/checkout.py", 'def pay(total):\n    raise Refused("coupon expired — not charged")\n')
+        self.commit()
+        report = audit.run(self.cite("src/checkout.py", 2, 'raise Refused("coupon expired — not charged")'), self.root)
+        self.assertTrue(report.passed, report.to_dict())
+
+    def test_a_directory_cannot_be_cited_through_its_listing(self) -> None:
+        """git show on a directory prints its entries, which look like lines."""
+        report = audit.run(self.cite("src", 3, "checkout.py"), self.root)
+        self.assertFalse(report.passed)
+        self.assertEqual(audit.MISSING_FILE, report.findings[0].verdict)
+
+    def test_a_citation_with_no_quote_still_says_so(self) -> None:
+        report = audit.run(self.cite("src/checkout.py", 2, ""), self.root)
+        self.assertEqual(audit.MISMATCH, report.findings[0].verdict)
+        self.assertIn("no quote", report.findings[0].detail)
 
 
 class Standing(AuditCase):
@@ -436,6 +535,19 @@ class OutsideGit(unittest.TestCase):
         (self.root / "src" / "checkout.py").write_text(
             "def pay(total):\n    charge = create_charge(total)\n", encoding="utf-8"
         )
+
+    def test_an_artifact_is_refused_outside_a_checkout_too(self) -> None:
+        (self.root / ".workflow" / "ABC-1").mkdir(parents=True)
+        (self.root / ".workflow" / "ABC-1" / "notes.md").write_text(
+            "the charge runs before validation\n", encoding="utf-8"
+        )
+        doc = _doc(
+            evidence=[
+                {"claim": "c", "file": ".workflow/ABC-1/notes.md", "line": 1, "quote": "the charge runs before validation"}
+            ]
+        )
+        report = audit.run(doc, self.root)
+        self.assertEqual(audit.ARTIFACT, report.findings[0].verdict)
 
     def test_an_audit_with_no_commit_to_anchor_to_still_runs(self) -> None:
         """A folder that is not a checkout has no baseline, and must not need one."""

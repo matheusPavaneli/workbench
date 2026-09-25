@@ -26,6 +26,14 @@ class WorkingTree(unittest.TestCase):
         # init.defaultBranch differs between machines; the tests need the name.
         self.base = gitctx.branch(self.root) or "master"
 
+    def test_file_at_returns_a_non_ascii_line_intact(self) -> None:
+        """Decoded with the locale's encoding it came back as mojibake on
+        Windows (cp1252), so the audit could never match such a quote."""
+        line = "raise Refused(\"coupon expired — não cobrado\")"
+        (self.root / "src" / "a.py").write_bytes(f"{line}\n".encode("utf-8"))
+        _git(["commit", "-qam", "non-ascii"], self.root)
+        self.assertEqual(f"{line}\n", gitctx.file_at(self.root, "HEAD", "src/a.py"))
+
     def test_modified_and_untracked_both_count(self) -> None:
         (self.root / "src" / "a.py").write_text("two\n", encoding="utf-8")
         (self.root / "src" / "b.py").write_text("new\n", encoding="utf-8")

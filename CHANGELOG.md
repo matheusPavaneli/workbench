@@ -13,6 +13,29 @@ renames a key raises its `schema` number in the same release, and
 
 ## Unreleased
 
+- **Hooks hold edits to the plan.** The plugin now ships `hooks/hooks.json`.
+  On a branch naming a ticket whose plan passed its audit, `PreToolUse`
+  refuses an `Edit`, `Write`, `MultiEdit` or `NotebookEdit` to a file neither
+  that plan nor another audited plan lists, and refuses every code edit while a
+  plan edited after its audit waits for a re-audit. `Stop` reports planned work
+  whose verification is missing or stale; `"hooks": "strict"` makes it block
+  once. With no ticket on the branch or no audited plan, both are silent.
+  Internal errors allow the edit and say so. **Upgrade cost:** one Python start
+  per file edit in a session with the plugin; `WB_NO_HOOKS=1` or
+  `"hooks": false` turns them off.
+- **The verification fingerprint works when `.workflow/` is ignored.**
+  `gitctx.tree()` excluded `.workflow` with a pathspec, and naming an ignored
+  directory makes `git add` fail -- so in a repo ignoring `.workflow/`
+  outright, the setup `wb doctor` recommends, the tree was always `None`.
+  Evidence then recorded no tree and compared equal to the next `None`: it
+  never read as stale. Evidence written by an affected checkout reads as stale
+  once, and `wb impl verify` records a real tree.
+- **The fingerprint no longer misses a same-size rewrite.** The scratch index
+  was copied with a fresh mtime, which hid racy entries from git's re-hash: a
+  file rewritten to the same size in the index's own tick kept its old blob in
+  the fingerprint, about one run in thirty. The copy now keeps the index's
+  mtime.
+
 - **`wb sdd audit` accepts only committed code as evidence.** The audit read
   the working tree, so a citation to a file written in the same session -- or
   to an ignored file, or to the plan itself -- verified as `ok`: a claim could

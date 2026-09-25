@@ -88,6 +88,7 @@ drops another.
 | `preset_paths` | by hand | a bar per path, for a repo that builds several things |
 | `flow` | `wb flow set` | source branch, validation targets, branch pattern |
 | `execute` | by hand | `false` refuses every `--execute`, standing |
+| `hooks` | by hand | `false` turns the plugin's hooks off; `"strict"` makes the stop hook block |
 | `field_map` | by hand | custom tracker fields this repo wants read, by destination |
 
 ```json

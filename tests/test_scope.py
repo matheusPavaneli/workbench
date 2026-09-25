@@ -89,6 +89,21 @@ class WhatStillCountsAsADeviation(ScopeBase):
         path.write_text(json.dumps(doc), encoding="utf-8")
         self.assertEqual({}, scope.claims("ABC-1"))
 
+    def test_a_ticket_marked_done_accounts_for_nothing(self) -> None:
+        """Shipped plans kept excusing every later edit to their files."""
+        self.plan("ABC-2", ["src/b.py"])
+        tasks = self.root / ".workflow" / "tasks"
+        tasks.mkdir(parents=True)
+        (tasks / "ABC-2.json").write_text(json.dumps({"key": "ABC-2", "status": "done"}), encoding="utf-8")
+        self.assertEqual({}, scope.claims("ABC-1"))
+
+    def test_a_ticket_still_open_keeps_its_claim(self) -> None:
+        self.plan("ABC-2", ["src/b.py"])
+        tasks = self.root / ".workflow" / "tasks"
+        tasks.mkdir(parents=True)
+        (tasks / "ABC-2.json").write_text(json.dumps({"key": "ABC-2", "status": "in-progress"}), encoding="utf-8")
+        self.assertEqual({"src/b.py": ["ABC-2"]}, scope.claims("ABC-1"))
+
     def test_a_file_no_plan_lists_is_not_accounted_for(self) -> None:
         self.plan("ABC-2", ["src/b.py"])
         self.assertNotIn("src/elsewhere.py", scope.claims("ABC-1"))

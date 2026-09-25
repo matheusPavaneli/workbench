@@ -202,6 +202,45 @@ double-quoted, or its backslashes are consumed as escapes:
 
 Forward slashes work everywhere and are the simpler choice.
 
+## Hooks
+
+`hooks/hooks.json` registers two Claude Code hooks. The decisions live in
+`lib/workbench/hooks.py`; `lib/wb_hook.py` only reads the event from stdin
+(1 MiB at most) and prints the answer. It is kept out of `wb` so that a hook
+firing on every edit does not fill the command history `--stats` reads.
+
+**The active ticket is the one the branch names**, among tickets with
+artifacts. `wb next` falls back to the most recently touched ticket; a hook
+that refuses edits must not, or a checkout on `main` would be held to last
+week's plan.
+
+`PreToolUse`, on `Edit`, `Write`, `MultiEdit` and `NotebookEdit`:
+
+| Situation | Answer |
+|---|---|
+| hooks off, no ticket on the branch, no plan, or an audit that never passed | allow, silently |
+| the path is outside the checkout, or under `.workflow/` | allow |
+| the plan passed once but no longer stands (edited since, or failed a re-audit) | deny: re-run `wb sdd audit` |
+| the path is in the plan's `files`, or another audited plan claims it | allow |
+| anything else | deny, naming the plan and how to extend it |
+
+`Stop`, with a standing plan and at least one planned file changed: when the
+evidence is missing or does not stand (`verify.standing`), it reports
+`wb impl verify <KEY>` as a `systemMessage`. Under `"hooks": "strict"` it
+blocks instead, once — a stop that already follows a block only reports, so it
+cannot loop.
+
+**Fail-open, never silent.** An internal error allows the edit and says why in
+a `systemMessage`. A hook that failed closed would block every edit on one bug
+and be switched off, and then it guards nothing.
+
+**What it does not cover.** A file written through `Bash` (`sed -i`, a
+redirection) never reaches these tools. `wb impl check` reads the working tree
+and remains the complete check.
+
+Switches: `WB_NO_HOOKS=1` in the environment, or `"hooks"` in
+`.workflow/config.json` — `false` for off, `"strict"` for a blocking stop.
+
 ## Git façade
 
 `lib/workbench/gitctx.py` is read-only by design, and everything that reads a

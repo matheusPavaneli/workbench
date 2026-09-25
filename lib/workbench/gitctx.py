@@ -290,10 +290,17 @@ def tree(cwd: Path) -> str | None:
     with tempfile.TemporaryDirectory() as scratch:
         copy = Path(scratch) / "index"
         if source.is_file():
-            shutil.copyfile(source, copy)
+            # copy2, not copyfile: the copy must keep the index's mtime. Git
+            # re-hashes an entry not older than the index file; a fresh mtime
+            # made a same-size rewrite in the index's own tick read as clean.
+            shutil.copy2(source, copy)
         env = {**os.environ, "GIT_INDEX_FILE": str(copy)}
         steps = (
-            ["add", "-A", "--", ".", f":(exclude){ARTIFACT_DIR}"],
+            # No exclude pathspec here: naming an ignored directory, even to
+            # exclude it, makes `git add` fail -- and a repo that ignores
+            # .workflow/ outright is the setup `wb doctor` recommends. The
+            # removal below is what leaves it out.
+            ["add", "-A", "--", "."],
             ["rm", "-r", "--cached", "-q", "--ignore-unmatch", "--", ARTIFACT_DIR],
         )
         for args in steps:

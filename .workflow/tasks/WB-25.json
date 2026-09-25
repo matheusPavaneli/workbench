@@ -2,10 +2,10 @@
   "key": "WB-25",
   "title": "verification evidence outlives the code it verified, and verify runs commands no person approved",
   "type": "bug",
-  "status": "open",
+  "status": "done",
   "desc": "Two gaps in wb impl verify, found in the same review as WB-22.\n\n1. evidence.json records verdict and output but nothing about which code produced them (verify.py Evidence.to_dict: schema, key, verdict, results, refused, env). A pass recorded before the last edit still reads pass: wb status shows verify ok and wb pr context hands the PR a verdict for code that was never run.\n2. The commands come from sdd.json, which a model wrote. The audit checks citations, not commands, and the runner allowlist admits python, node, npx, make -- each of which runs arbitrary code (python -c, node -e). Nothing makes a person look at the exact command before it executes.\n\nACCEPTANCE:\n- evidence.json records a fingerprint of the tree it verified (HEAD plus uncommitted changes, .workflow excluded) and the plan digest; committing exactly the verified tree keeps it standing\n- wb status reports verify as stale, not ok, once the tree or the plan differs from what was verified; wb pr context marks the verification as not standing\n- wb impl verify runs nothing until every command and env entry is approved on this machine; the refusal prints the exact approve call, naming each command verbatim so the permission prompt shows it\n- an approval is per repo, stored under WORKBENCH_HOME, never in the checkout; approving once covers later tickets using the same command\n- a changed command or env value needs a new approval\n- each has a regression test that fails before the fix",
   "created": "2026-09-25T18:56:02Z",
-  "updated": "2026-09-25T18:56:02Z",
+  "updated": "2026-09-25T19:21:33Z",
   "comments": [],
   "linked": [
     {

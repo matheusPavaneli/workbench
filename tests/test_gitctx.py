@@ -1,7 +1,9 @@
+import os
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from workbench import gitctx
 from workbench.errors import UsageError
@@ -196,6 +198,40 @@ class Tree(unittest.TestCase):
         (self.root / ".workflow" / "ABC-1" / "evidence.json").write_text("{}", encoding="utf-8")
         (self.root / "run.log").write_text("noise", encoding="utf-8")
         self.assertEqual(before, gitctx.tree(self.root))
+
+    def test_it_is_computed_when_workflow_is_ignored_outright(self) -> None:
+        """An exclude pathspec naming an ignored .workflow/ made git add fail,
+        so the tree was None before and after every edit -- and evidence
+        recorded with no tree never read as stale."""
+        (self.root / ".gitignore").write_text("*.log\n.workflow/\n", encoding="utf-8")
+        _git(["commit", "-qam", "ignore workflow"], self.root)
+        (self.root / ".workflow" / "ABC-1").mkdir(parents=True)
+        (self.root / ".workflow" / "ABC-1" / "evidence.json").write_text("{}", encoding="utf-8")
+        before = gitctx.tree(self.root)
+        self.assertTrue(before)
+        (self.root / "a.py").write_text("two\n", encoding="utf-8")
+        self.assertNotEqual(before, gitctx.tree(self.root))
+
+    def test_the_scratch_index_keeps_the_index_s_mtime(self) -> None:
+        """Racy git. An entry whose mtime is not older than the index file is
+        re-hashed, because the stat cache cannot vouch for it. Copying the index
+        with a fresh mtime made every such entry look safely older, so a
+        same-size rewrite in the index's own tick read as unchanged and was
+        left out of the fingerprint -- intermittently, about one run in thirty."""
+        index = self.root / ".git" / "index"
+        past = index.stat().st_mtime_ns - 5_000_000_000
+        os.utime(index, ns=(past, past))
+        seen = []
+        real = gitctx._git_env
+
+        def spy(args, cwd, env):
+            if not seen:
+                seen.append(Path(env["GIT_INDEX_FILE"]).stat().st_mtime_ns)
+            return real(args, cwd, env)
+
+        with mock.patch.object(gitctx, "_git_env", side_effect=spy):
+            gitctx.tree(self.root)
+        self.assertEqual([past], seen)
 
     def test_committing_the_verified_tree_keeps_it(self) -> None:
         """Verify before the commit, commit exactly that: the evidence still describes HEAD."""

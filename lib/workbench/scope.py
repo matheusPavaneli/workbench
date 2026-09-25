@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from . import artifacts, audit
+from . import artifacts, audit, status
 
 
 def claims(exclude: str, cwd: Path | None = None) -> dict[str, list[str]]:
@@ -40,6 +40,11 @@ def claims(exclude: str, cwd: Path | None = None) -> dict[str, list[str]]:
         if not directory.is_dir() or directory.name in {"tasks", ".cache"} or directory.name == excluded:
             continue
         if not _audit_passed(directory):
+            continue
+        if status.closed(directory.name, cwd):
+            # Shipped work accounts for nothing. Its artifacts outlive it, and
+            # left counting they excused every later edit to the files it once
+            # touched -- from impl check and from the edit hook alike.
             continue
         for path in _paths(directory / "sdd.json"):
             claimed.setdefault(path, []).append(directory.name)

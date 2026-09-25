@@ -35,7 +35,8 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
 5. **Check the scope.** `impl check <KEY>` after each step or two. It lists
    planned files as changed or pending, `other` for a file another audited plan
    claims, and `overlap` where two plans claim one file. It fails only on a file
-   no audited plan accounts for.
+   no audited plan accounts for. With the plugin's hooks on, an edit to such a
+   file is refused before it lands; the answer is the same either way.
 
 6. **Verify.** `impl verify <KEY>` runs the plan's `verify` commands and writes
    `.workflow/<KEY>/evidence.md`. It refuses anything that is not a known test,

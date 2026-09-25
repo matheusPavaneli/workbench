@@ -286,6 +286,19 @@ Turn it off standing with `WB_NO_EXECUTE=1` or `"execute": false` in
 `.workflow/config.json`. See [flow.md](docs/flow.md) and
 [execution.md](docs/execution.md).
 
+### Hooks
+
+The scope guard does not wait to be asked. On a branch that names a ticket
+whose plan passed its audit, the plugin's `PreToolUse` hook refuses an edit to
+a file the plan does not list, and that no other audited plan accounts for —
+the rule `wb impl check` fails on, one edit earlier. The `Stop` hook reports
+when planned files changed and the verification is missing or no longer
+describes the code. With no ticket on the branch, no plan, or a plan still
+being written, both stay silent.
+
+`"hooks": "strict"` makes `Stop` block instead of report. `WB_NO_HOOKS=1` or
+`"hooks": false` turns both off.
+
 ## Quality presets
 
 The preset sets the bar a plan must clear. It never lowers the floor: a unit test

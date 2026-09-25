@@ -13,7 +13,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from workbench import status as status_lib
+from workbench import audit as audit_lib, status as status_lib
 
 
 class StatusBase(unittest.TestCase):
@@ -39,6 +39,11 @@ class StatusBase(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         text = json.dumps(data) if not isinstance(data, str) else data
         path.write_text(text, encoding="utf-8")
+
+    def audited(self, key: str, plan: dict, **report) -> None:
+        """A plan and the passing audit of exactly that plan."""
+        self.write(key, "sdd.json", plan)
+        self.write(key, "audit.json", {"verdict": "pass", "plan_sha256": audit_lib.digest(plan), **report})
 
     def stage(self, key: str, name: str):
         return next(s for s in status_lib.read(key).stages if s.name == name)
@@ -82,16 +87,32 @@ class Pipeline(StatusBase):
 
     def test_a_passing_audit_opens_the_verify_stage(self) -> None:
         self.write("ABC-1", "triage.json", {"title": "t", "type": "feature"})
-        self.write("ABC-1", "sdd.json", {"files": [{"path": "a.py"}], "steps": [1]})
-        self.write("ABC-1", "audit.json", {"verdict": "pass", "citations_checked": 3})
+        self.audited("ABC-1", {"files": [{"path": "a.py"}], "steps": [1]}, citations_checked=3)
         self.assertIn("impl verify ABC-1", self.stage("ABC-1", "verify").command)
+
+    def test_a_plan_changed_after_its_audit_blocks_and_asks_for_the_audit(self) -> None:
+        self.write("ABC-1", "triage.json", {"title": "t", "type": "feature"})
+        self.audited("ABC-1", {"files": [{"path": "a.py"}], "steps": [1]}, citations_checked=3)
+        self.write("ABC-1", "sdd.json", {"files": [{"path": "a.py"}, {"path": "b.py"}], "steps": [1]})
+        status = status_lib.read("ABC-1")
+        self.assertEqual("audit", status.blocked.name)
+        self.assertIn("changed since", self.stage("ABC-1", "audit").detail)
+        self.assertIn("sdd audit ABC-1", status.next_command)
+        self.assertEqual("", self.stage("ABC-1", "verify").command)
+
+    def test_one_failed_command_of_three_reads_as_one(self) -> None:
+        """evidence.json carries exit_code; the count read a key it never writes."""
+        self.write("ABC-1", "triage.json", {"title": "t", "type": "feature"})
+        self.audited("ABC-1", {"files": [{"path": "a.py"}], "steps": [1]})
+        results = [{"command": c, "exit_code": e} for c, e in (("a", 0), ("b", 1), ("c", 0))]
+        self.write("ABC-1", "evidence.json", {"verdict": "fail", "results": results, "refused": []})
+        self.assertEqual("1 failed", self.stage("ABC-1", "verify").detail)
 
 
 class Scope(StatusBase):
     def _planned(self, key: str) -> None:
         self.write(key, "triage.json", {"title": "t", "type": "feature"})
-        self.write(key, "sdd.json", {"files": [{"path": "a.py"}, {"path": "b.py"}]})
-        self.write(key, "audit.json", {"verdict": "pass", "citations_checked": 2})
+        self.audited(key, {"files": [{"path": "a.py"}, {"path": "b.py"}]}, citations_checked=2)
 
     def test_scope_is_read_from_the_working_tree_not_from_a_file(self) -> None:
         self._planned("ABC-1")

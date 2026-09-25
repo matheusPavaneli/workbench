@@ -62,9 +62,17 @@ def _baseline(key: str, root: Path, *, rebaseline: bool) -> str | None:
     if rebaseline:
         return None  # start again from the current tree, strictly
     try:
-        return str(artifacts.read_json(key, "audit.json").get("baseline") or "") or None
+        previous = artifacts.read_json(key, "audit.json")
     except WbError:
         return None  # no previous audit: this plan is still being written
+    if not isinstance(previous, dict):
+        return None
+    # Only a plan that has passed is under way. A first audit that failed is
+    # still the strict one, however many times it is re-run; once a plan has
+    # passed, a failing correction keeps the anchor it already had.
+    if previous.get("verdict") != "pass" and not previous.get("under_way"):
+        return None
+    return str(previous.get("baseline") or "") or None
 
 
 def _audit(args: argparse.Namespace) -> int:

@@ -18,7 +18,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import artifacts, gitctx, sdd as sdd_lib
+from . import artifacts, audit as audit_lib, gitctx, sdd as sdd_lib
 
 # Stage states, worst-first when deciding what to report as blocking.
 FAIL = "fail"
@@ -219,12 +219,14 @@ def read(key: str, cwd: Path | None = None, *, changed: set[str] | None = None) 
         kind=str((triage or {}).get("type") or ""),
         provider=str((triage or {}).get("provider") or ""),
     )
+    # The later stages read the audit only while it still describes this plan.
+    current = audit if audit_lib.standing(audit, plan) is None else None
     status.stages = [
         _intake(key, directory, triage, frame),
         _plan(key, plan),
         _audit(key, audit, plan),
-        _scope(key, plan, audit, root, changed),
-        _evidence(key, evidence, audit),
+        _scope(key, plan, current, root, changed),
+        _evidence(key, evidence, current),
         _handover(key, directory, plan, status.kind),
         _artifact(directory / "commit.txt", "commit", f"wb commit check {key}"),
         _artifact(directory / "pr.md", "pr", f"wb pr context {key}"),
@@ -270,6 +272,8 @@ def _audit(key: str, audit: dict | None, plan: dict | None) -> Stage:
         return Stage("audit", TODO, "", f"wb sdd audit {key}")
     checked = audit.get("citations_checked", 0)
     if audit.get("verdict") == "pass":
+        if audit_lib.standing(audit, plan):
+            return Stage("audit", FAIL, "the plan changed since its audit", f"wb sdd audit {key}")
         return Stage("audit", OK, f"{checked} citation(s) verified", "")
     failed = audit.get("citations_failed", 0)
     reasons = audit.get("structure") or []
@@ -321,7 +325,7 @@ def _evidence(key: str, evidence: dict | None, audit: dict | None) -> Stage:
     refused = evidence.get("refused") or []
     if evidence.get("verdict") == "pass":
         return Stage("verify", OK, f"{len(results)} command(s) passed", "")
-    failed = sum(1 for r in results if not r.get("ok"))
+    failed = sum(1 for r in results if r.get("exit_code") != 0)
     parts = [f"{failed} failed"] if failed else []
     if refused:
         parts.append(f"{len(refused)} refused")

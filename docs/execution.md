@@ -42,8 +42,10 @@ because a wrong line number is a defect while the plan is still cheap to
 change. It also records the commit it ran against, as `baseline` in
 `audit.json`.
 
-Every audit after that is **anchored to that commit**, and the plan is treated
-as under way:
+Every audit after the first one that **passes** is **anchored to that commit**,
+and the plan is treated as under way. A first audit that fails anchors nothing:
+re-running it is strict again, so failing once is not a way past the strict
+check. Once a plan has passed, a failing correction keeps the anchor it had.
 
 | Citation | First audit | Once under way |
 |---|---|---|
@@ -64,6 +66,18 @@ plan to the current tree and is strict again.
 
 What the fallback never does is let an invented claim through: a quote found in
 neither the working tree nor the baseline is still a `mismatch`.
+
+A quote has to be the text of the cited line. A statement that wraps may be
+quoted across the lines that follow it, but the quote must start on the cited
+line and every word of it must be there; a real line with invented text after
+it is a `mismatch`. A quote under eight characters, whitespace aside, is a
+`mismatch` too: it identifies no line.
+
+`audit.json` records `plan_sha256`, a fingerprint of the plan it audited.
+`impl check`, `impl verify`, `wb status` and the scope attribution between
+tickets all trust a verdict only for that plan; an edited plan has to be
+audited again. This catches drift, not forgery -- whatever can write both files
+can make them agree.
 
 The post-implementation checks remain `impl check` (scope) and `impl verify`
 (behaviour).

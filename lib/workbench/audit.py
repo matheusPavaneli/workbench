@@ -13,6 +13,8 @@ the skill does not proceed to implementation on one.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -20,9 +22,11 @@ from . import gitctx
 
 MAX_FILE_BYTES = 5 * 1024 * 1024
 CONTEXT_LINES = 2
-# A line shorter than this cannot, on its own, support a longer quotation.
-# Without a floor, ``)`` or an empty line matches anything.
-MIN_LINE_FOR_REVERSE_MATCH = 10
+# A quote shorter than this, whitespace aside, identifies no line: ``c`` or
+# ``x = 1`` occurs somewhere in almost any file, so it verifies nothing.
+MIN_QUOTE_CHARS = 8
+# How many lines one quoted statement may wrap across.
+MAX_QUOTE_SPAN = 8
 
 OK = "ok"
 # The claim was true of the tree the plan was written against, but the working
@@ -35,6 +39,10 @@ MISMATCH = "mismatch"
 MISSING_FILE = "missing_file"
 OUT_OF_RANGE = "out_of_range"
 UNREADABLE = "unreadable"
+
+# Why a passing verdict no longer stands: the plan beside it is not the one
+# it was reached on. Named, because callers answer it differently.
+STALE = "changed since its audit"
 
 PASSING = {OK, BASELINE}
 # Passing only once a plan is under way. On the first audit a wrong line number
@@ -81,6 +89,9 @@ class Report:
     # "this plan has no steps" reads as an omission instead of a decision.
     tier: str = "standard"
     tier_reason: str = ""
+    # The plan this verdict is about. A verdict is only worth trusting for the
+    # document it was reached on; see standing().
+    plan: str = ""
     findings: list[Finding] = field(default_factory=list)
     structure: list[str] = field(default_factory=list)
     missing_paths: list[str] = field(default_factory=list)
@@ -106,6 +117,7 @@ class Report:
             "tier_reason": self.tier_reason,
             "baseline": self.baseline,
             "under_way": self.under_way,
+            "plan_sha256": self.plan,
             "citations_checked": len(self.findings),
             "citations_failed": len(self.failures),
             "findings": [f.to_dict() for f in self.findings if f.verdict not in self.passing],
@@ -127,7 +139,7 @@ def run(doc: dict, root: Path, baseline: str | None = None) -> Report:
     """
     from . import sdd
 
-    report = Report(key=str(doc.get("key", "")))
+    report = Report(key=str(doc.get("key", "")), plan=digest(doc))
     report.baseline = baseline or gitctx.head(root) or ""
     report.under_way = bool(baseline)
     report.tier, report.tier_reason = sdd.tier(doc)
@@ -149,6 +161,33 @@ def run(doc: dict, root: Path, baseline: str | None = None) -> Report:
 
     report.structure.extend(_preset_problems(doc, root))
     return report
+
+
+def digest(doc: dict) -> str:
+    """A fingerprint of a plan's content, blind to key order and formatting."""
+    canonical = json.dumps(doc, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def standing(report: object, doc: object) -> str | None:
+    """Why this plan may not be implemented from, or ``None`` when it may.
+
+    The verdict alone is not enough. It was reached on one version of the plan,
+    and a plan edited after it passed -- a wider file list, a weaker verify
+    list -- would otherwise run on the strength of an audit it never had.
+    An audit.json with no fingerprint is treated the same way: nothing ties it
+    to the plan beside it.
+
+    This catches drift, not forgery: whatever can write both files can make
+    them agree.
+    """
+    if not isinstance(report, dict):
+        return "has no audit result"
+    if report.get("verdict") != "pass":
+        return "did not pass its audit"
+    if not isinstance(doc, dict) or report.get("plan_sha256") != digest(doc):
+        return STALE
+    return None
 
 
 def _preset_problems(doc: dict, root: Path) -> list[str]:
@@ -247,22 +286,27 @@ def _check(index: int, item: dict, root: Path, baseline: str | None = None) -> F
         finding.detail = "citation has no quote, so nothing could be verified"
         return finding
 
-    if _matches(quote, lines[line_number - 1]):
+    if len(quote.replace(" ", "")) < MIN_QUOTE_CHARS:
+        finding.verdict = MISMATCH
+        finding.detail = f"quote is too short to identify a line; quote the whole of line {line_number}"
+        return finding
+
+    if _matches(quote, lines, line_number - 1):
         return finding
 
     # Tolerate drift, but never silently: an edit above the citation shifts it,
     # and the fix is to correct the number, not to loosen the check.
     for offset in range(1, CONTEXT_LINES + 1):
         for candidate in (line_number - 1 - offset, line_number - 1 + offset):
-            if 0 <= candidate < len(lines) and _matches(quote, lines[candidate]):
+            if 0 <= candidate < len(lines) and _matches(quote, lines, candidate):
                 finding.verdict = MOVED
                 finding.detail = f"quote found at line {candidate + 1}; update the citation"
                 return finding
 
-    for number, text in enumerate(lines, start=1):
-        if _matches(quote, text):
+    for index in range(len(lines)):
+        if _matches(quote, lines, index):
             finding.verdict = MOVED
-            finding.detail = f"quote found at line {number}; update the citation"
+            finding.detail = f"quote found at line {index + 1}; update the citation"
             return finding
 
     # Only now: the working tree is always tried first, so a plan audited
@@ -290,24 +334,31 @@ def _at_baseline(root: Path, baseline: str, raw_path: str, quote: str) -> bool:
     content = gitctx.file_at(root, baseline, raw_path.replace("\\", "/"))
     if content is None:
         return False
-    return any(_matches(quote, line) for line in content.splitlines())
+    lines = content.splitlines()
+    return any(_matches(quote, lines, index) for index in range(len(lines)))
 
 
-def _matches(quote: str, line: str) -> bool:
-    """Does this line support this quote?
+def _matches(quote: str, lines: list[str], index: int) -> bool:
+    """Does the text starting at ``lines[index]`` support this quote?
 
-    The reverse containment is deliberate but guarded: a citation may quote a
-    statement that wraps across lines. An empty or near-empty line is contained
-    in every string, so without the guard a citation pointing at a blank line
-    passes every time -- which is precisely the failure this module exists to
-    catch.
+    A citation may quote a statement that wraps, so the quote may run on into
+    the lines below -- but it has to *start* on the cited line and every word
+    of it has to be there. The earlier rule accepted any quote that merely
+    contained the cited line, which let a real line followed by invented text
+    verify: exactly the failure this module exists to catch.
     """
-    normalised = " ".join(line.split())
-    if not normalised or not quote:
+    joined = " ".join(lines[index].split())
+    if not joined or not quote:
         return False
-    if quote in normalised:
+    first = len(joined)
+    if quote in joined:
         return True
-    return len(normalised) >= MIN_LINE_FOR_REVERSE_MATCH and normalised in quote
+    for following in lines[index + 1 : index + MAX_QUOTE_SPAN]:
+        joined = f"{joined} {' '.join(following.split())}".strip()
+        position = joined.find(quote)
+        if position != -1:
+            return position < first
+    return False
 
 
 def _resolve(root: Path, raw: str) -> Path:

@@ -11,6 +11,38 @@ command's own output, and one that removes it. A `--json` payload that loses or
 renames a key raises its `schema` number in the same release, and
 `contract.VERSIONS` is asserted against the real output so it cannot drift.
 
+## 0.7.2
+
+### Fixed
+
+- The citation audit passed a quote that merely *contained* the cited line. It
+  was meant to let a statement that wraps be quoted whole, but it never checked
+  the rest of the quote, so a real line followed by invented text verified:
+  `return create_charge(total)  # after refunding every order` passed against a
+  line reading `return create_charge(total)`. A quote now has to start on the
+  cited line and every word of it has to be there, in that line or the ones
+  that follow it. A quote under eight characters, whitespace aside, fails as
+  well: `c` occurs on almost any line and so identifies none.
+- `impl check` and `impl verify` trusted the verdict in `audit.json` without
+  asking which plan it was reached on, so a plan edited after it passed -- a
+  wider file list, a weaker verify list -- ran without a second audit.
+  `audit.json` now records `plan_sha256`, and those two commands, `wb status`
+  and the attribution of files between tickets trust a verdict only for the
+  plan it describes. This catches drift, not forgery: whatever can write both
+  files can make them agree.
+- A first audit that failed still recorded its commit as the plan's baseline,
+  so re-running it was lenient -- a wrong line number passed as `moved`. Only an
+  audit that passed anchors the ones after it; once a plan has passed, a
+  failing correction keeps the anchor it already had.
+- `wb status` counted failed verify commands by a key `evidence.json` never
+  writes, so every command read as failed: three commands with one failure
+  said `3 failed`.
+
+No command, flag or exit code changed. `wb sdd audit --json` gains
+`plan_sha256`. An `audit.json` written before this release has no fingerprint,
+so `impl check`/`impl verify` refuse it and `wb status` marks the audit stage
+blocked until `wb sdd audit <KEY>` is re-run once per ticket in flight.
+
 ## 0.7.1
 
 ### Fixed

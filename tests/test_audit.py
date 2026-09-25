@@ -1,7 +1,10 @@
+import json
+import os
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from workbench import audit, gitctx, sdd
 
@@ -110,6 +113,60 @@ class Citations(AuditCase):
             ]
         )
         self.assertTrue(audit.run(doc, self.root).passed)
+
+    def test_a_real_line_padded_with_invented_text_fails(self) -> None:
+        """The line was contained in the quote, so the invented tail verified.
+
+        Found reviewing the audit: ``return finding  # and also deletes every
+        user row`` passed against a line reading ``return finding``.
+        """
+        (self.root / "src" / "padded.py").write_text(
+            "def pay(total):\n    return create_charge(total)\n", encoding="utf-8"
+        )
+        doc = _doc(
+            evidence=[
+                {
+                    "claim": "c",
+                    "file": "src/padded.py",
+                    "line": 2,
+                    "quote": "return create_charge(total)  # after refunding every order",
+                }
+            ]
+        )
+        report = audit.run(doc, self.root)
+        self.assertFalse(report.passed)
+        self.assertEqual(audit.MISMATCH, report.failures[0].verdict)
+
+    def test_a_one_character_quote_cannot_identify_a_line(self) -> None:
+        doc = _doc(evidence=[{"claim": "c", "file": "src/checkout.py", "line": 2, "quote": "c"}])
+        report = audit.run(doc, self.root)
+        self.assertFalse(report.passed)
+        self.assertEqual(audit.MISMATCH, report.failures[0].verdict)
+        self.assertIn("too short", report.failures[0].detail)
+
+    def test_a_statement_wrapped_over_three_lines_verifies(self) -> None:
+        (self.root / "src" / "call.py").write_text(
+            "total = compute(\n    items,\n    discount_code,\n)\n", encoding="utf-8"
+        )
+        quote = "total = compute( items, discount_code, )"
+        doc = _doc(evidence=[{"claim": "c", "file": "src/call.py", "line": 1, "quote": quote}])
+        self.assertTrue(audit.run(doc, self.root).passed)
+
+    def test_a_wrapped_quote_with_an_invented_continuation_fails(self) -> None:
+        (self.root / "src" / "call.py").write_text(
+            "total = compute(\n    items,\n    discount_code,\n)\n", encoding="utf-8"
+        )
+        quote = "total = compute( items, refund_all=True )"
+        doc = _doc(evidence=[{"claim": "c", "file": "src/call.py", "line": 1, "quote": quote}])
+        self.assertFalse(audit.run(doc, self.root).passed)
+
+    def test_a_wrapped_quote_must_start_on_the_cited_line(self) -> None:
+        """Otherwise a citation to any line verifies text a few lines below it."""
+        (self.root / "src" / "call.py").write_text(
+            "header_line = 1\ntotal = compute(\n    items,\n)\n", encoding="utf-8"
+        )
+        doc = _doc(evidence=[{"claim": "c", "file": "src/call.py", "line": 1, "quote": "compute( items, )"}])
+        self.assertFalse(audit.run(doc, self.root).passed)
 
     def test_nonexistent_file_fails(self) -> None:
         doc = _doc(evidence=[{"claim": "c", "file": "src/nope.py", "line": 1, "quote": "x"}])
@@ -274,6 +331,100 @@ class Baseline(unittest.TestCase):
     def test_an_unchanged_tree_still_verifies_at_the_cited_line(self) -> None:
         report = audit.run(_doc(), self.root, self.baseline)
         self.assertEqual(audit.OK, report.findings[0].verdict)
+
+
+class Standing(AuditCase):
+    """Whether a plan may be implemented from is a property of the plan *and*
+    its audit. The verdict alone was trusted, so a plan edited after it passed
+    -- a wider file list, a weaker verify list -- ran without a second look."""
+
+    def test_an_unchanged_plan_with_a_passing_audit_stands(self) -> None:
+        doc = _doc()
+        report = audit.run(doc, self.root).to_dict()
+        self.assertIsNone(audit.standing(report, doc))
+
+    def test_a_plan_edited_after_its_audit_does_not_stand(self) -> None:
+        doc = _doc()
+        report = audit.run(doc, self.root).to_dict()
+        doc["files"].append({"path": "src/billing.py", "change": "edit", "why": "later"})
+        self.assertIn("changed since", audit.standing(report, doc))
+
+    def test_an_audit_with_no_digest_does_not_stand(self) -> None:
+        """Hand-written or written by an older release: nothing ties it to the plan."""
+        self.assertIsNotNone(audit.standing({"verdict": "pass"}, _doc()))
+
+    def test_a_failed_audit_does_not_stand(self) -> None:
+        doc = _doc(rollback="")
+        report = audit.run(doc, self.root).to_dict()
+        self.assertIn("did not pass", audit.standing(report, doc))
+
+    def test_key_order_does_not_change_the_digest(self) -> None:
+        doc = _doc()
+        reordered = dict(reversed(list(doc.items())))
+        self.assertEqual(audit.digest(doc), audit.digest(reordered))
+
+
+class ImplementingFromAPlan(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name).resolve()
+        (self.root / "src").mkdir()
+        (self.root / "src" / "checkout.py").write_text(
+            "def checkout(total):\n    charge = create_charge(total)\n", encoding="utf-8"
+        )
+        self._cwd = os.getcwd()
+        os.chdir(self.root)
+        self.addCleanup(lambda: os.chdir(self._cwd))
+        patcher = mock.patch("workbench.gitctx.repo_root", return_value=self.root)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.directory = self.root / ".workflow" / "ABC-1"
+        self.directory.mkdir(parents=True)
+
+    def write(self, name: str, data: dict) -> None:
+        (self.directory / name).write_text(json.dumps(data), encoding="utf-8")
+
+    def test_impl_refuses_a_plan_edited_after_its_audit(self) -> None:
+        from workbench.cli import impl
+        from workbench.errors import UsageError
+
+        doc = _doc()
+        self.write("sdd.json", doc)
+        self.write("audit.json", audit.run(doc, self.root).to_dict())
+        doc["verify"] = ["python -c pass"]
+        self.write("sdd.json", doc)
+        with self.assertRaises(UsageError) as caught:
+            impl._audited_plan("ABC-1")
+        self.assertIn("sdd audit ABC-1", caught.exception.render())
+
+    def test_impl_accepts_the_plan_it_audited(self) -> None:
+        from workbench.cli import impl
+
+        doc = _doc()
+        self.write("sdd.json", doc)
+        self.write("audit.json", audit.run(doc, self.root).to_dict())
+        self.assertEqual(doc, impl._audited_plan("ABC-1"))
+
+    def test_a_failed_first_audit_does_not_make_the_next_one_lenient(self) -> None:
+        """Re-running a failed first audit was a way past its strictness."""
+        from workbench.cli import sdd as sdd_cli
+
+        self.write("audit.json", {"verdict": "fail", "baseline": "abc123", "under_way": False})
+        self.assertIsNone(sdd_cli._baseline("ABC-1", self.root, rebaseline=False))
+
+    def test_a_passing_audit_anchors_the_ones_after_it(self) -> None:
+        from workbench.cli import sdd as sdd_cli
+
+        self.write("audit.json", {"verdict": "pass", "baseline": "abc123", "under_way": False})
+        self.assertEqual("abc123", sdd_cli._baseline("ABC-1", self.root, rebaseline=False))
+
+    def test_a_plan_under_way_stays_anchored_through_a_failed_re_audit(self) -> None:
+        """Once implementation started, a failing correction must not reset the anchor."""
+        from workbench.cli import sdd as sdd_cli
+
+        self.write("audit.json", {"verdict": "fail", "baseline": "abc123", "under_way": True})
+        self.assertEqual("abc123", sdd_cli._baseline("ABC-1", self.root, rebaseline=False))
 
 
 class OutsideGit(unittest.TestCase):

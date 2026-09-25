@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from workbench import scope
+from workbench import audit, scope
 
 
 class ScopeBase(unittest.TestCase):
@@ -32,13 +32,11 @@ class ScopeBase(unittest.TestCase):
     def plan(self, key: str, paths: list, *, audited: bool = True) -> None:
         directory = self.root / ".workflow" / key
         directory.mkdir(parents=True, exist_ok=True)
-        (directory / "sdd.json").write_text(
-            json.dumps({"key": key, "files": [{"path": p, "change": "edit", "why": "w"} for p in paths]}),
-            encoding="utf-8",
-        )
+        doc = {"key": key, "files": [{"path": p, "change": "edit", "why": "w"} for p in paths]}
+        (directory / "sdd.json").write_text(json.dumps(doc), encoding="utf-8")
         if audited:
             (directory / "audit.json").write_text(
-                json.dumps({"key": key, "verdict": "pass"}), encoding="utf-8"
+                json.dumps({"key": key, "verdict": "pass", "plan_sha256": audit.digest(doc)}), encoding="utf-8"
             )
 
 
@@ -80,6 +78,15 @@ class WhatStillCountsAsADeviation(ScopeBase):
             json.dumps({"files": [{"path": "src/b.py"}]}), encoding="utf-8"
         )
         (directory / "audit.json").write_text(json.dumps({"verdict": "fail"}), encoding="utf-8")
+        self.assertEqual({}, scope.claims("ABC-1"))
+
+    def test_a_plan_edited_after_its_audit_accounts_for_nothing(self) -> None:
+        """Otherwise widening another ticket's file list silences this one's guard."""
+        self.plan("ABC-2", ["src/b.py"])
+        path = self.root / ".workflow" / "ABC-2" / "sdd.json"
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        doc["files"].append({"path": "src/stray.py", "change": "edit", "why": "w"})
+        path.write_text(json.dumps(doc), encoding="utf-8")
         self.assertEqual({}, scope.claims("ABC-1"))
 
     def test_a_file_no_plan_lists_is_not_accounted_for(self) -> None:

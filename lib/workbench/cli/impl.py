@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from .. import artifacts, gitctx, profile as profile_lib, scope as scope_lib, verify as verify_lib
+from .. import artifacts, audit as audit_lib, gitctx, profile as profile_lib, scope as scope_lib, verify as verify_lib
 from ..errors import EXIT_AUDIT, UsageError, WbError
 
 ACTIONS = ["check", "verify"]
@@ -118,7 +118,7 @@ def _verify(args: argparse.Namespace) -> int:
 
 
 def _audited_plan(key: str) -> dict:
-    """Load the plan, refusing unless its audit passed."""
+    """Load the plan, refusing unless its audit passed on this very plan."""
     doc = artifacts.read_json(key, "sdd.json")
     try:
         report = artifacts.read_json(key, "audit.json")
@@ -128,7 +128,13 @@ def _audited_plan(key: str) -> dict:
             fix=[f"run: wb sdd audit {key}"],
         ) from None
 
-    if report.get("verdict") != "pass":
+    reason = audit_lib.standing(report, doc)
+    if reason == audit_lib.STALE:
+        raise UsageError(
+            f"the plan for {key} changed since its audit",
+            fix=["re-run: wb sdd audit " + key],
+        )
+    if reason:
         raise UsageError(
             f"the audit for {key} did not pass",
             fix=[

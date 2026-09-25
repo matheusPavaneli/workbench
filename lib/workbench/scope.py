@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from . import artifacts
+from . import artifacts, audit
 
 
 def claims(exclude: str, cwd: Path | None = None) -> dict[str, list[str]]:
@@ -48,8 +48,9 @@ def claims(exclude: str, cwd: Path | None = None) -> dict[str, list[str]]:
 
 
 def _audit_passed(directory: Path) -> bool:
-    report = _read(directory / "audit.json")
-    return isinstance(report, dict) and report.get("verdict") == "pass"
+    # Current, not merely passed: a plan widened after its audit would
+    # otherwise silence the guard on every other ticket in the checkout.
+    return audit.standing(_read(directory / "audit.json"), _read(directory / "sdd.json")) is None
 
 
 def _paths(path: Path) -> list[str]:

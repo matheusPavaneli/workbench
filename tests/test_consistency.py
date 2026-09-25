@@ -295,9 +295,9 @@ class IsTheTreeDirty(ConsistencyBase):
             self.assertEqual([], gitctx.tracked_changes(self.root))
 
     def test_scope_attribution_reads_the_same_paths_the_plan_declares(self) -> None:
-        self.plan("ABC-1")
+        doc = self.plan("ABC-1")
         audit = self.root / ".workflow" / "ABC-1" / "audit.json"
-        audit.write_text(json.dumps({"verdict": "pass"}), encoding="utf-8")
+        audit.write_text(json.dumps({"verdict": "pass", "plan_sha256": audit_lib.digest(doc)}), encoding="utf-8")
 
         claimed = scope_lib.claims(exclude="ABC-2", cwd=self.root)
         self.assertIn("packages/billing/charge.ts", claimed)
@@ -349,11 +349,11 @@ class ScopeAndPrAgreeOnWhatChanged(unittest.TestCase):
 
         directory = self.root / ".workflow" / "ABC-1"
         directory.mkdir(parents=True)
-        (directory / "sdd.json").write_text(
-            json.dumps({"key": "ABC-1", "files": [{"path": "src/feature.py", "change": "add"}]}),
-            encoding="utf-8",
+        plan = {"key": "ABC-1", "files": [{"path": "src/feature.py", "change": "add"}]}
+        (directory / "sdd.json").write_text(json.dumps(plan), encoding="utf-8")
+        (directory / "audit.json").write_text(
+            json.dumps({"verdict": "pass", "plan_sha256": audit_lib.digest(plan)}), encoding="utf-8"
         )
-        (directory / "audit.json").write_text(json.dumps({"verdict": "pass"}), encoding="utf-8")
 
     def _restore(self, name: str, previous) -> None:
         if previous is None:

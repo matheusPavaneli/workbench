@@ -2,10 +2,10 @@
   "key": "WB-27",
   "title": "enforce plan scope and verification through Claude Code hooks shipped with the plugin",
   "type": "feature",
-  "status": "open",
+  "status": "done",
   "desc": "The scope guard only runs when the agent remembers wb impl check (\"after each step or two\"). Nothing stops an Edit outside the plan, or a session claiming done with no standing evidence. The plugin ships no hooks.\n\nACCEPTANCE:\n- a PreToolUse hook on Edit|Write|MultiEdit|NotebookEdit refuses a path not listed in files[] of an audited, standing plan for the active ticket (resolved like wb next); paths under .workflow/ are allowed\n- no active ticket or no plan: the hook allows and stays silent (does not break unrelated sessions)\n- a Stop hook reports, without blocking by default, when a ticket has changed files but verify is missing or stale\n- hooks are off with WB_NO_HOOKS=1 or \"hooks\": false in .workflow/config.json\n- hook logic lives in lib/ and is unit-tested; the hook entry points are thin",
   "created": "2026-09-25T19:32:51Z",
-  "updated": "2026-09-25T19:32:51Z",
+  "updated": "2026-09-25T20:18:49Z",
   "comments": [],
   "linked": []
 }

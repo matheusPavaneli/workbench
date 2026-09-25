@@ -1,9 +1,13 @@
+from __future__ import annotations
+
+import os
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from workbench import flow, gitctx, prose, sdd
+from workbench import flow, gitctx, gitrun, prose, sdd
 from workbench.errors import ConfigError, UsageError
 
 
@@ -101,6 +105,61 @@ class CarryPlan(unittest.TestCase):
     def test_branch_existence_is_checked_not_assumed(self) -> None:
         self.assertTrue(gitctx.branch_exists(self.root, "ABC-1-fix"))
         self.assertFalse(gitctx.branch_exists(self.root, "ABC-9-nope"))
+
+
+class StartThenPush(unittest.TestCase):
+    """WB-23: a branch made from origin/<base> tracked origin/<base> under git's
+    default autoSetupMerge, so the push guard refused every branch flow start
+    had created. Run on a real clone: the bug lived in git's defaults, not ours."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        base = Path(self._tmp.name)
+        origin, self.root = base / "origin.git", base / "clone"
+        seed = base / "seed"
+        seed.mkdir()
+        _git(["init", "-q", "--bare", "-b", "main", str(origin)], base)
+        _git(["init", "-q", "-b", "main", "."], seed)
+        _git(["config", "user.email", "t@example.com"], seed)
+        _git(["config", "user.name", "T"], seed)
+        (seed / "a.txt").write_text("one\n", encoding="utf-8")
+        _git(["add", "-A"], seed)
+        _git(["commit", "-qm", "base"], seed)
+        _git(["push", "-q", str(origin), "main", "main:homolog"], seed)
+        _git(["clone", "-q", str(origin), str(self.root)], base)
+        env = mock.patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop("WB_NO_EXECUTE", None)
+
+    def _upstream(self) -> str:
+        completed = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "@{u}"],
+            cwd=str(self.root), capture_output=True, text=True, check=False,
+        )
+        return completed.stdout.strip() if completed.returncode == 0 else ""
+
+    def _push_refusal(self) -> str | None:
+        push = gitrun.Action(["push", "-u", "origin", "x"], precondition=gitrun.NO_UPSTREAM)
+        return gitrun.precondition(push, self.root, [])
+
+    def test_a_started_branch_can_be_pushed(self) -> None:
+        run = gitrun.apply(flow.start_actions("ABC-1-fix", "main"), self.root)
+
+        self.assertTrue(run.ok)
+        self.assertEqual("ABC-1-fix", gitctx.branch(self.root))
+        self.assertEqual("", self._upstream())
+        self.assertIsNone(self._push_refusal())
+
+    def test_a_carry_branch_can_be_pushed(self) -> None:
+        switch = flow.carry_actions("ABC-1-homolog", "homolog", ["aaa1111 x"])[0]
+        run = gitrun.apply([switch], self.root)
+
+        self.assertTrue(run.ok)
+        self.assertEqual("ABC-1-homolog", gitctx.branch(self.root))
+        self.assertEqual("", self._upstream())
+        self.assertIsNone(self._push_refusal())
 
 
 class Prose(unittest.TestCase):

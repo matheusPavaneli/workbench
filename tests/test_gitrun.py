@@ -33,9 +33,12 @@ class Allowlist(unittest.TestCase):
         return reason or ""
 
     def test_the_commands_this_tool_computes_are_allowed(self) -> None:
+        computed = [
+            *flow_lib.start_actions("feature/ABC-1", "main"),
+            *flow_lib.carry_actions("carry/ABC-1", "homolog", ["abc1234 x", "def5678 y"]),
+        ]
         for argv in (
-            ["fetch", "origin"],
-            ["switch", "-c", "feature/ABC-1", "origin/main"],
+            *(action.argv for action in computed),
             ["cherry-pick", "abc1234", "def5678"],
             ["commit", "-F", ".workflow/ABC-1/commit.txt"],
             ["push", "-u", "origin", "feature/ABC-1"],
@@ -374,7 +377,7 @@ class ThroughTheCli(CliBase):
         with mock.patch("subprocess.run") as runner:
             code, out, _ = run("flow", "start", "ABC-1", "--title", "a thing")
         self.assertEqual(0, code)
-        self.assertIn("git switch -c", out)
+        self.assertIn("git switch --no-track -c", out)
         # Resolving the flow reads from git; what must not happen is a write.
         written = [
             call.args[0]
@@ -390,7 +393,7 @@ class ThroughTheCli(CliBase):
             code, out, _ = run("flow", "start", "ABC-1", "--title", "a thing", "--execute")
         self.assertEqual(0, code)
         ran = [call.args[0].rendered for call in runner.call_args_list]
-        self.assertEqual(["git fetch origin", "git switch -c ABC-1-a-thing origin/main"], ran)
+        self.assertEqual(["git fetch origin", "git switch --no-track -c ABC-1-a-thing origin/main"], ran)
         for command in ran:
             self.assertIn(command, out)
 

@@ -38,6 +38,22 @@ summarises. So:
 `wb sdd audit` reopens every citation and will catch the difference. Getting it
 right the first time is cheaper than being caught.
 
+Outside a plan the form is the one `sdd render` writes, so a script can find it:
+
+    `src/billing/checkout.py:142` — `charge = stripe.Charge.create(amount=total)`
+
+and `wb cite check <file>` reopens every one against HEAD (`--worktree` for a
+diff not yet committed). A `path:line` with no quoted line after it fails.
+
+## Answering a question about the code
+
+A question ("where is X decided?", "what calls Y?") gets the same discipline as
+a plan, because an answer is a set of claims. Write it to
+`.workflow/ask-<slug>.md` with every claim cited in the form above — absence
+claims included, stated as the search you ran — then `wb cite check` it.
+Present the answer only once it passes; what did not verify is either fixed
+from the code or reported as unknown.
+
 ## Blast radius
 
 Before claiming a change is contained, ask the index who calls it. "Nothing else

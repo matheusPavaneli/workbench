@@ -49,7 +49,9 @@ built on a guess extends the incident.
    before the fix goes out, say so explicitly and name the follow-up.
 
 8. **Close the timeline.** Detection, cause, fix, verification, and what would
-   have caught this earlier. Then hand off to `implement-change`.
+   have caught this earlier. Each step of the chain in `incident.md` cites as
+   `` `path:line` — `the line` ``; `cite check .workflow/incident-<slug>/incident.md`
+   must pass. Then hand off to `implement-change`.
 
 ## Rules
 

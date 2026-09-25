@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from workbench import events  # noqa: E402
 from workbench import redact  # noqa: E402
+from workbench.cli import cite as cite_cli  # noqa: E402
 from workbench.cli import ctx as ctx_cli  # noqa: E402
 from workbench.cli import commit as commit_cli  # noqa: E402
 from workbench.cli import doctor as doctor_cli  # noqa: E402
@@ -54,6 +55,7 @@ GROUPS = {
     "flow": flow_cli,
     "impl": impl_cli,
     "review": review_cli,
+    "cite": cite_cli,
     "commit": commit_cli,
     "pr": pr_cli,
     "git": git_cli,

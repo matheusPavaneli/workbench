@@ -26,6 +26,17 @@ renames a key raises its `schema` number in the same release, and
 
 ### Added
 
+- **`wb cite check <file>` audits citations outside a plan.** Review findings,
+  incident chains, replies to a reviewer and answers about the code were told
+  to quote the lines they rest on, and nothing looked. The command finds every
+  `` `path:line` — `quote` `` (the form `sdd render` writes) outside fenced
+  blocks and runs it through the audit's own verifier: against HEAD by
+  default, or the working tree with `--worktree` for an uncommitted diff --
+  `.workflow/` and ignored files refused either way. A `path:line` with no
+  quote fails as `unquoted`. Exit 7 on any failure. `review-diff`,
+  `trace-incident` and `address-review` now write their citations in that form
+  and run it; `shared/code-search.md` describes answering a question about the
+  code the same way, through `.workflow/ask-<slug>.md`.
 - **Absence claims are searches the audit runs.** "Nothing else calls this"
   used to pass by citing a real line, which proved nothing about the lines
   that are not there. An `evidence` item may now be `"kind": "absence"` with a

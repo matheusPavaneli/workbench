@@ -11,7 +11,9 @@ command's own output, and one that removes it. A `--json` payload that loses or
 renames a key raises its `schema` number in the same release, and
 `contract.VERSIONS` is asserted against the real output so it cannot drift.
 
-## Unreleased
+## 0.9.0
+
+### Added
 
 - **Hooks hold edits to the plan.** The plugin now ships `hooks/hooks.json`.
   On a branch naming a ticket whose plan passed its audit, `PreToolUse`
@@ -23,18 +25,8 @@ renames a key raises its `schema` number in the same release, and
   Internal errors allow the edit and say so. **Upgrade cost:** one Python start
   per file edit in a session with the plugin; `WB_NO_HOOKS=1` or
   `"hooks": false` turns them off.
-- **The verification fingerprint works when `.workflow/` is ignored.**
-  `gitctx.tree()` excluded `.workflow` with a pathspec, and naming an ignored
-  directory makes `git add` fail -- so in a repo ignoring `.workflow/`
-  outright, the setup `wb doctor` recommends, the tree was always `None`.
-  Evidence then recorded no tree and compared equal to the next `None`: it
-  never read as stale. Evidence written by an affected checkout reads as stale
-  once, and `wb impl verify` records a real tree.
-- **The fingerprint no longer misses a same-size rewrite.** The scratch index
-  was copied with a fresh mtime, which hid racy entries from git's re-hash: a
-  file rewritten to the same size in the index's own tick kept its old blob in
-  the fingerprint, about one run in thirty. The copy now keeps the index's
-  mtime.
+
+### Changed
 
 - **`wb sdd audit` accepts only committed code as evidence.** The audit read
   the working tree, so a citation to a file written in the same session -- or
@@ -47,6 +39,26 @@ renames a key raises its `schema` number in the same release, and
   the baseline cannot be cited either. **Upgrade cost:** a plan citing
   uncommitted work fails its first audit until that work is committed or the
   citation points at the committed line. `audit.json` keeps schema 1.
+
+### Fixed
+
+- **A ticket marked done no longer excuses edits to its files.** An audited
+  plan's claim on a file outlived the ticket: once shipped, it still accounted
+  for every later edit to those files, in `wb impl check` and in the edit hook.
+  A ticket the local backlog records as done now claims nothing. With a remote
+  tracker a shipped plan keeps its claim until `wb task clean` removes it.
+- **The verification fingerprint works when `.workflow/` is ignored.**
+  `gitctx.tree()` excluded `.workflow` with a pathspec, and naming an ignored
+  directory makes `git add` fail -- so in a repo ignoring `.workflow/`
+  outright, the setup `wb doctor` recommends, the tree was always `None`.
+  Evidence then recorded no tree and compared equal to the next `None`: it
+  never read as stale. Evidence written by an affected checkout reads as stale
+  once, and `wb impl verify` records a real tree.
+- **The fingerprint no longer misses a same-size rewrite.** The scratch index
+  was copied with a fresh mtime, which hid racy entries from git's re-hash: a
+  file rewritten to the same size in the index's own tick kept its old blob in
+  the fingerprint, about one run in thirty. The copy now keeps the index's
+  mtime.
 - **Baseline and HEAD lookups decode UTF-8 on every platform.** `git show` was
   read with the locale's encoding -- cp1252 on Windows -- so a citation whose
   line held any non-ASCII character could not verify against a commit.

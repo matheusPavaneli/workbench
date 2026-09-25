@@ -39,6 +39,15 @@ MISMATCH = "mismatch"
 MISSING_FILE = "missing_file"
 OUT_OF_RANGE = "out_of_range"
 UNREADABLE = "unreadable"
+# The citation points into this tool's own artifacts -- a plan quoting itself,
+# or another ticket's notes. Text a session wrote about the code is not
+# evidence about the code, however faithfully it is quoted.
+ARTIFACT = "artifact"
+# The quoted text is not in the commit the audit is anchored to: the file is
+# untracked, ignored or added by the plan, or the line exists only as an
+# uncommitted edit. A session can write any line it likes to disk and then
+# quote it, so only committed code counts as evidence.
+UNCOMMITTED = "uncommitted"
 
 # Why a passing verdict no longer stands: the plan beside it is not the one
 # it was reached on. Named, because callers answer it differently.
@@ -136,6 +145,10 @@ def run(doc: dict, root: Path, baseline: str | None = None) -> Report:
 
     That is what lets a plan be corrected while it is being implemented rather
     than only before, without loosening the check on a plan still being written.
+
+    Either way a citation must point at code the anchor commit contains. The
+    first audit reads the file as committed at HEAD, not as it sits on disk:
+    evidence is what the repository says, not what a session last wrote.
     """
     from . import sdd
 
@@ -146,7 +159,7 @@ def run(doc: dict, root: Path, baseline: str | None = None) -> Report:
     report.structure = sdd.validate(doc)
 
     for index, item in enumerate(doc.get("evidence") or []):
-        report.findings.append(_check(index, item, root, baseline))
+        report.findings.append(_check(index, item, root, report.baseline, under_way=report.under_way))
 
     # A plan may only claim to edit files that exist. Claiming to edit a file
     # that is not there is the same class of error as a false citation.
@@ -230,7 +243,10 @@ def _preset_problems(doc: dict, root: Path) -> list[str]:
     ]
 
 
-def _check(index: int, item: dict, root: Path, baseline: str | None = None) -> Finding:
+def _check(index: int, item: dict, root: Path, anchor: str = "", *, under_way: bool = False) -> Finding:
+    """Decide one citation's verdict. ``anchor`` is the commit the audit runs
+    against -- HEAD on a first audit, the recorded baseline after it -- and is
+    empty outside a checkout, where nothing can say where a file came from."""
     if not isinstance(item, dict):
         # Reported as a finding rather than raised: a malformed plan must fail
         # the audit, and failing it is not the same as crashing the checker.
@@ -253,30 +269,66 @@ def _check(index: int, item: dict, root: Path, baseline: str | None = None) -> F
 
     finding = Finding(index=index, verdict=OK, file=raw_path, line=line_number, claim=claim)
     path = _resolve(root, raw_path)
+    relative = _relative(root, path)
+    baseline = anchor if under_way else ""
 
-    if not path.is_file():
-        # A plan that deletes or renames a file it cited leaves the citation
-        # pointing at nothing. The claim was still true when it was written.
-        if baseline and _at_baseline(root, baseline, raw_path, quote):
-            finding.verdict = BASELINE
-            finding.detail = f"verified at baseline {baseline[:8]}; the file is gone from the working tree"
-            return finding
-        finding.verdict = MISSING_FILE
-        finding.detail = "no such file; the path in the citation does not exist"
+    if relative.split("/", 1)[0].casefold() == gitctx.ARTIFACT_DIR:
+        # Checked before anything else and without git: it holds outside a
+        # checkout too, where provenance cannot be asked.
+        finding.verdict = ARTIFACT
+        finding.detail = "cites a workflow artifact; evidence is the code, not what a session wrote about it"
         return finding
 
-    try:
-        if path.stat().st_size > MAX_FILE_BYTES:
+    if path.is_dir():
+        # ``git show <commit>:<dir>`` answers with a listing of the directory,
+        # and a file name in it would otherwise verify as a quoted line.
+        finding.verdict = MISSING_FILE
+        finding.detail = "a directory, not a file; cite the file the claim is about"
+        return finding
+
+    committed = gitctx.file_at(root, anchor, relative) if anchor else None
+    if anchor and committed is None and path.is_file():
+        finding.verdict = UNCOMMITTED
+        finding.detail = (
+            f"not in commit {anchor[:8]}: the file is untracked, ignored or added since; cite committed code"
+        )
+        return finding
+
+    if anchor and not under_way and committed is not None:
+        # The first audit reads the commit, not the disk. An uncommitted edit
+        # to a tracked file is text a session may have written; the committed
+        # line is what the claim has to rest on.
+        if len(committed) > MAX_FILE_BYTES:
             finding.verdict = UNREADABLE
             finding.detail = "file is too large to audit"
             return finding
-        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError as exc:
-        finding.verdict = UNREADABLE
-        finding.detail = str(exc)
-        return finding
+        lines = committed.splitlines()
+    else:
+        if not path.is_file():
+            # A plan that deletes or renames a file it cited leaves the citation
+            # pointing at nothing. The claim was still true when it was written.
+            if baseline and _at_baseline(root, baseline, relative, quote):
+                finding.verdict = BASELINE
+                finding.detail = f"verified at baseline {baseline[:8]}; the file is gone from the working tree"
+                return finding
+            finding.verdict = MISSING_FILE
+            finding.detail = "no such file; the path in the citation does not exist"
+            return finding
+
+        try:
+            if path.stat().st_size > MAX_FILE_BYTES:
+                finding.verdict = UNREADABLE
+                finding.detail = "file is too large to audit"
+                return finding
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError as exc:
+            finding.verdict = UNREADABLE
+            finding.detail = str(exc)
+            return finding
 
     if line_number < 1 or line_number > len(lines):
+        if _uncommitted_only(anchor, under_way, path, quote):
+            return _uncommitted_edit(finding, anchor)
         finding.verdict = OUT_OF_RANGE
         finding.detail = f"file has {len(lines)} lines"
         return finding
@@ -313,17 +365,44 @@ def _check(index: int, item: dict, root: Path, baseline: str | None = None) -> F
     # before any change behaves exactly as it did. Reaching here means the
     # quote is nowhere in the current file, and the usual reason is that this
     # plan is being implemented and the line has already been rewritten.
-    if baseline and _at_baseline(root, baseline, raw_path, quote):
+    if baseline and _at_baseline(root, baseline, relative, quote):
         finding.verdict = BASELINE
         finding.detail = f"verified at baseline {baseline[:8]}; the working tree has moved since"
         return finding
+
+    if _uncommitted_only(anchor, under_way, path, quote):
+        return _uncommitted_edit(finding, anchor)
 
     finding.verdict = MISMATCH
     finding.detail = f"line {line_number} reads: {' '.join(lines[line_number - 1].split())[:120]!r}"
     return finding
 
 
-def _at_baseline(root: Path, baseline: str, raw_path: str, quote: str) -> bool:
+def _uncommitted_only(anchor: str, under_way: bool, path: Path, quote: str) -> bool:
+    """On a first audit, is the quote on disk although the commit lacks it?
+
+    Only asked once the committed file has already failed the citation, to
+    name the reason: "mismatch" would send the author looking for a typo when
+    the line is real and simply not committed.
+    """
+    if not anchor or under_way or not quote or not path.is_file():
+        return False
+    try:
+        if path.stat().st_size > MAX_FILE_BYTES:
+            return False
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return False
+    return any(_matches(quote, lines, index) for index in range(len(lines)))
+
+
+def _uncommitted_edit(finding: Finding, anchor: str) -> Finding:
+    finding.verdict = UNCOMMITTED
+    finding.detail = f"the quote is only in uncommitted changes, not in commit {anchor[:8]}; cite committed code"
+    return finding
+
+
+def _at_baseline(root: Path, baseline: str, relative: str, quote: str) -> bool:
     """Was this quote in the file at the baseline commit?
 
     The line number is deliberately not checked. A citation that has survived
@@ -331,7 +410,7 @@ def _at_baseline(root: Path, baseline: str, raw_path: str, quote: str) -> bool:
     answering is whether the claim was ever true -- not whether the author kept
     the numbering up to date while working.
     """
-    content = gitctx.file_at(root, baseline, raw_path.replace("\\", "/"))
+    content = gitctx.file_at(root, baseline, relative)
     if content is None:
         return False
     lines = content.splitlines()
@@ -369,3 +448,11 @@ def _resolve(root: Path, raw: str) -> Path:
     except ValueError:
         return root / "__outside_repo__"
     return candidate
+
+
+def _relative(root: Path, path: Path) -> str:
+    """A resolved citation path as git names it: repo-relative, forward slashes."""
+    try:
+        return path.relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return path.name

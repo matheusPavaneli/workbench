@@ -37,10 +37,18 @@ design exists to prevent, so the CLI does not offer a way to do it.
 ## When the audit runs
 
 `wb sdd audit` is a gate before implementation, but it is not only usable
-before implementation. The first audit is strict and checks the working tree,
-because a wrong line number is a defect while the plan is still cheap to
-change. It also records the commit it ran against, as `baseline` in
-`audit.json`.
+before implementation. The first audit is strict and checks the file as
+committed at HEAD, because a wrong line number is a defect while the plan is
+still cheap to change. It also records the commit it ran against, as
+`baseline` in `audit.json`.
+
+Whatever the stage, a citation must point at code that commit contains. A
+session can write any line it likes to disk and then quote it, so the audit
+does not take the disk's word for it: a citation into `.workflow/` is
+`artifact`, and one into a file the anchor commit lacks -- untracked, ignored,
+or added by the plan -- or to a line that exists only as an uncommitted edit is
+`uncommitted`. Both fail at every stage. Outside a checkout there is no commit
+to ask, and only the `.workflow/` rule applies.
 
 Every audit after the first one that **passes** is **anchored to that commit**,
 and the plan is treated as under way. A first audit that fails anchors nothing:
@@ -53,6 +61,8 @@ check. Once a plan has passed, a failing correction keeps the anchor it had.
 | found elsewhere in the file | `moved`, fails | `moved`, passes, line reported |
 | found only at the baseline commit | `mismatch`, fails | `baseline`, passes |
 | found nowhere, ever | `mismatch`, fails | `mismatch`, fails |
+| only in uncommitted changes, or a file the commit lacks | `uncommitted`, fails | `uncommitted`, fails |
+| under `.workflow/` | `artifact`, fails | `artifact`, fails |
 
 This exists because `plan-change` instructs the author to correct a plan that
 turns out wrong — which is precisely when the tree has already moved. Before

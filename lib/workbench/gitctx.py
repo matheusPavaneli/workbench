@@ -60,10 +60,21 @@ def _git_raw(args: list[str], cwd: Path) -> str | None:
     Stripping is right for a branch name and wrong for a blob -- a file that
     opens with a blank line would come back shifted by one, and every line
     number checked against it would be off.
+
+    Decoded as UTF-8 rather than the locale's encoding: on Windows that is
+    cp1252, which turns every non-ASCII character of a UTF-8 file into
+    mojibake, and a quote containing one could then never match.
     """
     try:
         completed = subprocess.run(
-            ["git", *args], cwd=str(cwd), capture_output=True, text=True, timeout=15, check=False
+            ["git", *args],
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=15,
+            check=False,
         )
     except (OSError, subprocess.SubprocessError):
         return None

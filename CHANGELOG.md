@@ -11,6 +11,23 @@ command's own output, and one that removes it. A `--json` payload that loses or
 renames a key raises its `schema` number in the same release, and
 `contract.VERSIONS` is asserted against the real output so it cannot drift.
 
+## Unreleased
+
+- **`wb sdd audit` accepts only committed code as evidence.** The audit read
+  the working tree, so a citation to a file written in the same session -- or
+  to an ignored file, or to the plan itself -- verified as `ok`: a claim could
+  be invented, written to disk and quoted. The first audit now reads each cited
+  file as committed at HEAD. Two new finding verdicts, both failing at every
+  stage: `artifact` for a citation into `.workflow/`, and `uncommitted` for a
+  file the anchor commit lacks (untracked, ignored, added by the plan) or a
+  line that exists only as an uncommitted edit. Under way, a file added after
+  the baseline cannot be cited either. **Upgrade cost:** a plan citing
+  uncommitted work fails its first audit until that work is committed or the
+  citation points at the committed line. `audit.json` keeps schema 1.
+- **Baseline and HEAD lookups decode UTF-8 on every platform.** `git show` was
+  read with the locale's encoding -- cp1252 on Windows -- so a citation whose
+  line held any non-ASCII character could not verify against a commit.
+
 ## 0.8.0
 
 ### Changed

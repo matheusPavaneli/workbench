@@ -59,7 +59,7 @@ so a wrong `line` or an invented `quote` fails here rather than in review.
 
 | Field | Rule |
 |---|---|
-| `evidence[].quote` | The **actual text of that line**, copied. The audit compares it after collapsing whitespace. Do not paraphrase, do not reconstruct from memory. |
+| `evidence[].quote` | The **actual text of that line**, copied. The audit compares it after collapsing whitespace. Do not paraphrase, do not reconstruct from memory. Only committed code counts: the first audit reads the file at HEAD, and a citation into `.workflow/`, an untracked or ignored file, a file the plan adds, or an uncommitted edit fails. |
 | `evidence[].line` | 1-indexed. If the audit says `moved`, correct the number — do not loosen the quote. |
 | `files[]` | Every file the change touches, before any of it is touched. `implement-change` refuses a file that is not listed. `change` is one of `edit`, `add`, `delete`, `rename`. A listed `edit` whose path does not exist fails the audit. |
 | `zones` | From `wb repo zones`. Do not hand-write it. |

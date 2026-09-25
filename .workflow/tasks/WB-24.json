@@ -1,0 +1,16 @@
+{
+  "key": "WB-24",
+  "title": "wb status lists shipped tickets as work in flight forever",
+  "type": "bug",
+  "status": "done",
+  "desc": "wb status reads only which artifacts exist under .workflow/<KEY>/ (status.py:231-232: commit.txt -> 'commit', pr.md -> 'pr') and never the ticket's own state or git. A ticket that was merged and closed stays listed with its last artifact as if pending: on 2026-09-25 WB-16..WB-23 all showed as 'commit'/'pr' although merged in #10-#18, and WB-7/10-15 (status done) showed 'BLOCKED at audit'. Separately, 'task clean --merged' only selects tickets whose branch is gone from the remote, so with squash merges that keep branches it selects nothing. Acceptance: a ticket whose tracker status is done is not listed as in flight (or is listed as done); a regression test with a done ticket that still has commit.txt. Open question: should status also detect a merged PR/branch when the tracker was not closed, and should clean --merged accept tracker-done as shipped?",
+  "created": "2026-09-25T18:42:53Z",
+  "updated": "2026-09-25T18:49:26Z",
+  "comments": [],
+  "linked": [
+    {
+      "key": "WB-20",
+      "type": "relates"
+    }
+  ]
+}

@@ -69,16 +69,24 @@ class Status:
     kind: str = ""
     provider: str = ""
     stages: list[Stage] = None  # type: ignore[assignment]
+    # Closed in the local backlog. The artifacts of a shipped ticket stay on
+    # disk until someone cleans them, and read on their own they describe work
+    # stopped at its last stage -- or blocked, if an audit once failed.
+    closed: bool = False
 
     def __post_init__(self) -> None:
         self.stages = self.stages or []
 
     @property
     def blocked(self) -> Stage | None:
+        if self.closed:
+            return None
         return next((s for s in self.stages if s.state == FAIL), None)
 
     @property
     def next_stage(self) -> Stage | None:
+        if self.closed:
+            return None
         return next((s for s in self.stages if not s.done), None)
 
     @property
@@ -89,6 +97,8 @@ class Status:
     @property
     def headline(self) -> str:
         """The furthest stage actually reached, for the one-line listing."""
+        if self.closed:
+            return "done"
         reached = [s.name for s in self.stages if s.state in (OK, PENDING)]
         return reached[-1] if reached else "not started"
 
@@ -99,6 +109,7 @@ class Status:
             "title": self.title,
             "type": self.kind,
             "provider": self.provider,
+            "closed": self.closed,
             "stages": [
                 {"name": s.name, "state": s.state, "detail": s.detail, "command": s.command, "skill": s.skill}
                 for s in self.stages
@@ -173,7 +184,10 @@ def pick(key: str | None = None, cwd: Path | None = None) -> tuple[Status, str] 
     if from_branch:
         return read(from_branch, cwd), "branch"
     if available:
-        return read(available[0], cwd), "most recent"
+        # Newest first, but a closed ticket is the answer only when nothing
+        # else is: `wb next` right after `wb task done` asks what is left.
+        newest = next((key for key in available if not closed(key, cwd)), available[0])
+        return read(newest, cwd), "most recent"
 
     here = cwd or Path.cwd()
     name = gitctx.branch(gitctx.checkout(here)) or ""
@@ -218,6 +232,7 @@ def read(key: str, cwd: Path | None = None, *, changed: set[str] | None = None) 
         title=str((triage or {}).get("title") or (plan or {}).get("objective") or ""),
         kind=str((triage or {}).get("type") or ""),
         provider=str((triage or {}).get("provider") or ""),
+        closed=closed(key, cwd),
     )
     # The later stages read the audit only while it still describes this plan.
     current = audit if audit_lib.standing(audit, plan) is None else None
@@ -235,6 +250,21 @@ def read(key: str, cwd: Path | None = None, *, changed: set[str] | None = None) 
     if response.is_file():
         status.stages.append(_artifact(response, "review", ""))
     return status
+
+
+def closed(key: str, cwd: Path | None = None) -> bool:
+    """Whether the local backlog records ``key`` as done.
+
+    The local backlog only. A remote tracker's state names are its own
+    ("Closed", "Resolved", a custom workflow's "Shipped"), triage.json holds a
+    snapshot of them that is stale by the time it matters, and status is not
+    allowed to call the network. Guessing a vocabulary would be worse than
+    saying nothing.
+    """
+    from .providers import local
+
+    task = _json(local.task_path(key, cwd))
+    return bool(task) and task.get("status") == local.DONE
 
 
 # ---- stages -------------------------------------------------------------

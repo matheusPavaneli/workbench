@@ -110,6 +110,47 @@ class Pipeline(StatusBase):
         self.assertEqual("1 failed", self.stage("ABC-1", "verify").detail)
 
 
+class StaleEvidence(StatusBase):
+    """A pass recorded before the last edit is a claim about code that is gone."""
+
+    PLAN = {"files": [{"path": "a.py"}], "steps": [1]}
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.write("ABC-1", "triage.json", {"title": "t", "type": "feature"})
+        self.audited("ABC-1", self.PLAN)
+        self.write("ABC-1", "evidence.json", {
+            "verdict": "pass", "results": [{"command": "pytest", "exit_code": 0}], "refused": [],
+            "tree": "tree-verified", "plan_sha256": audit_lib.digest(self.PLAN),
+        })
+
+    def verify_stage(self, tree: str):
+        with mock.patch("workbench.gitctx.tree", return_value=tree):
+            return self.stage("ABC-1", "verify")
+
+    def test_the_verified_tree_reads_ok(self) -> None:
+        self.assertEqual(status_lib.OK, self.verify_stage("tree-verified").state)
+
+    def test_a_changed_tree_reads_stale_and_offers_verify_again(self) -> None:
+        stage = self.verify_stage("tree-edited")
+        self.assertNotEqual(status_lib.OK, stage.state)
+        self.assertIn("stale", stage.detail)
+        self.assertIn("impl verify ABC-1", stage.command)
+
+    def test_a_changed_plan_reads_stale(self) -> None:
+        wider = {"files": [{"path": "a.py"}, {"path": "b.py"}], "steps": [1]}
+        self.audited("ABC-1", wider)
+        stage = self.verify_stage("tree-verified")
+        self.assertNotEqual(status_lib.OK, stage.state)
+        self.assertIn("plan changed", stage.detail)
+
+    def test_a_listing_passes_the_tree_it_resolved_once(self) -> None:
+        with mock.patch("workbench.gitctx.tree", side_effect=AssertionError("resolved per ticket")):
+            status = status_lib.read("ABC-1", changed=set(), tree="tree-verified")
+        verify = next(s for s in status.stages if s.name == "verify")
+        self.assertEqual(status_lib.OK, verify.state)
+
+
 class Scope(StatusBase):
     def _planned(self, key: str) -> None:
         self.write(key, "triage.json", {"title": "t", "type": "feature"})

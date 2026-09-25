@@ -39,7 +39,10 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
 
 6. **Verify.** `impl verify <KEY>` runs the plan's `verify` commands and writes
    `.workflow/<KEY>/evidence.md`. It refuses anything that is not a known test,
-   build or lint runner — run those yourself and say so.
+   build or lint runner — run those yourself and say so. The first time a
+   command appears in a checkout nothing runs: it prints a `--approve` call
+   naming each command. Show it to the user; never approve on their behalf.
+   The evidence is bound to the tree it saw, so verify last, then commit.
 
 7. **Report honestly.** If verification fails, say so with the failing line.
    Fix the code, never the evidence.

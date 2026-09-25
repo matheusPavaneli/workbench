@@ -18,7 +18,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import artifacts, audit as audit_lib, gitctx, sdd as sdd_lib
+from . import artifacts, audit as audit_lib, gitctx, sdd as sdd_lib, verify as verify_lib
 
 # Stage states, worst-first when deciding what to report as blocking.
 FAIL = "fail"
@@ -216,7 +216,14 @@ def branch_changes(cwd: Path | None = None) -> set[str]:
     return set(gitctx.changed_since(root, base))
 
 
-def read(key: str, cwd: Path | None = None, *, changed: set[str] | None = None) -> Status:
+# ``read``'s default for ``tree``: not resolved yet. ``None`` is a real answer
+# (no checkout), so it cannot double as "ask git".
+UNRESOLVED = ""
+
+
+def read(
+    key: str, cwd: Path | None = None, *, changed: set[str] | None = None, tree: str | None = UNRESOLVED
+) -> Status:
     key = artifacts.validate_key(key)
     directory = artifacts.ticket_dir(key, cwd)
     root = gitctx.checkout(cwd)
@@ -241,7 +248,7 @@ def read(key: str, cwd: Path | None = None, *, changed: set[str] | None = None) 
         _plan(key, plan),
         _audit(key, audit, plan),
         _scope(key, plan, current, root, changed),
-        _evidence(key, evidence, current),
+        _evidence(key, evidence, current, plan, root, tree),
         _handover(key, directory, plan, status.kind),
         _artifact(directory / "commit.txt", "commit", f"wb commit check {key}"),
         _artifact(directory / "pr.md", "pr", f"wb pr context {key}"),
@@ -346,7 +353,14 @@ def _scope(
     return Stage("scope", OK, f"all {len(planned)} planned file(s) changed", "")
 
 
-def _evidence(key: str, evidence: dict | None, audit: dict | None) -> Stage:
+def _evidence(
+    key: str, evidence: dict | None, audit: dict | None, plan: dict | None, root: Path, tree: str | None
+) -> Stage:
+    """A pass counts only while it describes this plan and this tree.
+
+    The tree is resolved here only when a caller did not resolve it once for
+    every ticket, and only for a pass -- a failed or missing run owes no git call.
+    """
     if not audit or audit.get("verdict") != "pass":
         return Stage("verify", TODO, "", "")
     if not evidence:
@@ -354,6 +368,12 @@ def _evidence(key: str, evidence: dict | None, audit: dict | None) -> Stage:
     results = evidence.get("results") or []
     refused = evidence.get("refused") or []
     if evidence.get("verdict") == "pass":
+        if tree == UNRESOLVED:
+            tree = gitctx.tree(root)
+        digest = audit_lib.digest(plan) if isinstance(plan, dict) else None
+        stale = verify_lib.standing(evidence, digest, tree)
+        if stale:
+            return Stage("verify", PENDING, f"stale: {stale}", f"wb impl verify {key}")
         return Stage("verify", OK, f"{len(results)} command(s) passed", "")
     failed = sum(1 for r in results if r.get("exit_code") != 0)
     parts = [f"{failed} failed"] if failed else []

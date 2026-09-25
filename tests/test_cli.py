@@ -9,6 +9,7 @@ worth asserting rather than assuming.
 import io
 import json
 import os
+import shlex
 import sys
 import tempfile
 import time
@@ -21,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 
 import wb  # noqa: E402
 from workbench.errors import EXIT_AUDIT, EXIT_CONFIG, EXIT_NOT_FOUND, EXIT_USAGE  # noqa: E402
+from workbench import audit as audit_lib, verify as verify_lib  # noqa: E402
 
 
 def run(*argv) -> tuple[int, str, str]:
@@ -439,6 +441,67 @@ class Impl(CliBase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps({"key": "ABC-1", "files": [{"path": "a.py"}]}), encoding="utf-8")
         self.assertNotEqual(0, run("impl", "check", "ABC-1")[0])
+
+
+class ImplVerifyApproval(CliBase):
+    """A plan's commands are model-written; none runs until a person approved it here."""
+
+    COMMANDS = ["python -m unittest -q", "python -c pass"]
+
+    def setUp(self) -> None:
+        super().setUp()
+        plan = {"key": "ABC-1", "files": [{"path": "a.py"}], "verify": self.COMMANDS,
+                "verify_env": {"PYTHONPATH": "lib"}}
+        directory = self.root / ".workflow" / "ABC-1"
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "sdd.json").write_text(json.dumps(plan), encoding="utf-8")
+        (directory / "audit.json").write_text(
+            json.dumps({"verdict": "pass", "plan_sha256": audit_lib.digest(plan)}), encoding="utf-8"
+        )
+        self.evidence = directory / "evidence.json"
+        self.entries = [*self.COMMANDS, "env PYTHONPATH=lib"]
+
+    def approve_all(self) -> list[str]:
+        return [arg for entry in self.entries for arg in ("--approve", entry)]
+
+    def test_unapproved_commands_run_nothing_and_print_the_approve_call(self) -> None:
+        with mock.patch("workbench.verify._execute") as execute:
+            code, _, err = run("impl", "verify", "ABC-1")
+        self.assertEqual(EXIT_AUDIT, code)
+        execute.assert_not_called()
+        self.assertFalse(self.evidence.exists())
+        self.assertIn("wb impl verify ABC-1 --approve", err)
+        for entry in self.entries:
+            self.assertIn(shlex.quote(entry), err)
+
+    def test_approving_every_entry_runs_and_binds_the_evidence(self) -> None:
+        result = verify_lib.Result(command="x", exit_code=0, duration_ms=1, output="")
+        with mock.patch("workbench.verify._execute", return_value=result), \
+             mock.patch("workbench.gitctx.tree", return_value="tree-1"), \
+             mock.patch("workbench.gitctx.head", return_value="head-1"):
+            code, _, _ = run("impl", "verify", "ABC-1", *self.approve_all())
+            self.assertEqual(0, code)
+            data = json.loads(self.evidence.read_text(encoding="utf-8"))
+            self.assertEqual("tree-1", data["tree"])
+            self.assertEqual(audit_lib.digest(json.loads(
+                (self.root / ".workflow" / "ABC-1" / "sdd.json").read_text(encoding="utf-8"))), data["plan_sha256"])
+            # Approved once: the next run does not ask.
+            self.evidence.unlink()
+            self.assertEqual(0, run("impl", "verify", "ABC-1")[0])
+
+    def test_a_partial_approval_still_runs_nothing(self) -> None:
+        with mock.patch("workbench.verify._execute") as execute:
+            code, _, err = run("impl", "verify", "ABC-1", "--approve", self.COMMANDS[0])
+        self.assertEqual(EXIT_AUDIT, code)
+        execute.assert_not_called()
+        self.assertIn(shlex.quote(self.COMMANDS[1]), err)
+
+    def test_approving_something_the_plan_does_not_name_is_refused(self) -> None:
+        with mock.patch("workbench.verify._execute") as execute:
+            code, _, err = run("impl", "verify", "ABC-1", "--approve", "python -c 'import os'")
+        self.assertEqual(EXIT_USAGE, code)
+        execute.assert_not_called()
+        self.assertIn("not in the plan", err)
 
 
 

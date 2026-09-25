@@ -14,10 +14,18 @@ boundary, and it is drawn narrowly on purpose:
 
 Anything outside that is refused with the command printed, for the user to run
 themselves. Refusing is cheap; running an unexpected command is not.
+
+The allowlist bounds *which program* runs, not what it is told to do:
+``python -c`` and ``node -e`` are on it by construction. So nothing runs until
+a person has approved the exact string on this machine -- see ``approve``.
+
+Evidence records the tree and the plan it verified, so a pass describes one
+version of the code and stops standing once that version is gone.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shlex
@@ -26,6 +34,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import contexts
 from .errors import UsageError
 
 TIMEOUT_SECONDS = 600
@@ -97,6 +106,11 @@ class Evidence:
     results: list[Result] = field(default_factory=list)
     refused: list[tuple[str, str]] = field(default_factory=list)
     env: dict = field(default_factory=dict)
+    # What was verified. ``tree`` is ``gitctx.tree`` before the first command
+    # ran; ``plan`` is the audited plan's digest. Both ``None`` outside a checkout.
+    tree: str | None = None
+    head: str | None = None
+    plan: str | None = None
 
     @property
     def passed(self) -> bool:
@@ -110,7 +124,35 @@ class Evidence:
             "results": [r.to_dict() for r in self.results],
             "refused": [{"command": c, "reason": r} for c, r in self.refused],
             "env": sorted(self.env),
+            "tree": self.tree,
+            "head": self.head,
+            "plan_sha256": self.plan,
         }
+
+
+STALE_TREE = "the code changed since it was verified"
+STALE_PLAN = "the plan changed since it was verified"
+
+
+def standing(evidence: object, plan_digest: str | None, tree: str | None) -> str | None:
+    """Why this evidence does not describe the code as it is, or ``None`` when it does.
+
+    A pass is a claim about one tree. Read after an edit, it describes code that
+    is no longer there -- and ``wb status`` and ``wb pr context`` would repeat it
+    as if it were current. Evidence written before trees were recorded has none,
+    so it compares as changed: nothing ties it to the code beside it.
+
+    Like ``audit.standing``, this catches drift, not forgery.
+    """
+    if not isinstance(evidence, dict):
+        return "has no evidence"
+    if evidence.get("verdict") != "pass":
+        return "did not pass"
+    if evidence.get("plan_sha256") != plan_digest:
+        return STALE_PLAN
+    if evidence.get("tree") != tree:
+        return STALE_TREE
+    return None
 
 
 def check(command: str) -> str | None:
@@ -251,6 +293,12 @@ def render(evidence: Evidence) -> str:
         # search path, and evidence.md is written to be pasted into a PR.
         lines += [f"**Environment:** {', '.join(sorted(evidence.env))}", ""]
 
+    if evidence.tree:
+        verified = f"tree `{evidence.tree[:12]}`"
+        if evidence.head:
+            verified += f" on `{evidence.head[:12]}`"
+        lines += [f"**Verified:** {verified}", ""]
+
     for result in evidence.results:
         status = "pass" if result.ok else f"FAIL (exit {result.exit_code})"
         lines += [f"## `{result.command}` — {status}", "", "```", result.output or "(no output)", "```", ""]
@@ -261,6 +309,62 @@ def render(evidence: Evidence) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+APPROVALS_NAME = "approvals.json"
+
+
+def approvals_path() -> Path:
+    """Per machine, never in the checkout: a plan must not be able to ship its own approval."""
+    return contexts.home() / APPROVALS_NAME
+
+
+def entries(commands: list[str], env: dict) -> list[str]:
+    """What a person approves: each command verbatim, each variable as ``env NAME=value``.
+
+    Verbatim, because the approval is only worth the attention it got. A digest
+    would be approved unread; the string itself shows up in the permission
+    prompt of whatever runs the approve call. One changed character is a
+    different entry, and asks again.
+    """
+    return [*commands, *(f"env {name}={value}" for name, value in sorted(env.items()))]
+
+
+def unapproved(root: Path, wanted: list[str]) -> list[str]:
+    approved = set(_approvals().get(_repo_id(root), []))
+    return [entry for entry in wanted if entry not in approved]
+
+
+def approve(root: Path, given: list[str]) -> None:
+    """Record approvals for this checkout. Refuses to write over a file it cannot read."""
+    data = _approvals()
+    repo = _repo_id(root)
+    data[repo] = sorted(set(data.get(repo, [])) | set(given))
+    path = approvals_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _repo_id(root: Path) -> str:
+    # The checkout, not the remote: keyed by remote, a fork's plan would run on
+    # the strength of approvals given to upstream's.
+    return str(Path(root).resolve())
+
+
+def _approvals() -> dict:
+    path = approvals_path()
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise UsageError(
+            f"cannot read {path}",
+            fix=[f"fix or delete {path}; every command will ask for approval again"],
+        ) from exc
+    if not isinstance(data, dict) or not all(isinstance(v, list) for v in data.values()):
+        raise UsageError(f"{path} is not an object of repo: [entries]", fix=[f"fix or delete {path}"])
+    return data
 
 
 def require_commands(commands: object) -> list[str]:

@@ -2,10 +2,10 @@
   "key": "WB-23",
   "title": "wb git push refuses every branch wb flow start created",
   "type": "bug",
-  "status": "open",
+  "status": "done",
   "desc": "flow start --execute runs 'git switch -c <branch> origin/<source>'. With git's default branch.autoSetupMerge that sets the new branch's upstream to origin/<source>, so 'wb git push --execute' then refuses with 'this branch already has an upstream' -- the tool's own start path can never reach its own publish path. Seen on WB-22 (PR #17), pushed by hand. Likely fix: 'git switch --no-track -c', with a regression test on a real checkout.",
   "created": "2026-09-25T18:19:53Z",
-  "updated": "2026-09-25T18:19:53Z",
+  "updated": "2026-09-25T18:37:02Z",
   "comments": [],
   "linked": [
     {

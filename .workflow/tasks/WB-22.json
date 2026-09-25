@@ -1,0 +1,11 @@
+{
+  "key": "WB-22",
+  "title": "the audit and verify gates pass what they were built to stop",
+  "type": "bug",
+  "status": "done",
+  "desc": "Found reviewing the anti-hallucination guarantees. Four defects, each confirmed by running it:\n\n1. audit._matches accepts a quote that merely contains a real line of 10+ chars (reverse containment), so a real line padded with invented text verifies ('return finding  # and also deletes every user row' passes). No minimum quote length either: quote 'n' verifies against any line containing n.\n2. impl check / impl verify only read audit.json verdict. Nothing binds the verdict to the sdd.json it audited, so a plan edited after a pass (wider files[], weaker verify[]) runs without a re-audit.\n3. cli/sdd._baseline inherits the baseline from audit.json whatever its verdict, so a first audit that FAILED makes the next one lenient (under_way, MOVED passes). The strict first audit is strict exactly once.\n4. status._evidence counts failed commands with r.get('ok'), a key evidence.json never writes, so every result counts as failed: 3 commands with 1 failure reads '3 failed'.\n\nAcceptance: each has a regression test that fails before the fix.",
+  "created": "2026-09-25T18:07:21Z",
+  "updated": "2026-09-25T18:19:52Z",
+  "comments": [],
+  "linked": []
+}

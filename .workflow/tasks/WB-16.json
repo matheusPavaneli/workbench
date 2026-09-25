@@ -1,0 +1,11 @@
+{
+  "key": "WB-16",
+  "title": "pr context and status scope measure the working tree, not the branch",
+  "type": "bug",
+  "status": "done",
+  "desc": "wb pr context reported changed:[] and size:trivial for a 160-line feature because cli/pr.py:68 measures gitctx.changed_files(root) -- the working tree, already clean after a commit. The same payload builds commits from subjects_since(root, base), so one function answers branch-vs-base for commits and working-tree for files.\n\nSecond divergence in the same place: pr.py:66 takes base from flow.source.branch (local main). flow.carry_base(root, source) at flow.py:252 already resolves origin/main when it exists, with a docstring on why a local ref is stale. Nothing in the flow reads a local branch except this.\n\nstatus.py:271 _scope has the same root cause: after a commit the tree is clean, so wb status reports 'scope -- 0 of 3 planned file(s) changed' for work that is done.\n\nACCEPTANCE:\n- one shared helper in gitctx measures committed-against-base plus working tree, and both callers use it (a second implementation is the divergence this ticket is about)\n- pr context on a branch with commits reports the files those commits changed\n- pr context resolves its base through flow.carry_base\n- status scope counts planned files changed by the branch, committed or not\n- a consistency test holds pr context and status to the same answer for one branch\n- a branch with no commits above base behaves as it does today",
+  "created": "2026-08-22T16:46:22Z",
+  "updated": "2026-09-25T18:37:00Z",
+  "comments": [],
+  "linked": []
+}

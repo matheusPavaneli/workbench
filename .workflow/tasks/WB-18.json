@@ -1,0 +1,11 @@
+{
+  "key": "WB-18",
+  "title": "the CLI surface is not discoverable without reading prose",
+  "type": "feature",
+  "status": "done",
+  "desc": "A session composing an unfamiliar call has to infer flags from a SKILL.md. Composing 'wb pr check --key WB-15' failed with 'unrecognized arguments' because --key does not exist. test_plugin.py:177 asserts every command is named in a doc; naming is not knowing its flags.\n\nMCP publishes a typed schema per tool and pays for it in every session. The equivalent here must cost nothing until asked for.\n\nACCEPTANCE:\n- wb surface --json emits every group, action and flag from the live parser, not a hand-kept list\n- it is built by walking argparse, so it cannot drift from the CLI\n- zero always-on cost: no SKILL.md names it, README does\n- a test asserts every group in wb.GROUPS appears in the output",
+  "created": "2026-08-22T16:46:45Z",
+  "updated": "2026-09-25T18:37:01Z",
+  "comments": [],
+  "linked": []
+}

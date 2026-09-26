@@ -11,7 +11,10 @@ from __future__ import annotations
 import ast
 import re
 
-ARMS = ("plain", "workbench")
+ARMS = ("plain", "workbench", "run")
+# What a run measures unless told otherwise. The run arm drives `wb run`, which
+# starts its own sessions; it costs a third more and is asked for by name.
+DEFAULT_ARMS = ("plain", "workbench")
 
 # Metric -> which direction is better. The report reads a loss off this.
 METRICS = {
@@ -364,15 +367,15 @@ def summarize(records: list[dict]) -> dict:
     return summary
 
 
-def losses(summary: dict) -> list[tuple[str, str, float, float]]:
-    """(ticket, metric, plain median, workbench median) wherever workbench is worse."""
+def losses(summary: dict, arm: str = "workbench") -> list[tuple[str, str, float, float]]:
+    """(ticket, metric, plain median, ``arm``'s median) wherever ``arm`` is worse than plain."""
     found = []
     for ticket in sorted(summary):
         for metric in METRICS:
             arms = summary[ticket].get(metric, {})
-            if "plain" not in arms or "workbench" not in arms:
+            if "plain" not in arms or arm not in arms:
                 continue
-            plain, bench = arms["plain"]["median"], arms["workbench"]["median"]
+            plain, bench = arms["plain"]["median"], arms[arm]["median"]
             worse = bench < plain if METRICS[metric] == "higher" else bench > plain
             if worse:
                 found.append((ticket, metric, plain, bench))
@@ -383,8 +386,8 @@ def _made_error(metric: str, value: float) -> bool:
     return value < 1 if metric == "hidden_pass" else value > 0
 
 
-def caught(records: list[dict]) -> list[tuple[str, str, int, int, int, int]]:
-    """(ticket, metric, plain runs with the error, plain n, workbench runs with it, workbench n).
+def caught(records: list[dict], arm: str = "workbench") -> list[tuple[str, str, int, int, int, int]]:
+    """(ticket, metric, plain runs with the error, plain n, ``arm``'s runs with it, ``arm``'s n).
 
     Only where the two arms made the error in a different share of their runs.
     An absent value is left out of n.
@@ -400,9 +403,9 @@ def caught(records: list[dict]) -> list[tuple[str, str, int, int, int, int]]:
             tally[1] += 1
     found = []
     for (ticket, metric), arms in sorted(counts.items(), key=lambda item: (item[0][0], ERROR_METRICS.index(item[0][1]))):
-        if "plain" not in arms or "workbench" not in arms:
+        if "plain" not in arms or arm not in arms:
             continue
-        (plain_hits, plain_n), (bench_hits, bench_n) = arms["plain"], arms["workbench"]
+        (plain_hits, plain_n), (bench_hits, bench_n) = arms["plain"], arms[arm]
         if plain_hits * bench_n != bench_hits * plain_n:
             found.append((ticket, metric, plain_hits, plain_n, bench_hits, bench_n))
     return found
@@ -423,7 +426,9 @@ def report(records: list[dict], *, commit: str, model: str, date: str, skipped: 
     summary = summarize(records)
     spent = sum(rec["metrics"]["cost_usd"] or 0 for rec in records)
     errors = sum(1 for rec in records if rec.get("error"))
-    bench_runs = [rec for rec in records if rec["arm"] == "workbench"]
+    present = [arm for arm in ARMS if any(rec["arm"] == arm for rec in records)]
+    compared = [arm for arm in present if arm != "plain"]
+    bench_runs = [rec for rec in records if rec["arm"] != "plain"]
     used_flow = sum(1 for rec in bench_runs if rec.get("workflow_artifacts"))
     lines = [
         "# Benchmark report",
@@ -432,7 +437,8 @@ def report(records: list[dict], *, commit: str, model: str, date: str, skipped: 
         f"- model: `{model}`",
         f"- date: {date}",
         f"- runs recorded: {len(records)}, with an error: {errors}, skipped by the spend cap: {skipped}",
-        f"- workbench runs that left workflow artifacts: {used_flow} of {len(bench_runs)}",
+        f"- arms: {', '.join(present)}",
+        f"- workbench and run sessions that left workflow artifacts: {used_flow} of {len(bench_runs)}",
         f"- auth: {auth}",
         f"- spent: US${spent:.2f}"
         + (" (Claude Code's estimate; drawn from the subscription's usage limit, not billed)" if auth == "subscription" else ""),
@@ -444,14 +450,13 @@ def report(records: list[dict], *, commit: str, model: str, date: str, skipped: 
             "",
             f"## {ticket}",
             "",
-            "| metric | better | plain median | plain min-max | workbench median | workbench min-max |",
-            "|---|---|---|---|---|---|",
+            "| metric | better | " + " | ".join(f"{arm} median | {arm} min-max" for arm in present) + " |",
+            "|---|---|" + "---|---|" * len(present),
         ]
         for metric, direction in METRICS.items():
             arms = summary[ticket].get(metric, {})
-            plain = _cell(arms.get("plain"))
-            bench = _cell(arms.get("workbench"))
-            lines.append(f"| {metric} | {direction} | {plain[0]} | {plain[1]} | {bench[0]} | {bench[1]} |")
+            cells = " | ".join(" | ".join(_cell(arms.get(arm))) for arm in present)
+            lines.append(f"| {metric} | {direction} | {cells} |")
 
     lines += [
         "",
@@ -460,19 +465,20 @@ def report(records: list[dict], *, commit: str, model: str, date: str, skipped: 
         "Runs that made each error, per arm, wherever the arms differ (for hidden_pass: runs that failed the hidden tests).",
         "",
     ]
-    differ = caught(records)
+    differ = [(arm, row) for arm in compared for row in caught(records, arm)]
     if not differ:
-        lines.append("None: on every ticket, both arms made each error in the same share of their runs.")
-    for ticket, metric, plain_hits, plain_n, bench_hits, bench_n in differ:
-        lines.append(f"- {ticket} {metric}: plain {plain_hits} of {plain_n} runs, workbench {bench_hits} of {bench_n}")
+        lines.append("None: on every ticket, the arms made each error in the same share of their runs.")
+    for arm, (ticket, metric, plain_hits, plain_n, bench_hits, bench_n) in differ:
+        lines.append(f"- {ticket} {metric}: plain {plain_hits} of {plain_n} runs, {arm} {bench_hits} of {bench_n}")
 
-    lines += ["", "## Where workbench loses", ""]
-    lost = losses(summary)
-    if not lost:
-        lines.append("Nowhere: on every ticket and metric, the workbench median is at least as good as plain's.")
-    for ticket, metric, plain_median, bench_median in lost:
-        lines.append(
-            f"- {ticket} {metric}: workbench median {_fmt(bench_median)} against plain {_fmt(plain_median)}"
-            f" ({METRICS[metric]} is better)"
-        )
+    for arm in compared or ["workbench"]:
+        lines += ["", f"## Where {arm} loses", ""]
+        lost = losses(summary, arm)
+        if not lost:
+            lines.append(f"Nowhere: on every ticket and metric, the {arm} median is at least as good as plain's.")
+        for ticket, metric, plain_median, bench_median in lost:
+            lines.append(
+                f"- {ticket} {metric}: {arm} median {_fmt(bench_median)} against plain {_fmt(plain_median)}"
+                f" ({METRICS[metric]} is better)"
+            )
     return "\n".join(lines) + "\n"

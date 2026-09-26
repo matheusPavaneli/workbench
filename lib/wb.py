@@ -41,6 +41,7 @@ from workbench.cli import pr as pr_cli  # noqa: E402
 from workbench.cli import repo as repo_cli  # noqa: E402
 from workbench.cli import review as review_cli  # noqa: E402
 from workbench.cli import route as route_cli  # noqa: E402
+from workbench.cli import run as run_cli  # noqa: E402
 from workbench.cli import sdd as sdd_cli  # noqa: E402
 from workbench.cli import start as start_cli  # noqa: E402
 from workbench.cli import status as status_cli  # noqa: E402
@@ -55,6 +56,7 @@ GROUPS = {
     "start": start_cli,
     "finish": finish_cli,
     "approve": approve_cli,
+    "run": run_cli,
     "status": status_cli,
     "next": next_cli,
     "route": route_cli,

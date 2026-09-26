@@ -387,6 +387,52 @@ class CaughtTest(unittest.TestCase):
         self.assertEqual([], score.caught([old, dict(old, arm="workbench")]))
 
 
+class RunArmTest(unittest.TestCase):
+    """WB-56: the third arm drives `wb run`, and the harness plays the person."""
+
+    def test_the_run_arm_is_asked_for_by_name(self) -> None:
+        self.assertNotIn("run", score.DEFAULT_ARMS)
+        planned = bench_run.plan_runs([_ticket(key="BN-1")], runs=1, arms=score.ARMS)
+        self.assertEqual(["plain", "workbench", "run"], [arm for _, arm, _ in planned])
+
+    def test_wb_run_is_called_to_a_commit_in_the_sandbox(self) -> None:
+        argv = bench_run.run_argv("BN-3", Path("/p"), model="m", timeout_s=60)
+        self.assertEqual(["run", "BN-3", "--until", "commit"], argv[2:6])
+        self.assertEqual("bypassPermissions", argv[argv.index("--permission-mode") + 1])
+        self.assertEqual(str(Path("/p")), argv[argv.index("--plugin-dir") + 1])
+
+    def test_the_approval_a_stopped_run_printed_is_read_back(self) -> None:
+        out = "BN-2  waiting on you: verify: 1 verify entry\n  python -m unittest -q\napprove: wb approve BN-2 abc123def0\n"
+        self.assertEqual(["approve", "BN-2", "abc123def0"], bench_run.approval(out))
+        self.assertIsNone(bench_run.approval("BN-2  done: committed\n"))
+
+    def test_the_sessions_are_summed_and_an_unreported_field_stays_absent(self) -> None:
+        sessions = [
+            {"usage": {"input_tokens": 10, "output_tokens": 5}, "total_cost_usd": 0.5, "num_turns": 3, "session_id": "a"},
+            {"usage": {"input_tokens": 1}, "total_cost_usd": None, "num_turns": 2, "session_id": "b"},
+        ]
+        merged = bench_run.combined(sessions)
+        self.assertEqual({"input_tokens": 11, "output_tokens": 5}, merged["usage"])
+        self.assertEqual(0.5, merged["total_cost_usd"])
+        self.assertEqual(5, merged["num_turns"])
+        self.assertEqual("a,b", merged["session_id"])
+        self.assertIsNone(bench_run.combined([])["total_cost_usd"])
+        self.assertIsNone(score.tokens(bench_run.combined([])["usage"]))
+
+    def test_the_report_compares_each_arm_with_plain(self) -> None:
+        records = [
+            _record("BN-3", "plain", wall_s=20.0, tests_missing=1),
+            _record("BN-3", "workbench", wall_s=40.0, tests_missing=0),
+            _record("BN-3", "run", wall_s=60.0, tests_missing=0),
+        ]
+        text = score.report(records, commit="c", model="m", date="d", skipped=0)
+        self.assertIn("run median", text)
+        self.assertIn("## Where run loses", text)
+        self.assertIn("- BN-3 wall_s: run median 60", text)
+        self.assertIn("- BN-3 tests_missing: plain 1 of 1 runs, run 0 of 1", text)
+        self.assertEqual([("BN-3", "tests_missing", 1, 1, 0, 1)], score.caught(records, "run"))
+
+
 class CommandTest(unittest.TestCase):
     def test_the_plain_arm_loads_no_plugin(self) -> None:
         argv = bench_run.command("claude", "plain", "do it", model="claude-sonnet-5", plugin_dir=None)

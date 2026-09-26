@@ -11,6 +11,70 @@ command's own output, and one that removes it. A `--json` payload that loses or
 renames a key raises its `schema` number in the same release, and
 `contract.VERSIONS` is asserted against the real output so it cannot drift.
 
+## 1.0.0
+
+The public surface is now stable. Everything this file already calls public
+(commands, flags, exit codes and `--json` payloads) follows semantic
+versioning from here: a removal or rename waits for 2.0.0, and the
+deprecation policy above applies to it. This release closes a review of the
+first hour of use. Every item below is something a new user hit before
+reaching a plan.
+
+### Added
+
+- **`wb` is a command a person can type.** `bin/wb` (sh) and `bin/wb.cmd`
+  (Windows) run the same `lib/wb.py` that skills call. The README says how to
+  put `bin/` on PATH, and it now opens with a five-command quickstart.
+  **Upgrade cost:** none.
+- **A mistyped command suggests the closest name.** `wb taks` answers
+  `did you mean: wb task`, and `wb task lst` answers `wb task list`, before
+  the usage line. **Upgrade cost:** none. The exit code is still 2.
+- **`key_prefix` in `.workflow/config.json`** sets the prefix of local
+  backlog keys (`ACME-1`). It must be 2 to 10 letters or digits and start
+  with a letter. An invalid value exits 3 and names the setting. For a local
+  provider with an empty backlog, `wb init` proposes one from the directory
+  name. **Upgrade cost:** none. Without the setting, keys stay `WB-n`.
+- **`wb init` writes the `.gitignore` lines `wb doctor` asks for.** The
+  proposal lists the lines that are missing, and `--write` appends them,
+  never rewriting an existing line. **Upgrade cost:** none.
+
+### Changed
+
+- **`wb route` fits the ticket.** A `review` step (`review-diff`,
+  `wb review gates --key KEY`) comes right before the commit on every route,
+  light included, so the light route now has six steps. `frame` appears only
+  for feature work, `idea-` work, or a ticket that already has a `frame.md`.
+  **Upgrade cost:** a script that counts steps sees one more, and one fewer
+  on bug tickets. The `--json` keys are unchanged.
+- **`wb status` with no key lists only work in flight.** Done tickets are
+  counted on one closing line that names `wb task clean --merged`. A title
+  longer than 48 characters ends in `...`. `--json` still carries every
+  ticket. **Upgrade cost:** none for scripts, which read `--json`.
+- **`wb flow start` and `wb flow carry` refuse without an `origin` remote.**
+  They exit 3 and name `git remote add origin <url>`, where they used to print
+  commands that could not run. `wb doctor` warns about the missing remote,
+  and `wb init` says the source branch was read off the local branch.
+  **Upgrade cost:** none for a checkout that has an origin.
+- **Paths print relative to the checkout** in `doctor`, `init`,
+  `task new` and the context source. **Upgrade cost:** none. Paths outside
+  the checkout print in full.
+
+### Fixed
+
+- **`wb status` and `wb next` see a task that was only created.** Right after
+  `wb task new`, both answered `no work in progress`. An open backlog task
+  with no artifacts is now listed as `not started`, and `next` points to
+  `wb task get <KEY>`. **Upgrade cost:** none.
+- **`wb next` names the skill once.** The plan step used to print
+  `(plan-change)` twice.
+- **`wb status --stats` counts a verify held for approval apart from a
+  failed one.** An `impl verify` that stops before running anything records
+  `held: true` with the same exit code. The history reports `held` next to
+  `failed` and never calls a step fragile because of held runs. `--json`
+  gains `commands.<name>.held`, an added key, so `status.stats` stays at
+  schema 1. **Upgrade cost:** none. Log lines written before this carry no
+  flag and count as before.
+
 ## 0.12.0
 
 ### Added

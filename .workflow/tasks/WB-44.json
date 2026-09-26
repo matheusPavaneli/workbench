@@ -1,0 +1,11 @@
+{
+  "key": "WB-44",
+  "title": "Decide the rigour tier by risk and lines changed, not by file count",
+  "type": "feature",
+  "status": "done",
+  "desc": "sdd.tier puts any plan with more than two files on the standard tier. File count is a proxy for risk that misfires both ways: a one-line fix plus its test plus a fixture pays for the full seven-section plan, while a 400-line rewrite of one file outside every critical zone qualifies as light. The bar should follow what can go wrong, and the size of a change is measured in lines, not paths.\n\nThe tier must stay computed, never chosen: a plan is written before the code, so its line count is an estimate, and the estimate has to be checked against the real diff or it becomes the way to argue down to a lower bar.\n\nACCEPTANCE:\n- critical zones and a non-engineering audience still force standard, unchanged\n- file count no longer decides on its own; the size rule is estimated lines changed, with the light bound in config and a documented default\n- each files[] entry may carry an estimated line count; a plan with any entry missing one is standard, the safe default\n- companion files (WB-45) do not count toward the size\n- impl check measures added plus removed lines with git diff --numstat against the baseline; a light plan whose real diff is over the bound is a DEVIATION that says to re-plan at standard; binary or unreadable numstat counts as over\n- the tier reason names the measure, e.g. \"~40 lines in 3 files, no critical zone\"; wb route --json keeps its key set\n- tests in test_tier: three small files light, one large file standard, zone still standard, missing estimate standard, real diff over the bound fails impl check",
+  "created": "2026-09-26T04:36:55Z",
+  "updated": "2026-09-26T04:56:29Z",
+  "comments": [],
+  "linked": []
+}

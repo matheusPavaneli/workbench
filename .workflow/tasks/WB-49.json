@@ -1,0 +1,24 @@
+{
+  "key": "WB-49",
+  "title": "A benchmark that measures what workbench gains, instead of arguing it",
+  "type": "feature",
+  "status": "open",
+  "desc": "The README argues that plans, audits and the scope guard pay for themselves. Nothing measures it, so the claim is as strong as the prose and no stronger. The same gap hides the cost side: ceremony has a price, and nothing says where it exceeds what it saves.\n\nA benchmark is the same tickets done with and without workbench, on the same model, with the outcome judged by tests rather than by reading prose.\n\nACCEPTANCE:\n- metrics defined before any run: tickets whose hidden tests pass, files changed outside what the ticket needed, rework commits after the first, tokens and wall time per ticket\n- a fixture repo with a fixed set of seeded tickets (bug with a thin description, feature crossing a critical zone, one-file chore, a ticket whose natural fix tempts scope creep), each with hidden acceptance tests the session never sees\n- a harness that runs every ticket in two arms, plain session and workbench flow, several runs each, on a pinned model, and writes one JSON record per run\n- the report gives median and spread per metric and arm, and states where workbench loses, not only where it wins\n- the harness is gated on env and never runs in the unit suite; its own scoring logic has unit tests\n- results are committed with the workbench commit, model and date; the README cites them and drops any claim they do not support\n- rerunnable after WB-44 to WB-46 land, so their effect on cost is measured too",
+  "created": "2026-09-26T04:37:03Z",
+  "updated": "2026-09-26T04:37:03Z",
+  "comments": [],
+  "linked": [
+    {
+      "key": "WB-44",
+      "type": "relates"
+    },
+    {
+      "key": "WB-45",
+      "type": "relates"
+    },
+    {
+      "key": "WB-46",
+      "type": "relates"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "key": "WB-48",
+  "title": "GitLab provider",
+  "type": "feature",
+  "status": "done",
+  "desc": "GitLab issues are unreadable to workbench, so a team on GitLab gets the flow without the triage. GitLab has typed issue links, which GitHub does not, so this provider can report blockers honestly rather than falling back to relates.\n\nACCEPTANCE:\n- providers/gitlab.py subclasses Provider per docs/providers.md and is registered\n- REST v4 against a configurable base URL, so self-managed instances work; gitlab.com is the default\n- auth from a token in the context, falling back to glab auth token the way the GitHub provider falls back to gh; the token is never logged or cached\n- a key format that artifacts.validate_key accepts and that maps back to exactly one project issue, documented with its reason\n- title, description, state, labels, notes newest-first and capped (system notes excluded), and issue links: blocks and is_blocked_by map to the canonical set, relates_to to relates, epics and child tasks to hierarchy where the payload carries them\n- every request has a timeout; pagination capped; cache revalidation uses updated_at\n- fixtures under tests/fixtures/gitlab/ and the parity test runs it like the others\n- wb init and wb doctor know the provider; docs/providers.md gains a section on what GitLab has and lacks",
+  "created": "2026-09-26T04:37:01Z",
+  "updated": "2026-09-26T13:56:55Z",
+  "comments": [],
+  "linked": [
+    {
+      "key": "WB-47",
+      "type": "relates"
+    }
+  ]
+}

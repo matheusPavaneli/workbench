@@ -369,6 +369,7 @@ def _contributors(root: Path) -> int | None:
             cwd=str(root),
             capture_output=True,
             text=True,
+            stdin=subprocess.DEVNULL,
             timeout=20,
             check=False,
         )

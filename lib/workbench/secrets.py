@@ -79,7 +79,7 @@ def _from_keychain(key: str) -> str:
         )
 
     try:
-        completed = subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=False)
+        completed = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=15, check=False)
     except (OSError, subprocess.SubprocessError) as exc:
         raise AuthError(f"keychain lookup failed: {exc}", fix=["switch the context to pat_env"]) from exc
 

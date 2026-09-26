@@ -48,7 +48,7 @@ class Remote:
 def _git(args: list[str], cwd: Path) -> str | None:
     try:
         completed = subprocess.run(
-            ["git", *args], cwd=str(cwd), capture_output=True, text=True, timeout=15, check=False
+            ["git", *args], cwd=str(cwd), capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=15, check=False
         )
     except (OSError, subprocess.SubprocessError):
         return None
@@ -76,6 +76,7 @@ def _git_raw(args: list[str], cwd: Path) -> str | None:
             text=True,
             encoding="utf-8",
             errors="replace",
+            stdin=subprocess.DEVNULL,
             timeout=15,
             check=False,
         )
@@ -197,6 +198,7 @@ def is_ignored(cwd: Path, path: str) -> bool | None:
             cwd=str(cwd),
             capture_output=True,
             text=True,
+            stdin=subprocess.DEVNULL,
             timeout=10,
             check=False,
         )
@@ -386,7 +388,7 @@ def _git_env(args: list[str], cwd: Path, env: dict) -> str | None:
     """As ``_git``, under an explicit environment; ``""`` for success with no output."""
     try:
         completed = subprocess.run(
-            ["git", *args], cwd=str(cwd), capture_output=True, text=True, timeout=60, check=False, env=env
+            ["git", *args], cwd=str(cwd), capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=60, check=False, env=env
         )
     except (OSError, subprocess.SubprocessError):
         return None
@@ -433,6 +435,7 @@ def grep_files(cwd: Path, ref: str, pattern: str, paths: list[str], *, word: boo
             text=True,
             encoding="utf-8",
             errors="replace",
+            stdin=subprocess.DEVNULL,
             timeout=30,
             check=False,
         )
@@ -497,7 +500,7 @@ def worktree(cwd: Path, ref: str) -> Iterator[Path]:
     try:
         completed = subprocess.run(
             ["git", "worktree", "add", "--detach", "--quiet", str(path), ref],
-            cwd=str(cwd), capture_output=True, text=True, timeout=120, check=False,
+            cwd=str(cwd), capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=120, check=False,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         shutil.rmtree(scratch, ignore_errors=True)

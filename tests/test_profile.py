@@ -1,4 +1,6 @@
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -86,6 +88,42 @@ class Detection(unittest.TestCase):
         self._touch("package.json", "{}")
         self._touch("tests/a.spec.js", "")
         self.assertNotIn("test_runner", profile.detect(self.root).conventions)
+
+
+class ContributorsWithAnOpenStdin(unittest.TestCase):
+    """WB-51: git shortlog --all in a repo with no commits reads the log from
+    stdin. From a terminal that never ends, and wb init waited 20 s per call."""
+
+    def test_a_repo_with_no_commits_answers_promptly(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            subprocess.run(
+                ["git", "init", "-q", tmp], stdin=subprocess.DEVNULL, capture_output=True, timeout=30, check=True
+            )
+            code = "import sys; from pathlib import Path; from workbench import profile; print(profile._contributors(Path(sys.argv[1])))"
+            lib = str(Path(__file__).resolve().parent.parent / "lib")
+            # An open pipe that is never written or closed stands in for a terminal.
+            child = subprocess.Popen(
+                [sys.executable, "-c", code, tmp],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env={**os.environ, "PYTHONPATH": lib},
+            )
+            try:
+                child.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                child.kill()
+                child.wait()
+                self.fail("contributor detection waited on the caller's stdin")
+            finally:
+                assert child.stdin is not None and child.stdout is not None and child.stderr is not None
+                child.stdin.close()
+                out, err = child.stdout.read(), child.stderr.read()
+                child.stdout.close()
+                child.stderr.close()
+            self.assertEqual(0, child.returncode, err)
+            self.assertEqual("1", out.strip())
 
 
 class Gates(unittest.TestCase):

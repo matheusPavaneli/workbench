@@ -296,6 +296,7 @@ def _run(action: Action, root: Path) -> Step:
             cwd=str(root),
             capture_output=True,
             text=True,
+            stdin=subprocess.DEVNULL,
             timeout=TIMEOUT_SECONDS,
             check=False,
             shell=False,
@@ -316,6 +317,7 @@ def _upstream(root: Path) -> str | None:
             cwd=str(root),
             capture_output=True,
             text=True,
+            stdin=subprocess.DEVNULL,
             timeout=15,
             check=False,
         )

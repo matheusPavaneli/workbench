@@ -289,6 +289,7 @@ def _glab_token(host: str) -> str:
             ["glab", "config", "get", "token", "--host", host],
             capture_output=True,
             text=True,
+            stdin=subprocess.DEVNULL,
             timeout=15,
             check=False,
         )

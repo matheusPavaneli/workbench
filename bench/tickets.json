@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "tickets": [
+    {
+      "key": "BN-1",
+      "kind": "bug",
+      "title": "Cart total is wrong for some orders",
+      "desc": "A customer was charged less than the items in their cart. Not every order is affected.",
+      "expected_files": ["shop/cart.py", "tests/test_cart.py"],
+      "hidden": "BN-1"
+    },
+    {
+      "key": "BN-2",
+      "kind": "feature",
+      "title": "Percentage coupons at checkout",
+      "desc": "create_charge(cart, currency=\"USD\", coupon=None) accepts an optional coupon code. Codes live in shop/billing/coupons.py as a mapping from code to percent; start with SAVE10 at 10 percent. The discount is the percent of the cart total rounded down to whole cents, and the charge is the total minus the discount. An unknown code raises ChargeError. Without a coupon the charge is unchanged.",
+      "expected_files": ["shop/billing/charge.py", "shop/billing/coupons.py", "tests/test_billing.py"],
+      "hidden": "BN-2"
+    },
+    {
+      "key": "BN-3",
+      "kind": "chore",
+      "title": "format_money prints refunds with the wrong amount",
+      "desc": "format_money(-150) prints \"USD -2.50\"; it should print \"USD -1.50\". Negative amounts are refunds and must show their real value with a leading minus, including amounts under one unit (-5 is \"USD -0.05\"). Positive amounts are unchanged.",
+      "expected_files": ["shop/format.py", "tests/test_format.py"],
+      "hidden": "BN-3"
+    },
+    {
+      "key": "BN-4",
+      "kind": "bug",
+      "title": "display_name keeps stray whitespace",
+      "desc": "Names come padded from the admin export, and a user with only a first name is shown with a trailing space. display_name should trim each part and join the non-empty parts with one space, falling back to the email when both parts are blank.",
+      "expected_files": ["shop/users.py", "tests/test_users.py"],
+      "hidden": "BN-4"
+    }
+  ]
+}

@@ -134,6 +134,38 @@ class Route(CliBase):
         self.assertIn("the floor is not waived", out)
         self.assertIn("citations", out)
 
+    def _steps(self, *argv: str) -> list[str]:
+        _, out, _ = run("route", *argv, "--json")
+        return [step["skill"] for step in json.loads(out)["steps"]]
+
+    def test_a_bug_ticket_is_never_framed(self) -> None:
+        """WB-41: the full route asked for a product case on a bug fix."""
+        self._triage("ABC-1", "bug")
+        self.assertNotIn("frame-product", self._steps("ABC-1", "--files", "a.py", "b.py", "c.py"))
+        _, out, _ = run("route", "ABC-1", "--files", "a.py", "b.py", "c.py")
+        self.assertNotIn("frame-product", out)
+
+    def test_a_feature_on_the_full_route_is_framed(self) -> None:
+        self._triage("ABC-1", "feature")
+        self.assertIn("frame-product", self._steps("ABC-1", "--files", "a.py", "b.py", "c.py"))
+
+    def test_an_existing_frame_keeps_its_step(self) -> None:
+        self._triage("ABC-1", "chore")
+        (self.root / ".workflow" / "ABC-1" / "frame.md").write_text("# Frame\n", encoding="utf-8")
+        self.assertIn("frame-product", self._steps("ABC-1", "--files", "a.py", "b.py", "c.py"))
+
+    def test_every_route_reviews_the_diff_right_before_the_commit(self) -> None:
+        """WB-41: no route had a review step, light or full."""
+        self._triage("ABC-1", "feature")
+        self._triage("ABC-2", "bug")
+        for argv in (("ABC-1", "--files", "src/util.py"), ("ABC-1", "--files", "a.py", "b.py", "c.py"),
+                     ("ABC-2", "--files", "src/util.py")):
+            skills = self._steps(*argv)
+            self.assertIn("review-diff", skills, argv)
+            self.assertEqual(skills.index("write-commit") - 1, skills.index("review-diff"), argv)
+        _, out, _ = run("route", "ABC-1", "--files", "src/util.py")
+        self.assertIn("wb review gates --key ABC-1", out)
+
     def test_json_names_the_skill_for_each_step(self) -> None:
         _, out, _ = run("route", "ABC-1", "--files", "src/util.py", "--json")
         steps = json.loads(out)["steps"]

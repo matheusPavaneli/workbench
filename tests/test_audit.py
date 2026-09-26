@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from workbench import audit, gitctx, sdd
+from workbench import audit, gitctx, profile, sdd
 
 
 def _doc(**overrides) -> dict:
@@ -36,6 +36,9 @@ def _doc(**overrides) -> dict:
         "questions": [],
     }
     doc.update(overrides)
+    if "zones" not in overrides:
+        # What `wb repo zones` would print for these files, as a plan is told to copy.
+        doc["zones"] = profile.critical_zones([item["path"] for item in doc["files"] if isinstance(item, dict)])
     return doc
 
 
@@ -231,6 +234,48 @@ class Structure(AuditCase):
         report = audit.run(_doc(rollback=""), self.root)
         self.assertFalse(report.passed)
         self.assertTrue(report.structure)
+
+
+class Zones(AuditCase):
+    """The zones a plan shows must be the zones its files touch.
+
+    sdd.md and the summary print ``zones`` as written, while the tier is
+    computed from the files -- so a stale block used to pass unnoticed.
+    """
+
+    def _zone_problems(self, **overrides) -> list[str]:
+        return [p for p in sdd.validate(_doc(**overrides)) if p.startswith("zones")]
+
+    def test_a_billing_file_with_no_zones_fails_the_audit_naming_both(self) -> None:
+        report = audit.run(_doc(zones={}), self.root)
+        self.assertFalse(report.passed)
+        problem = next(p for p in report.structure if p.startswith("zones"))
+        self.assertIn("missing billing", problem)
+        self.assertIn("src/checkout.py", problem)
+
+    def test_a_zone_no_file_touches_is_named(self) -> None:
+        problems = self._zone_problems(zones={"billing": ["src/checkout.py"], "auth": ["src/checkout.py"]})
+        self.assertEqual(1, len(problems))
+        self.assertIn("auth is touched by no listed file", problems[0])
+        self.assertNotIn("billing", problems[0].split(" -- ")[0])
+
+    def test_a_zone_with_the_wrong_paths_is_named(self) -> None:
+        problems = self._zone_problems(zones={"billing": ["src/elsewhere.py"]})
+        self.assertEqual(1, len(problems))
+        self.assertIn("billing should list src/checkout.py", problems[0])
+
+    def test_matching_zones_pass_in_any_order(self) -> None:
+        files = [
+            {"path": "src/checkout.py", "change": "edit", "why": "w"},
+            {"path": "src/billing/invoice.py", "change": "edit", "why": "w"},
+            {"path": "src/auth/login.py", "change": "edit", "why": "w"},
+        ]
+        zones = {"auth": ["src/auth/login.py"], "billing": ["src/billing/invoice.py", "src/checkout.py"]}
+        self.assertEqual([], self._zone_problems(files=files, zones=zones))
+
+    def test_zones_that_are_not_an_object_are_reported_not_raised(self) -> None:
+        problems = self._zone_problems(zones=["billing"])
+        self.assertEqual(["zones must be an object of zone: [paths]"], problems)
 
 
 class Sections(unittest.TestCase):

@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from workbench import audit, gitctx, hooks
+from workbench import audit, gitctx, hooks, profile
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "lib"))
@@ -29,7 +29,7 @@ def _plan(key: str = "ABC-1", files: tuple = ("src/checkout.py",)) -> dict:
             {"claim": "c", "file": "src/checkout.py", "line": 2, "quote": "charge = create_charge(total)"}
         ],
         "files": [{"path": path, "change": "edit", "why": "w"} for path in files],
-        "zones": {},
+        "zones": profile.critical_zones(list(files)),
         "steps": [{"do": "move validation above the charge"}],
         "tests": [{"kind": "regression", "target": "tests/test_checkout.py", "asserts": "expired coupon returns 422"}],
         "verify": ["python -m unittest -q"],

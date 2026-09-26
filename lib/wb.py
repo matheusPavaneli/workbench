@@ -14,7 +14,9 @@ what is valid; it never guesses.
 from __future__ import annotations
 
 import argparse
+import difflib
 import io
+import re
 import sys
 import time
 from pathlib import Path
@@ -73,7 +75,23 @@ class _StrictParser(argparse.ArgumentParser):
 
     def error(self, message: str) -> None:  # type: ignore[override]
         usage = " ".join(self.format_usage().split())
-        raise UsageError(message, fix=[usage])
+        raise UsageError(message, fix=[*_suggest(self.prog, message), usage])
+
+
+# argparse's wording for a mistyped group or action. The choices are quoted on
+# some Python versions and bare on others.
+_INVALID_CHOICE = re.compile(r"invalid choice: '([^']*)' \(choose from (.*)\)")
+
+
+def _suggest(prog: str, message: str) -> list[str]:
+    """The closest valid name for a typo, or nothing: a guess is offered as a
+    fix to read, never run in place of what was typed."""
+    match = _INVALID_CHOICE.search(message)
+    if not match:
+        return []
+    choices = [choice.strip().strip("'\"") for choice in match.group(2).split(",")]
+    close = difflib.get_close_matches(match.group(1), choices, n=1)
+    return [f"did you mean: {prog} {close[0]}"] if close else []
 
 
 class _ScrubbedStream(io.TextIOBase):

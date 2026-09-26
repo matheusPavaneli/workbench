@@ -5,6 +5,19 @@ trackers (Jira Cloud, Azure DevOps, GitHub Issues, or a backlog in the repo).
 
 Ten skills, one CLI, two hooks, 885 tests, no third-party dependencies.
 
+## Quickstart
+
+```sh
+wb init --write                        # config, preset, flow and .gitignore, from what the repo already shows
+wb doctor                              # everything that has to be true, with the fix for anything that is not
+wb task new "the thing to do" --type bug
+wb next                                # the one command to run now
+wb status                              # everything in flight
+```
+
+In a Claude Code session the skills call `wb` themselves. In a terminal, put
+the plugin's `bin/` on your PATH first (see [Install](#install)).
+
 ## Two design rules
 
 **Scripts distil, they do not relay.** A Jira issue payload is mostly noise —
@@ -33,6 +46,16 @@ off standing.
 ```
 
 `wb` is `python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py"`. Requires Python 3.9+.
+
+Skills call it by that path. To type `wb` in a terminal, put the plugin's `bin/`
+directory on PATH: it holds `wb` (sh) and `wb.cmd` (Windows), both running the
+same `lib/wb.py`. From a clone:
+
+```sh
+export PATH="$PWD/bin:$PATH"           # PowerShell: $env:Path = "$PWD\bin;$env:Path"
+```
+
+For the installed plugin, use the directory Claude Code installed it into.
 
 ### One pass to a working setup
 

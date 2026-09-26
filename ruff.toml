@@ -1,0 +1,6 @@
+# Lint rules CI holds lib/ to. Pinned here, not left to ruff's defaults, so a
+# local run with any ruff version checks the same thing CI does.
+target-version = "py39"
+
+[lint]
+select = ["E4", "E7", "E9", "F", "B", "UP"]

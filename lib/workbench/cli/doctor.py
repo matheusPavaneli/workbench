@@ -193,8 +193,7 @@ def _available(name: str) -> bool:
 def _runners(check, root: Path) -> None:
     """A plan's verify commands are worthless if the runner is not installed."""
     conventions = profile_lib.resolve(root).conventions
-    wanted = [conventions.get("test_runner"), conventions.get("package_manager")]
-    wanted = [w for w in wanted if w]
+    wanted = [w for w in (conventions.get("test_runner"), conventions.get("package_manager")) if w]
 
     if not wanted:
         check("runners", OK, "no runner detected from the repo; verify commands will name their own")

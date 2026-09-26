@@ -239,7 +239,7 @@ class Anonymiser:
         return self._seen[value]
 
     def _digest(self, value: str) -> str:
-        return hashlib.sha256(f"{self._salt}:{value}".encode("utf-8")).hexdigest()
+        return hashlib.sha256(f"{self._salt}:{value}".encode()).hexdigest()
 
 
 def _looks_like_person(key: str) -> bool:

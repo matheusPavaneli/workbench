@@ -11,6 +11,16 @@ command's own output, and one that removes it. A `--json` payload that loses or
 renames a key raises its `schema` number in the same release, and
 `contract.VERSIONS` is asserted against the real output so it cannot drift.
 
+## Unreleased
+
+### Added
+
+- **CI lints and type-checks `lib/`.** A `lint` job runs `ruff check lib` and
+  `mypy` at pinned versions, blocking, with the rules committed in `ruff.toml`
+  and `mypy.ini`. The 11 ruff findings and 13 mypy errors already in `lib/`
+  are fixed: unused imports, ambiguous names, and annotations that did not
+  hold; no behaviour changes. **Upgrade cost:** none; the tools are dev-only.
+
 ## 0.11.1
 
 ### Fixed

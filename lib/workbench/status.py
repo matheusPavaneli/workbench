@@ -271,7 +271,9 @@ def closed(key: str, cwd: Path | None = None) -> bool:
     from .providers import local
 
     task = _json(local.task_path(key, cwd))
-    return bool(task) and task.get("status") == local.DONE
+    if not task:
+        return False
+    return task.get("status") == local.DONE
 
 
 # ---- stages -------------------------------------------------------------

@@ -20,9 +20,13 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from . import gitctx
 from .errors import ConfigError, UsageError
+
+if TYPE_CHECKING:
+    from . import gitrun
 
 STRATEGIES = ["cherry-pick", "merge", "trunk"]
 
@@ -264,7 +268,7 @@ def carry_base(root: Path, source: str) -> str:
     return remote if gitctx.branch_exists(root, remote) else source
 
 
-def fetch_action() -> "object":
+def fetch_action() -> gitrun.Action:
     """Refresh the remote-tracking refs. Runs before anything is measured."""
     from . import gitrun
 

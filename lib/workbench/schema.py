@@ -141,7 +141,7 @@ def _link_dict(link: Link) -> dict:
 
 
 def _comment_dict(comment: Comment) -> dict:
-    data = {"author": comment.author, "when": comment.when, "text": comment.text}
+    data: dict[str, object] = {"author": comment.author, "when": comment.when, "text": comment.text}
     if comment.truncated:
         data["truncated"] = True
     return data

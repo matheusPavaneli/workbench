@@ -7,7 +7,6 @@ user's; this reports what the house style is and whether a draft breaks it.
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from pathlib import Path
 

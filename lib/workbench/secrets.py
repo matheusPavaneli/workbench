@@ -87,6 +87,6 @@ def _from_keychain(key: str) -> str:
     if completed.returncode != 0 or not value:
         raise AuthError(
             f"no keychain entry {key!r} under service {_KEYCHAIN_SERVICE!r}",
-            fix=[f"store it, or switch the context to pat_env"],
+            fix=["store it, or switch the context to pat_env"],
         )
     return value

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 from .. import contexts, flow as flow_lib, gitctx, profile as profile_lib
@@ -81,6 +82,11 @@ def _propose(root: Path, args: argparse.Namespace, existing: dict) -> tuple[dict
     elif not args.provider and not existing.get("provider"):
         notes.append(f"provider  {provider}, from the git remote")
 
+    if provider == "local" and "key_prefix" not in existing and not _has_backlog(root):
+        lead = _prefix_for(root.name)
+        proposal["key_prefix"] = lead
+        notes.append(f"keys      {lead}-1, {lead}-2, ... from the directory name; change key_prefix before the first task")
+
     profile = profile_lib.resolve(root)
     preset = args.preset or existing.get("preset") or profile.preset
     proposal["preset"] = preset
@@ -111,6 +117,27 @@ def _propose(root: Path, args: argparse.Namespace, existing: dict) -> tuple[dict
         notes.append(f"  wb ctx add <name> --provider {provider} ...   then   wb ctx use <name>")
 
     return proposal, notes
+
+
+def _has_backlog(root: Path) -> bool:
+    """A backlog that already numbers its tasks keeps its prefix: changing it
+    would start a second sequence beside the first."""
+    tasks = root / ".workflow" / "tasks"
+    return tasks.is_dir() and any(tasks.glob("*.json"))
+
+
+def _prefix_for(name: str) -> str:
+    """A key prefix from a directory name: initials of a multi-word name, else
+    its first four letters or digits. ``WB`` when neither makes a valid one."""
+    words = [word for word in re.split(r"[^A-Za-z0-9]+", name) if word]
+    if len(words) > 1:
+        candidate = "".join(word[0] for word in words)[:5]
+    else:
+        candidate = (words[0] if words else "")[:4]
+    candidate = candidate.upper()
+    if re.match(r"^[A-Z][A-Z0-9]{1,9}$", candidate):
+        return candidate
+    return "WB"
 
 
 def _detect_provider(root: Path) -> str:

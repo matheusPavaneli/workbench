@@ -88,6 +88,25 @@ class Init(CliBase):
             _, out, _ = run("init")
         self.assertIn('"provider": "local"', out)
 
+    def test_a_new_local_backlog_gets_a_prefix_from_the_directory(self) -> None:
+        """WB-38: without one, every project numbered its tasks WB-n."""
+        from workbench.cli import init
+
+        self.assertEqual("MCA", init._prefix_for("my-cool-app"))
+        self.assertEqual("BILL", init._prefix_for("billing"))
+        self.assertEqual("WB", init._prefix_for("42"))
+        with mock.patch("workbench.gitctx.origin", return_value=None):
+            _, out, _ = run("init")
+        self.assertIn('"key_prefix"', out)
+
+    def test_an_existing_backlog_keeps_its_prefix(self) -> None:
+        tasks = self.root / ".workflow" / "tasks"
+        tasks.mkdir(parents=True)
+        (tasks / "WB-1.json").write_text("{}", encoding="utf-8")
+        with mock.patch("workbench.gitctx.origin", return_value=None):
+            _, out, _ = run("init")
+        self.assertNotIn("key_prefix", out)
+
 
 class Route(CliBase):
     def _plan(self, key: str, paths: list[str]) -> None:

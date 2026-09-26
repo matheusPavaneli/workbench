@@ -61,7 +61,7 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     new.add_argument("title", help="what needs doing, in one line")
     new.add_argument("--type", dest="kind", default="feature", choices=local.TYPES)
     new.add_argument("--desc", default="", help="the detail: acceptance criteria, a reproduction, constraints")
-    new.add_argument("--key", help="an explicit key; defaults to the next free WB-<n>")
+    new.add_argument("--key", help="an explicit key; defaults to the next free <key_prefix>-<n> (WB unless config sets key_prefix)")
     new.add_argument("--link", action="append", default=[], metavar="KEY", help="a related task; repeatable")
 
     done = actions.add_parser("done", help="close a task in the local backlog, or move it to another status")

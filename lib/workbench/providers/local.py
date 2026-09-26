@@ -22,13 +22,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .. import artifacts, gitctx, schema
-from ..errors import NotFoundError, UsageError
+from ..errors import ConfigError, NotFoundError, UsageError
 from ..schema import Comment, Link, Task
 from ..text import normalise
 from .base import Identity, Provider
 
 TASKS_DIR = "tasks"
 KEY_PREFIX = "WB"
+
+# A key is what a branch, a commit and a PR carry, so it should be the
+# project's. The constant above stays the default so a backlog that already
+# numbers WB-n never changes keys under its owner.
+_PREFIX_PATTERN = re.compile(r"^[A-Z][A-Z0-9]{1,9}$")
 
 # The types the rest of the toolchain already branches on: write-handover is
 # required for bug and support work, and the commit convention maps type to a
@@ -54,20 +59,37 @@ def now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def prefix(cwd: Path | None = None) -> str:
+    """``key_prefix`` from ``.workflow/config.json``, or ``WB``."""
+    from .. import profile
+
+    raw = profile.repo_config(gitctx.checkout(cwd)).get("key_prefix")
+    if raw is None:
+        return KEY_PREFIX
+    value = str(raw).strip().upper()
+    if not _PREFIX_PATTERN.match(value):
+        raise ConfigError(
+            f"key_prefix {raw!r} in .workflow/config.json is not a usable key prefix",
+            fix=['2 to 10 letters or digits, starting with a letter: "key_prefix": "ACME"'],
+        )
+    return value
+
+
 def next_key(cwd: Path | None = None) -> str:
-    """The lowest unused ``WB-<n>``.
+    """The lowest unused ``<prefix>-<n>``.
 
     Reusing a freed number would point two different ``.workflow/<KEY>/``
     directories at one task, so the counter only ever moves forward: it is the
     highest number seen plus one, not the count of files.
     """
+    lead = prefix(cwd)
     highest = 0
-    for path in tasks_dir(cwd).glob(f"{KEY_PREFIX}-*.json"):
+    for path in tasks_dir(cwd).glob(f"{lead}-*.json"):
         try:
             highest = max(highest, int(path.stem.split("-", 1)[1]))
         except (IndexError, ValueError):
             continue
-    return f"{KEY_PREFIX}-{highest + 1}"
+    return f"{lead}-{highest + 1}"
 
 
 def create(

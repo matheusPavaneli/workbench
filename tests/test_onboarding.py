@@ -88,6 +88,47 @@ class Init(CliBase):
             _, out, _ = run("init")
         self.assertIn('"provider": "local"', out)
 
+    def _ignored(self, answer):
+        return mock.patch("workbench.gitctx.is_ignored", return_value=answer)
+
+    def test_write_adds_the_ignore_lines_doctor_asks_for(self) -> None:
+        """WB-39: init --write, then doctor warned .workflow/ was not ignored."""
+        with self._ignored(False):
+            code, out, _ = run("init", "--write")
+        self.assertEqual(0, code, out)
+        lines = (self.root / ".gitignore").read_text(encoding="utf-8").splitlines()
+        for line in (".workflow/*", "!.workflow/config.json", "!.workflow/tasks/"):
+            self.assertIn(line, lines)
+
+    def test_only_missing_lines_are_added_and_the_rest_is_kept(self) -> None:
+        original = "node_modules/\n.workflow/*\n# mine"
+        (self.root / ".gitignore").write_text(original, encoding="utf-8")
+        with self._ignored(False):
+            run("init", "--write")
+        text = (self.root / ".gitignore").read_text(encoding="utf-8")
+        self.assertTrue(text.startswith(original + "\n"), text)
+        self.assertEqual(1, text.splitlines().count(".workflow/*"))
+        self.assertIn("!.workflow/config.json", text)
+
+    def test_an_ignored_workflow_leaves_gitignore_alone(self) -> None:
+        (self.root / ".gitignore").write_text("x\n", encoding="utf-8")
+        with self._ignored(True):
+            _, out, _ = run("init", "--write")
+        self.assertEqual("x\n", (self.root / ".gitignore").read_text(encoding="utf-8"))
+        self.assertNotIn("gitignore", out)
+
+    def test_a_proposal_writes_no_gitignore(self) -> None:
+        with self._ignored(False):
+            _, out, _ = run("init")
+        self.assertIn("would add to .gitignore", out)
+        self.assertFalse((self.root / ".gitignore").exists())
+
+    def test_git_unable_to_answer_writes_nothing_and_says_so(self) -> None:
+        with self._ignored(None):
+            _, out, _ = run("init", "--write")
+        self.assertFalse((self.root / ".gitignore").exists())
+        self.assertIn("could not ask git", out)
+
     def test_a_new_local_backlog_gets_a_prefix_from_the_directory(self) -> None:
         """WB-38: without one, every project numbered its tasks WB-n."""
         from workbench.cli import init

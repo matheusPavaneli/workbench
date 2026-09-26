@@ -119,13 +119,7 @@ def tier(doc: dict) -> tuple[str, str]:
     """
     from .profile import critical_zones
 
-    # Tolerant of a malformed entry on purpose: this runs *before* validate, so
-    # it is reached by exactly the documents that have not been checked yet.
-    paths = [
-        str(item.get("path", ""))
-        for item in doc.get("files") or []
-        if isinstance(item, dict) and item.get("path")
-    ]
+    paths = _paths(doc)
 
     if len(paths) > LIGHT_MAX_FILES:
         return STANDARD, f"{len(paths)} files (light is up to {LIGHT_MAX_FILES})"
@@ -143,6 +137,50 @@ def tier(doc: dict) -> tuple[str, str]:
         return STANDARD, "no files listed"
 
     return LIGHT, f"{len(paths)} file(s), no critical zone"
+
+
+def _paths(doc: dict) -> list[str]:
+    # Tolerant of a malformed entry on purpose: tier() runs *before* validate,
+    # so it is reached by exactly the documents that have not been checked yet.
+    return [
+        str(item.get("path", ""))
+        for item in doc.get("files") or []
+        if isinstance(item, dict) and item.get("path")
+    ]
+
+
+def _zones_problem(doc: dict) -> str | None:
+    """How the plan's zones differ from the zones its own files touch.
+
+    The tier is computed from the files, but sdd.md and the summary print
+    ``zones`` as written -- so a hand-written or stale block reaches the reader
+    looking exactly like a computed one.
+    """
+    from .profile import critical_zones
+
+    written = doc.get("zones") or {}
+    if not isinstance(written, dict):
+        return "zones must be an object of zone: [paths]"
+
+    paths = _paths(doc)
+    expected = {zone: set(hits) for zone, hits in critical_zones(paths).items()}
+    actual = {
+        str(zone): {str(path) for path in hits} if isinstance(hits, list) else set()
+        for zone, hits in written.items()
+    }
+    if actual == expected:
+        return None
+
+    differences = []
+    for zone in sorted(expected.keys() | actual.keys()):
+        if zone not in actual:
+            differences.append(f"missing {zone} ({', '.join(sorted(expected[zone]))})")
+        elif zone not in expected:
+            differences.append(f"{zone} is touched by no listed file")
+        elif actual[zone] != expected[zone]:
+            differences.append(f"{zone} should list {', '.join(sorted(expected[zone]))}")
+    command = " ".join(["wb repo zones", *paths]) if paths else "wb repo zones <paths>"
+    return f"zones disagrees with the files: {'; '.join(differences)} -- copy it from `{command}`"
 
 
 def validate(doc: dict) -> list[str]:
@@ -199,6 +237,10 @@ def validate(doc: dict) -> list[str]:
             problems.append(f"files[{index}].change must be one of: {', '.join(CHANGE_KINDS)}")
         if not str(item.get("why", "")).strip():
             problems.append(f"files[{index}] has no why: an untouched-for-no-reason file is scope creep")
+
+    zones = _zones_problem(doc)
+    if zones:
+        problems.append(zones)
 
     if not doc.get("steps") and "steps" not in waived:
         problems.append("steps is empty: an unordered plan cannot be executed or reviewed")

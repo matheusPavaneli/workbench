@@ -11,6 +11,19 @@ command's own output, and one that removes it. A `--json` payload that loses or
 renames a key raises its `schema` number in the same release, and
 `contract.VERSIONS` is asserted against the real output so it cannot drift.
 
+## Unreleased
+
+### Fixed
+
+- **A plan's `zones` must match the files it lists.** The tier was computed
+  from the files, but `sdd.md` and `wb sdd get --section summary` printed
+  `zones` as written, so a hand-written or stale block reached the reader
+  looking computed. `wb sdd audit` now recomputes the zones from `files` and
+  reports a structure problem naming each missing zone, each zone no listed
+  file touches, and each zone whose paths differ. **Upgrade cost:** a plan
+  whose zones disagree with its files fails its audit until `zones` is copied
+  from `wb repo zones`.
+
 ## 0.11.0
 
 ### Changed

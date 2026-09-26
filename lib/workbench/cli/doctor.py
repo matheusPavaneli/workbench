@@ -124,7 +124,11 @@ def _credential(check, resolution) -> None:
     try:
         secrets.resolve(context.auth, context.name)
     except WbError as exc:
-        check("credential", FAIL, exc.message, exc.fix)
+        fix = list(exc.fix)
+        if context.provider == "linear":
+            # A personal API key, from Linear's settings under Security & access.
+            fix.append("create a personal API key in Linear, then: export LINEAR_API_KEY=<key>")
+        check("credential", FAIL, exc.message, fix)
         return
     source = context.auth.get("pat_env") or context.auth.get("pat_keychain")
     check("credential", OK, f"resolved from {source}")

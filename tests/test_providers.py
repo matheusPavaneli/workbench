@@ -7,7 +7,7 @@ from unittest import mock
 from workbench import gitctx, schema
 from workbench.errors import UsageError
 
-from support import FakeAzure, FakeJira, jira_context
+from support import FakeAzure, FakeJira, FakeLinear, jira_context
 
 
 class ProviderTestCase(unittest.TestCase):
@@ -150,10 +150,18 @@ class Parity(ProviderTestCase):
         self.assertEqual(set(jira) - ignore, set(azure) - ignore)
         self.assertEqual(set(jira["linked"][0]) - {"desc"}, set(azure["linked"][0]) - {"desc"})
 
+    def test_linear_payload_keys_match(self) -> None:
+        jira = FakeJira().get_task("ABC-123", depth=1, requested=[])
+        linear = FakeLinear().get_task("ENG-42", depth=1, requested=[])
+        ignore = {"_unmapped", "_truncated", "history"}
+        self.assertEqual(set(jira) - ignore, set(linear) - ignore)
+        self.assertEqual(set(jira["linked"][0]) - {"desc"}, set(linear["linked"][0]) - {"desc"})
+
     def test_link_types_come_from_the_canonical_set(self) -> None:
         for payload in (
             FakeJira().get_task("ABC-123", depth=1, requested=[]),
             FakeAzure().get_task("4821", depth=1, requested=[]),
+            FakeLinear().get_task("ENG-42", depth=1, requested=[]),
         ):
             for link in payload["linked"]:
                 self.assertIn(link["type"], schema.LINK_TYPES)

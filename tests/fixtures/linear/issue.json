@@ -1,0 +1,34 @@
+{
+  "data": {
+    "issue": {
+      "identifier": "ENG-42",
+      "title": "Coupon applied after the charge is created",
+      "description": "Applying a coupon after `createCharge` means an expired coupon still charges the card.\n\nSteps:\n1. Add an expired coupon\n2. Pay",
+      "url": "https://linear.app/acme/issue/ENG-42/coupon-applied-after-the-charge-is-created",
+      "updatedAt": "2026-08-10T09:15:00.000Z",
+      "state": { "name": "In Progress", "type": "started" },
+      "assignee": { "name": "ana", "displayName": "Ana Ruiz" },
+      "labels": { "nodes": [{ "name": "Bug" }, { "name": "Billing" }] },
+      "parent": { "identifier": "ENG-12", "title": "Checkout correctness", "state": { "name": "In Progress" } },
+      "children": {
+        "nodes": [
+          { "identifier": "ENG-43", "title": "Validate coupon expiry", "state": { "name": "Todo" } }
+        ]
+      },
+      "relations": {
+        "nodes": [
+          { "type": "blocks", "relatedIssue": { "identifier": "ENG-50", "title": "Release 2.4", "state": { "name": "Backlog" } } },
+          { "type": "duplicate", "relatedIssue": { "identifier": "ENG-7", "title": "Coupon ordering", "state": { "name": "Done" } } },
+          { "type": "related", "relatedIssue": { "identifier": "OPS-3", "title": "Refund runbook", "state": { "name": "Todo" } } },
+          { "type": "similar", "relatedIssue": { "identifier": "ENG-88", "title": "Coupon rounding", "state": { "name": "Todo" } } }
+        ]
+      },
+      "inverseRelations": {
+        "nodes": [
+          { "type": "blocks", "issue": { "identifier": "ENG-40", "title": "Charge API migration", "state": { "name": "Done" } } },
+          { "type": "duplicate", "issue": { "identifier": "ENG-60", "title": "Expired coupon charged", "state": { "name": "Canceled" } } }
+        ]
+      }
+    }
+  }
+}

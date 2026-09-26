@@ -27,8 +27,8 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     add = actions.add_parser("add", help="define a context")
     add.add_argument("name")
     add.add_argument("--provider", required=True, choices=providers.names())
-    add.add_argument("--base-url", help="Jira site root, or https://dev.azure.com/<org>; not used by github/local")
-    add.add_argument("--project", help="Jira project key, Azure project name, or GitHub owner/repo")
+    add.add_argument("--base-url", help="Jira site root, or https://dev.azure.com/<org>; not used by github/linear/local")
+    add.add_argument("--project", help="Jira project key, Azure project name, GitHub owner/repo, or Linear team key (optional)")
     add.add_argument("--pat-env", help="name of the environment variable holding the token")
     add.add_argument("--pat-keychain", help="OS keychain account name (macOS/Linux only)")
     add.add_argument("--email", help="Jira account email; Jira authenticates as email:api_token")
@@ -244,7 +244,17 @@ _GITHUB_SHAPES = (
     ("/issues", "list"),
     ("/user", "probe"),
 )
-_SHAPES = {"jira": _JIRA_SHAPES, "azure": _AZURE_SHAPES, "github": _GITHUB_SHAPES}
+# Every Linear call is a POST to /graphql, so the operation name is the label.
+_LINEAR_SHAPES = (
+    ("#IssueComments", "comments"),
+    ("#IssueHistory", "history"),
+    ("#IssueDescriptions", "descriptions"),
+    ("#IssueUpdated", "updated"),
+    ("#AssignedIssues", "list"),
+    ("#Issue", "issue"),
+    ("#Viewer", "probe"),
+)
+_SHAPES = {"jira": _JIRA_SHAPES, "azure": _AZURE_SHAPES, "github": _GITHUB_SHAPES, "linear": _LINEAR_SHAPES}
 
 
 def _record(args: argparse.Namespace) -> int:
@@ -306,7 +316,12 @@ def _capture(provider, captured: list) -> None:
 
         def tee(*a, _original=original, **kw):
             response = _original(*a, **kw)
-            captured.append((str(a[0]) if a else "", response))
+            label = str(a[0]) if a else ""
+            body = a[1] if len(a) > 1 else kw.get("body")
+            if isinstance(body, dict) and body.get("operationName"):
+                # One GraphQL endpoint serves every call; the operation tells them apart.
+                label += "#" + str(body["operationName"])
+            captured.append((label, response))
             return response
 
         setattr(provider, name, tee)

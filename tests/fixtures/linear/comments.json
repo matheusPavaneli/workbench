@@ -1,0 +1,14 @@
+{
+  "data": {
+    "issue": {
+      "comments": {
+        "nodes": [
+          { "body": "Reproduced on staging.", "createdAt": "2026-08-08T10:00:00.000Z", "user": { "name": "bo", "displayName": "Bo Lin" } },
+          { "body": "Fix should validate before the charge.", "createdAt": "2026-08-09T11:30:00.000Z", "user": { "name": "ana", "displayName": "Ana Ruiz" } },
+          { "body": "First report came from support.", "createdAt": "2026-08-07T08:00:00.000Z", "user": null }
+        ],
+        "pageInfo": { "hasNextPage": false, "endCursor": null }
+      }
+    }
+  }
+}

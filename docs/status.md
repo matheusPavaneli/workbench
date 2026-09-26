@@ -120,9 +120,27 @@ warnings. `--offline` skips the tracker round trip.
 
 ## Rigour tiers
 
-`sdd.tier(doc)` returns `light` or `standard` and the reason, computed from the
-plan's own file list. `light` requires all of: at most two files, no critical
-zone, a ticket type with no non-engineering audience, and at least one file.
+`sdd.tier(doc, max_lines)` returns `light` or `standard` and the reason,
+computed from the plan's own file list. `light` requires all of: no critical
+zone, a ticket type with no non-engineering audience, at least one file, a line
+estimate on every file (`files[].lines`, added plus removed), and an estimated
+total at or under the bound. The bound is `light_max_lines` in
+`.workflow/config.json`, 100 when absent or not a positive integer. A plan with
+any entry missing its estimate is `standard`: a size nobody stated is not a
+small size. The reason names the measure — `~40 lines in 3 file(s), no critical
+zone`.
+
+File count no longer decides. It misfired both ways: a one-line fix plus its
+test plus a fixture paid for the full plan, and a 400-line rewrite of one file
+qualified as light.
+
+The estimate is written before the code, so it is checked against the code.
+On a light plan `wb impl check` runs `git diff --numstat` over the planned
+paths against the audit's baseline commit (untracked planned files count
+whole) and reports a `DEVIATION` when the real total is over the bound, saying
+to re-plan at standard. A binary file or a failed measurement counts as over.
+Only planned paths are measured: a file another ticket accounts for, or a
+companion that follows a planned file through, is not this plan's size.
 
 It waives exactly two sections:
 

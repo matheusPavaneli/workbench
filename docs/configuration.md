@@ -89,6 +89,7 @@ drops another.
 | `flow` | `wb flow set` | source branch, validation targets, branch pattern |
 | `key_prefix` | `wb init`, or by hand | the prefix of local backlog keys (`ACME-1`); 2-10 letters or digits, `WB` when absent |
 | `execute` | by hand | `false` refuses every `--execute`, standing |
+| `light_max_lines` | by hand | the most estimated lines changed a plan may have and stay on the light tier; 100 when absent |
 | `hooks` | by hand | `false` turns the plugin's hooks off; `"strict"` makes the stop hook block |
 | `field_map` | by hand | custom tracker fields this repo wants read, by destination |
 

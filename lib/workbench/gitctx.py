@@ -274,6 +274,54 @@ def added_lines(cwd: Path, *, staged: bool = False) -> list[tuple[str, int, str]
     return added
 
 
+def lines_changed(cwd: Path, base: str, paths: list[str], *, staged: bool = False) -> int | None:
+    """Added plus removed lines of ``paths`` against ``base``, or None.
+
+    None means the size cannot be told: a binary file, whose numstat columns
+    are ``-``, a git call that failed, or an untracked file that cannot be
+    read. A caller holding a bound must treat that as over it -- a measure
+    that fails open is a way around the bound.
+
+    Untracked files are counted whole in working-tree mode, as ``added_lines``
+    does: git's diff does not report them, and a planned new file is exactly
+    the kind of change being measured.
+    """
+    if not paths:
+        return 0
+    args = ["diff", "--numstat", "--no-renames", "--no-color"]
+    if staged:
+        args.append("--cached")
+    output = _git_raw([*args, base or "HEAD", "--", *paths], cwd)
+    if output is None:
+        return None
+
+    total = 0
+    for row in output.splitlines():
+        added, _, rest = row.partition("\t")
+        removed, _, _ = rest.partition("\t")
+        if not (added.isdigit() and removed.isdigit()):
+            return None
+        total += int(added) + int(removed)
+
+    if not staged:
+        # -z: without it git quotes a non-ASCII name, and the quoted form is
+        # not a path that can be opened.
+        untracked = _git_raw(["ls-files", "-z", "--others", "--exclude-standard", "--", *paths], cwd)
+        if untracked is None:
+            return None
+        for name in untracked.split("\0"):
+            if not name:
+                continue
+            try:
+                data = (cwd / name).read_bytes()
+            except OSError:
+                return None
+            if b"\0" in data:
+                return None
+            total += len(data.splitlines())
+    return total
+
+
 def default_branch(cwd: Path) -> str:
     """The branch a PR would target. Falls back rather than failing."""
     head = _git(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"], cwd)

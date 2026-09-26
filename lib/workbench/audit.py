@@ -168,8 +168,9 @@ def run(doc: dict, root: Path, baseline: str | None = None) -> Report:
     report = Report(key=str(doc.get("key", "")), plan=digest(doc))
     report.baseline = baseline or gitctx.head(root) or ""
     report.under_way = bool(baseline)
-    report.tier, report.tier_reason = sdd.tier(doc)
-    report.structure = sdd.validate(doc)
+    bound = sdd.light_max_lines(root)
+    report.tier, report.tier_reason = sdd.tier(doc, bound)
+    report.structure = sdd.validate(doc, bound)
     report.pending = sdd.pending(doc)
 
     for index, item in enumerate(doc.get("evidence") or []):

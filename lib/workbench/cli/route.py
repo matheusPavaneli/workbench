@@ -22,7 +22,7 @@ import argparse
 import json
 from pathlib import Path
 
-from .. import artifacts, contract, gitctx, profile as profile_lib, sdd as sdd_lib, status as status_lib
+from .. import artifacts, contract, gitctx, sdd as sdd_lib, status as status_lib
 from ..errors import UsageError
 
 ACTIONS: list[str] = []
@@ -46,7 +46,7 @@ FULL = [
 # step needs no sdd.json.
 MITIGATE = ("mitigate", "trace-incident", "wb cite check .workflow/{key}/incident.md")
 
-# What a change of one or two files, in no critical zone, on a ticket nobody
+# What a small change, in no critical zone, on a ticket nobody
 # has to explain to QA, actually needs. A self-review is part of the floor: it
 # is the step that costs least on the smallest change.
 SHORT = {"triage", "plan", "implement", "verify", "review", "commit"}
@@ -60,6 +60,13 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     parser = subparsers.add_parser("route", help="the steps this change actually needs, in order")
     parser.add_argument("key", nargs="?", help="a ticket key; omit to use the one this checkout is on")
     parser.add_argument("--files", nargs="*", default=None, help="paths the change will touch, if no plan exists yet")
+    parser.add_argument(
+        "--lines",
+        type=int,
+        default=None,
+        metavar="N",
+        help="estimated lines changed across --files; without it the size is unknown and the route is full",
+    )
     parser.add_argument("--json", action="store_true")
 
 
@@ -71,7 +78,7 @@ def run(args: argparse.Namespace) -> int:
     paths = list(args.files or []) or [str(item.get("path", "")) for item in (doc or {}).get("files") or []]
     kind = _kind(key, root)
 
-    tier, reason = _tier(doc, paths, kind)
+    tier, reason = _tier(doc, paths, args.lines, kind, sdd_lib.light_max_lines(root))
     steps = [step for step in FULL if tier == sdd_lib.STANDARD or step[0] in SHORT]
     if not _framed(key, kind, root):
         steps = [step for step in steps if step[0] != "frame"]
@@ -146,21 +153,24 @@ def _framed(key: str, kind: str, root: Path) -> bool:
     return (artifacts.ticket_dir(key, root) / "frame.md").is_file()
 
 
-def _tier(doc: dict | None, paths: list[str], kind: str) -> tuple[str, str]:
+def _tier(doc: dict | None, paths: list[str], lines: int | None, kind: str, bound: int) -> tuple[str, str]:
     """The plan's own tier where one exists; otherwise the same rules applied
     to whatever is known -- so the route can be asked for *before* planning,
-    which is the only moment the answer changes anything."""
+    which is the only moment the answer changes anything.
+
+    Both go through ``sdd.tier``: a second copy of the rule here is how the
+    route and the audit came to disagree about the same change.
+    """
     if doc:
-        return sdd_lib.tier(doc)
+        return sdd_lib.tier(doc, bound)
 
     if not paths:
         return sdd_lib.STANDARD, "no plan and no files named yet; assuming the full route"
-    if len(paths) > sdd_lib.LIGHT_MAX_FILES:
-        return sdd_lib.STANDARD, f"{len(paths)} files (light is up to {sdd_lib.LIGHT_MAX_FILES})"
-
-    zones = profile_lib.critical_zones(paths)
-    if zones:
-        return sdd_lib.STANDARD, f"touches {', '.join(sorted(zones))}"
-    if kind.lower() in sdd_lib.HANDOVER_TYPES:
-        return sdd_lib.STANDARD, f"a {kind} ticket owes a handover"
-    return sdd_lib.LIGHT, f"{len(paths)} file(s), no critical zone"
+    # The whole estimate sits on the first file: the tier reads the sum. With
+    # no --lines no entry has one, which is standard -- after the zone and the
+    # audience have had their say, so the reason names the weightier cause.
+    files: list[dict] = [{"path": path} for path in paths]
+    if lines is not None:
+        for index, item in enumerate(files):
+            item["lines"] = lines if index == 0 else 0
+    return sdd_lib.tier({"files": files, "ticket_type": kind}, bound)

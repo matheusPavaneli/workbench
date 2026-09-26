@@ -12,6 +12,8 @@ by accident.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from .errors import UsageError
 from .profile import FLOOR, PRESET_GATES
 
@@ -76,6 +78,13 @@ MAX_SEARCH_PATHS = 20
 # scales with the risk of the change -- but the scaling is computed here, from
 # the plan's own file list, and never chosen by whoever is writing the plan.
 #
+# Size is measured in lines, not paths. A file count misfires both ways: a
+# one-line fix plus its test plus a fixture is three files, and a 400-line
+# rewrite of one file is one. Each files[] entry carries an estimate, and a
+# plan missing one is standard -- the safe default. The estimate is written
+# before the code, so impl check measures the real diff against the same bound;
+# an estimate nobody checks would be the way to argue down to a lower bar.
+#
 # What LIGHT waives is deliberately narrow. It never touches the citations, the
 # file list, the verification commands or the rollback: those are what make a
 # plan checkable at all, and a small change is not a less checkable one. It
@@ -86,8 +95,49 @@ MAX_SEARCH_PATHS = 20
 LIGHT = "light"
 STANDARD = "standard"
 
-LIGHT_MAX_FILES = 2
+# Added plus removed lines, across every listed file. Overridden per repo by
+# ``light_max_lines`` in .workflow/config.json.
+LIGHT_MAX_LINES = 100
 LIGHT_WAIVES = ("steps", "product")
+
+
+def light_max_lines(root: Path) -> int:
+    """The light bound this repo configured, or the default.
+
+    A value that is not a positive integer is ignored rather than trusted: a
+    typo in a config file must not silently waive the bar for every plan.
+    """
+    from .profile import repo_config
+
+    value = repo_config(root).get("light_max_lines")
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        return value
+    return LIGHT_MAX_LINES
+
+
+def _estimate(item: dict) -> int | None:
+    value = item.get("lines")
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+        return value
+    return None
+
+
+def estimated_lines(doc: dict) -> tuple[int, str | None]:
+    """The plan's estimated lines changed, and the first path with no estimate.
+
+    Only listed files count. A companion that follows a planned file through
+    without being listed is not part of the estimate, and impl check measures
+    the planned paths alone, so the two sides count the same thing.
+    """
+    total = 0
+    for item in doc.get("files") or []:
+        if not isinstance(item, dict) or not item.get("path"):
+            continue
+        lines = _estimate(item)
+        if lines is None:
+            return total, str(item["path"])
+        total += lines
+    return total, None
 
 
 def blank(key: str, preset: str, persona: str) -> dict:
@@ -111,18 +161,16 @@ def blank(key: str, preset: str, persona: str) -> dict:
     }
 
 
-def tier(doc: dict) -> tuple[str, str]:
+def tier(doc: dict, max_lines: int = LIGHT_MAX_LINES) -> tuple[str, str]:
     """The rigour tier this plan qualifies for, and the reason it got it.
 
     Computed from the plan, so the same plan always lands on the same tier and
-    a session cannot argue its way down to a lower bar.
+    a session cannot argue its way down to a lower bar. ``max_lines`` is the
+    light bound; callers with a checkout pass ``light_max_lines(root)``.
     """
     from .profile import critical_zones
 
     paths = _paths(doc)
-
-    if len(paths) > LIGHT_MAX_FILES:
-        return STANDARD, f"{len(paths)} files (light is up to {LIGHT_MAX_FILES})"
 
     zones = critical_zones(paths)
     if zones:
@@ -136,7 +184,15 @@ def tier(doc: dict) -> tuple[str, str]:
     if not paths:
         return STANDARD, "no files listed"
 
-    return LIGHT, f"{len(paths)} file(s), no critical zone"
+    lines, missing = estimated_lines(doc)
+    if missing is not None:
+        return STANDARD, f"no line estimate for {missing} (files[].lines)"
+
+    measure = f"~{lines} lines in {len(paths)} file(s)"
+    if lines > max_lines:
+        return STANDARD, f"{measure} (light is up to {max_lines})"
+
+    return LIGHT, f"{measure}, no critical zone"
 
 
 def _paths(doc: dict) -> list[str]:
@@ -183,14 +239,14 @@ def _zones_problem(doc: dict) -> str | None:
     return f"zones disagrees with the files: {'; '.join(differences)} -- copy it from `{command}`"
 
 
-def validate(doc: dict) -> list[str]:
+def validate(doc: dict, max_lines: int = LIGHT_MAX_LINES) -> list[str]:
     """Return structural problems. Empty means the shape is sound.
 
     This checks that a decision was made, not that it was a good one -- the
     citations are what make it checkable, and those are audited separately.
     """
     problems: list[str] = []
-    waived = LIGHT_WAIVES if tier(doc)[0] == LIGHT else ()
+    waived = LIGHT_WAIVES if tier(doc, max_lines)[0] == LIGHT else ()
 
     if doc.get("schema") != SCHEMA_VERSION:
         problems.append(f"schema must be {SCHEMA_VERSION}")
@@ -237,6 +293,8 @@ def validate(doc: dict) -> list[str]:
             problems.append(f"files[{index}].change must be one of: {', '.join(CHANGE_KINDS)}")
         if not str(item.get("why", "")).strip():
             problems.append(f"files[{index}] has no why: an untouched-for-no-reason file is scope creep")
+        if "lines" in item and _estimate(item) is None:
+            problems.append(f"files[{index}].lines must be a whole number of lines changed, 0 or more")
 
     zones = _zones_problem(doc)
     if zones:

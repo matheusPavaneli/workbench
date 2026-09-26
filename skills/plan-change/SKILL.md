@@ -43,9 +43,12 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
    the citation to match a wrong claim, and never proceed to implementation.
    Then `sdd render <KEY>` for the human-readable copy.
 
-   The audit reports a **tier**. A plan touching at most two files, no critical
-   zone and no bug/support ticket qualifies as `light`, which waives `steps` and
-   `product` — nothing else. Do not aim for a tier: write the plan the change
+   The audit reports a **tier**. Give every `files[]` entry a `lines` estimate
+   (added plus removed); an entry without one makes the plan `standard`. An
+   estimated total within the repo's bound (100 by default), no critical zone
+   and no bug/support ticket qualifies as `light`, which waives `steps` and
+   `product` — nothing else. `impl check` measures the real diff against the
+   bound, so an estimate written low only moves the failure later. Do not aim for a tier: write the plan the change
    needs and let the audit compute it. Citations, the file list, `verify` and
    `rollback` are required at every tier.
 

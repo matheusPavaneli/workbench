@@ -33,6 +33,10 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
    logic, regression test with a bug fix, no swallowed error, no secret, a
    stated rollback.
 
+   `review context` also lists files the plan gained after its audit
+   (`plan amended after its audit`). The first audit never saw those files, so
+   read them as closely as a critical zone.
+
 5. **Go deeper in critical zones.** Billing, auth, user data, migrations and
    secrets are held to a higher standard than the preset otherwise sets. In
    those files, read every changed line and its error path.

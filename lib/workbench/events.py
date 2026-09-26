@@ -50,6 +50,7 @@ TRACKED = {
     ("task", "get"),
     ("task", "new"),
     ("sdd", "audit"),
+    ("sdd", "amend"),
     ("impl", "check"),
     ("impl", "verify"),
     ("review", "gates"),
@@ -75,6 +76,10 @@ _pending: dict[str, int] = {}
 # nothing failed; counted as a failure, it made the history call the step
 # fragile when the gate was doing its job.
 _held = False
+
+# Files `sdd amend` added to an audited plan. A count, never the paths: the
+# history shows that plans widen mid-flight and how often, not what they touch.
+_amended = 0
 
 
 def path(cwd: Path | None = None) -> Path:
@@ -104,13 +109,20 @@ def note_held() -> None:
     _held = True
 
 
+def note_amended(count: int) -> None:
+    """Attach how many files an amendment added to the event this command records."""
+    global _amended
+    _amended = int(count)
+
+
 def record(group: str, action: str, key: str | None, exit_code: int, duration_ms: int) -> None:
     """Append one event, here and once per machine. Never raises."""
-    global _held
+    global _held, _amended
     # Taken before any early return, so counts never leak onto a later event.
     verdicts = dict(sorted(_pending.items()))
     _pending.clear()
     held, _held = _held, False
+    amended, _amended = _amended, 0
     if (group, action) not in TRACKED:
         return
     if os.environ.get("WORKBENCH_NO_EVENTS"):
@@ -129,6 +141,8 @@ def record(group: str, action: str, key: str | None, exit_code: int, duration_ms
         entry["verdicts"] = verdicts
     if held:
         entry["held"] = True
+    if amended:
+        entry["amended"] = amended
 
     _append(_here, entry, MAX_EVENTS, TRIM_TO)
     _append(_everywhere, entry, MAX_GLOBAL_EVENTS, TRIM_GLOBAL_TO)

@@ -99,7 +99,8 @@ class Scope(HookCase):
     def test_an_unplanned_file_is_refused_naming_the_plan(self) -> None:
         reason = self.denied(self.edit("src/other.py"))
         self.assertIn("src/other.py", reason)
-        self.assertIn("wb sdd audit ABC-1", reason)
+        # WB-46: the way through is named, not a hand edit of sdd.json.
+        self.assertIn('wb sdd amend ABC-1 src/other.py --why "<reason>"', reason)
 
     def test_every_file_writing_tool_is_held_to_the_plan(self) -> None:
         for tool in ("Write", "MultiEdit", "NotebookEdit"):

@@ -71,6 +71,9 @@ This skill writes the description. Opening the PR is the user's call.
   Explain the decisions, point at the risk.
 - **Name the critical zones.** If the change touches billing, auth, user data or
   a migration, that belongs in the description, not discovered in review.
+- **Name the amendments.** `amended` in `pr context` lists files added after the
+  plan passed its audit. List each one with its reason under Risk, because a
+  reviewer has to know that the plan widened mid-flight.
 - **Carry the open questions across.** A question the plan could not answer does
   not disappear because the code is written.
 - **Nothing beyond what is needed.** No restating the diff, no attribution

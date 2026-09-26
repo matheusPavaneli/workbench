@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 from .. import artifacts, gitctx, profile as profile_lib, review as review_lib
-from ..errors import EXIT_AUDIT, UsageError
+from ..errors import EXIT_AUDIT, UsageError, WbError
 
 ACTIONS = ["context", "gates"]
 
@@ -94,6 +94,7 @@ def _context(args: argparse.Namespace) -> int:
     detected = profile_lib.resolve(root)
     zones = profile_lib.critical_zones(changed)
     missing_tests = review_lib.untested(changed)
+    amended = _amendments(root)
 
     if args.json:
         print(
@@ -104,6 +105,7 @@ def _context(args: argparse.Namespace) -> int:
                     "zones": zones,
                     "untested": missing_tests,
                     "gates": detected.gates(),
+                    "amended": amended,
                 },
                 indent=2,
             )
@@ -126,7 +128,31 @@ def _context(args: argparse.Namespace) -> int:
         for path in missing_tests:
             print(f"  {path}")
 
+    if amended:
+        print("\nplan amended after its audit (files the first audit never saw):")
+        for item in amended:
+            print(f"  {item.get('path')}  ({item.get('why')})")
+
     print("\ngates:")
     for gate in detected.gates():
         print(f"  - {gate}")
     return 0
+
+
+def _amendments(root: Path) -> list[dict]:
+    """The amendments of the ticket this branch names, or none.
+
+    The branch, never a guess: a review that named another ticket's amendments
+    would send the reviewer to the wrong files.
+    """
+    from .. import status as status_lib
+
+    key = status_lib.key_from_branch(status_lib.keys(root), root)
+    if key is None:
+        return []
+    try:
+        doc = artifacts.read_json(key, "sdd.json")
+    except WbError:
+        return []
+    amendments = doc.get("amendments") if isinstance(doc, dict) else None
+    return [item for item in amendments or [] if isinstance(item, dict)]

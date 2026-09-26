@@ -17,6 +17,7 @@ session that reads one, and nothing else in the suite would notice.
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import time
@@ -30,15 +31,38 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import support  # noqa: E402
 import wb  # noqa: E402
 
-# Wall-clock ceiling, in seconds. Measured on the development machine, `wb
-# status` across twenty tickets runs in 50ms with a worst case of 71ms, so this
-# is roughly a tenfold margin: it is here to catch a *change in kind* -- a
-# network call, an unbounded directory walk -- and never to grade a busy CI box.
+# The budget is here to catch a *change in kind* -- a git call per ticket, a
+# network call, an unbounded directory walk -- and never to grade a busy box.
 # A timing test that fails on load teaches people to rerun the suite until it
 # passes, which costs more than the check is worth.
+#
+# So the kind is asserted deterministically: an opening command starts at most
+# MAX_SPAWNS processes, and as many with sixty tickets as with twenty. The
+# wall-clock ceiling only backs that up, and it is priced in process starts.
+# A fixed 0.75 s was sized on a machine where `wb status` took 50ms; on Windows
+# one git start costs 40-55ms, `wb status` makes 13 of them whatever the ticket
+# count, and a cold run failed the fixed number with no code changed (WB-50).
+MAX_SPAWNS = 16
+# The floor for everything that is not a process start, and the ceiling's floor:
+# a fast box never gets a tighter bar than the fixed number it replaces.
+NON_SPAWN_SECONDS = 0.25
 OPENING_COMMAND = 0.75
 # Best of five: a scheduling hiccup during one attempt must not fail a build.
 ATTEMPTS = 5
+
+
+def _spawn_seconds() -> float:
+    """What starting one git process costs on this machine, right now."""
+    best = float("inf")
+    for _ in range(ATTEMPTS):
+        started = time.perf_counter()
+        subprocess.run(["git", "--version"], capture_output=True, timeout=15, check=False)
+        best = min(best, time.perf_counter() - started)
+    return best
+
+
+def ceiling(spawn_seconds: float) -> float:
+    return max(OPENING_COMMAND, NON_SPAWN_SECONDS + MAX_SPAWNS * spawn_seconds)
 
 
 class OpeningCommands(unittest.TestCase):
@@ -64,7 +88,10 @@ class OpeningCommands(unittest.TestCase):
 
         # Twenty tickets: more than a checkout normally carries, so the budget
         # is measured against a bad case rather than an empty one.
-        for index in range(20):
+        self._tickets(range(20))
+
+    def _tickets(self, indexes) -> None:
+        for index in indexes:
             directory = self.root / ".workflow" / f"ABC-{index}"
             directory.mkdir(parents=True)
             (directory / "triage.json").write_text(json.dumps({"title": f"ticket {index}"}), encoding="utf-8")
@@ -88,18 +115,55 @@ class OpeningCommands(unittest.TestCase):
             best = min(best, time.perf_counter() - started)
         return best
 
+    def _spawns(self, *argv: str) -> int:
+        real = subprocess.run
+        count = 0
+
+        def counting(*args, **kwargs):
+            nonlocal count
+            count += 1
+            return real(*args, **kwargs)
+
+        with mock.patch("subprocess.run", counting), redirect_stdout(io.StringIO()):
+            wb.main(list(argv))
+        return count
+
+    def _assert_instant(self, name: str, elapsed: float) -> None:
+        # Priced now, in the same run: a cold machine raises the spawn cost and
+        # the ceiling together, so only a change in the command can fail this.
+        spawn = _spawn_seconds()
+        limit = ceiling(spawn)
+        self.assertLess(
+            elapsed, limit, f"wb {name} took {elapsed:.3f}s; ceiling {limit:.3f}s at {spawn * 1000:.0f}ms per spawn"
+        )
+
     def test_status_is_instant(self) -> None:
-        elapsed = self._fastest("status")
-        self.assertLess(elapsed, OPENING_COMMAND, f"wb status took {elapsed:.3f}s across 20 tickets")
+        self._assert_instant("status", self._fastest("status"))
 
     def test_next_is_instant(self) -> None:
         with mock.patch("workbench.gitctx.branch", return_value="feature/ABC-1-thing"):
             elapsed = self._fastest("next")
-        self.assertLess(elapsed, OPENING_COMMAND, f"wb next took {elapsed:.3f}s")
+        self._assert_instant("next", elapsed)
 
     def test_route_is_instant(self) -> None:
-        elapsed = self._fastest("route", "ABC-1")
-        self.assertLess(elapsed, OPENING_COMMAND, f"wb route took {elapsed:.3f}s")
+        self._assert_instant("route", self._fastest("route", "ABC-1"))
+
+    def test_the_opening_commands_start_a_bounded_number_of_processes(self) -> None:
+        with mock.patch("workbench.gitctx.branch", return_value="feature/ABC-1-thing"):
+            spawns = {"status": self._spawns("status"), "next": self._spawns("next")}
+        spawns["route"] = self._spawns("route", "ABC-1")
+        for name, count in spawns.items():
+            self.assertLessEqual(count, MAX_SPAWNS, f"wb {name} started {count} processes")
+
+    def test_status_starts_no_process_per_ticket(self) -> None:
+        with_twenty = self._spawns("status")
+        self._tickets(range(20, 60))
+        self.assertEqual(with_twenty, self._spawns("status"), "wb status started more processes for more tickets")
+
+    def test_the_ceiling_is_priced_in_process_starts_and_never_below_the_old_bar(self) -> None:
+        self.assertEqual(OPENING_COMMAND, ceiling(0.001))
+        self.assertGreater(ceiling(0.050), ceiling(0.040))
+        self.assertAlmostEqual(NON_SPAWN_SECONDS + MAX_SPAWNS * 0.05, ceiling(0.05))
 
     def test_the_opening_commands_never_reach_the_network(self) -> None:
         """The reason they can be fast, and the reason they work with no

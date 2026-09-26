@@ -89,7 +89,19 @@ def marker(key: str, root: Path) -> dict | None:
 
 
 def mark(key: str, root: Path) -> None:
-    artifacts.write_json(key, MARKER, {"schema": 1, "key": key}, root)
+    """Put ``key`` on the path, remembering the commit its branch started from.
+
+    That commit is what wb finish measures against. The flow's source branch is
+    a name, and a name can fail to resolve -- a source recorded before the repo
+    had a commit, a branch renamed since -- where the commit cannot.
+    """
+    artifacts.write_json(key, MARKER, {"schema": 1, "key": key, "base": gitctx.head(root)}, root)
+
+
+def base(key: str, root: Path, fallback: str) -> str:
+    """The commit the light path started from, or ``fallback`` for a marker that has none."""
+    recorded = (marker(key, root) or {}).get("base")
+    return str(recorded) if recorded else fallback
 
 
 def unmark(key: str, root: Path) -> None:
@@ -212,6 +224,7 @@ def record(result: Finish, root: Path) -> None:
             "schema": 1,
             "key": result.key,
             "verdict": "pass",
+            "base": base(result.key, root, ""),
             "tree": gitctx.tree(root),
             "changed": result.changed,
             "lines": result.lines,

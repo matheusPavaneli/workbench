@@ -42,6 +42,8 @@ ACTIONS: list[str] = []
 EXIT_WAITING = 8
 MAX_SESSIONS = 4
 RECORD = "run.json"
+# The CLI this run is part of, so each session calls the same one.
+WB = (Path(__file__).resolve().parents[2] / "wb.py").as_posix()
 GOALS = ("commit", "pr")
 
 
@@ -95,7 +97,7 @@ def run(args: argparse.Namespace) -> int:
         if stopped is not None:
             return stopped
 
-        before = _where(key, root)
+        before, code_before = _where(key, root), _code(root)
         began = time.monotonic()
         session = adapter.session(_prompt(key, root, args.until), root, args.timeout)
         entry = {**session.to_dict(), "agent": adapter.name, "wall_s": round(time.monotonic() - began, 1),
@@ -112,7 +114,8 @@ def run(args: argparse.Namespace) -> int:
                 "so nothing is lost",
                 fix=[f"resume: wb run {key}", f"or by hand: {_next(key, root)}"],
             )
-        if entry["after"] == before and _stop(key, root, args.until, quiet=True) is None:
+        moved = entry["after"] != before or _code(root) != code_before
+        if not moved and _stop(key, root, args.until, quiet=True) is None:
             raise WbError(
                 f"{key}: a whole session made no progress at {before}; stopping rather than paying for another",
                 fix=[f"run the step yourself: {_next(key, root)}", f"then: wb run {key}"],
@@ -164,6 +167,12 @@ def _where(key: str, root: Path) -> str:
     return f"{stage.name} {stage.state}" if stage else "complete"
 
 
+def _code(root: Path) -> tuple[str | None, str | None]:
+    """What the code is: the commit and the tree on disk. Work that has not
+    moved a stage yet still moves this."""
+    return gitctx.head(root), gitctx.tree(root)
+
+
 def _next(key: str, root: Path) -> str:
     picked = status_lib.pick(key, root)
     return (picked[0].next_command if picked else "") or f"wb next {key}"
@@ -176,6 +185,7 @@ def _prompt(key: str, root: Path, until: str) -> str:
     return (
         f"Pick up ticket {key} and take it through the workbench flow {goal}.\n\n"
         f"Where it stands now:\n{where}\n\n"
+        f'`wb` is not on PATH here; run it as: python "{WB}" <group> <action> ...\n\n'
         "Do not push and do not open a PR. Never approve anything on the user's behalf: "
         "when wb names `wb approve`, stop there and say which decision is waiting."
     )

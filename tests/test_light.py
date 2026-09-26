@@ -169,6 +169,24 @@ class Chore(LightPath):
         self.assertIn("wb start ABC-1", err)
 
 
+class SourceThatNeverExisted(LightPath):
+    """The first probe: a flow source recorded as main on a repo that is on master."""
+
+    def test_finish_measures_against_the_commit_the_path_started_from(self) -> None:
+        self.git("branch", "-m", "main", "master")
+        config = self.root / ".workflow" / "config.json"
+        data = json.loads(config.read_text(encoding="utf-8"))
+        data["flow"] = {"source": "main", "validation": [], "protected": ["main"], "strategy": "cherry-pick"}
+        config.write_text(json.dumps(data), encoding="utf-8")
+        self.git("commit", "-qam", "chore: flow")
+        run("start", "ABC-1")
+        self.write("shop/money.py", MONEY_FIXED)
+        self.write("tests/test_money.py", TEST_REFUND)
+        code, out, err = self.finish()
+        self.assertEqual(0, code, out + err)
+        self.assertIn("clear", out)
+
+
 class Bug(LightPath):
     KIND = "bug"
 

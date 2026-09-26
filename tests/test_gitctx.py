@@ -193,6 +193,18 @@ class WorkingTree(unittest.TestCase):
         self.assertIsNotNone(gitctx.branch(self.root))
 
 
+class DefaultBranchUnborn(unittest.TestCase):
+    def test_a_repo_with_no_commits_names_the_branch_head_is_on(self) -> None:
+        """The bench found it: `wb init` before the first commit recorded "main"
+        on a repo whose default was master, and every diff against it failed."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _git(["init", "-q", "-b", "master", "."], root)
+            self.assertEqual("master", gitctx.default_branch(root))
+            _git(["symbolic-ref", "HEAD", "refs/heads/trunk"], root)
+            self.assertEqual("trunk", gitctx.default_branch(root))
+
+
 class OutsideACheckout(unittest.TestCase):
     """The two answers the package is allowed to give, in one place each.
 

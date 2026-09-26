@@ -1,0 +1,27 @@
+{
+  "ticket": "BN-5",
+  "arm": "plain",
+  "run": 1,
+  "metrics": {
+    "hidden_pass": 1,
+    "out_of_scope": 0,
+    "rework": 0,
+    "tokens": 359408,
+    "cost_usd": 0.14252460000000003,
+    "wall_s": 31.5,
+    "tests_missing": 0,
+    "invalid_refs": 0,
+    "unexpected_changes": 0
+  },
+  "out_of_scope_files": [],
+  "invalid_ref_list": [],
+  "changed": [
+    "shop/shipping.py",
+    "tests/test_shipping.py"
+  ],
+  "commits": 1,
+  "session_id": "b68816f0-4e70-49d6-a27b-31eadfc0cce9",
+  "num_turns": 11,
+  "workflow_artifacts": [],
+  "error": null
+}

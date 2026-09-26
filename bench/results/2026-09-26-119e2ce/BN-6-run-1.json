@@ -1,0 +1,34 @@
+{
+  "ticket": "BN-6",
+  "arm": "run",
+  "run": 1,
+  "metrics": {
+    "hidden_pass": 1,
+    "out_of_scope": 0,
+    "rework": 0,
+    "tokens": 1332293,
+    "cost_usd": 0.42819399999999996,
+    "wall_s": 230.9,
+    "tests_missing": 0,
+    "invalid_refs": 0,
+    "unexpected_changes": 0
+  },
+  "out_of_scope_files": [],
+  "invalid_ref_list": [],
+  "changed": [
+    "shop/stock.py",
+    "tests/test_stock.py"
+  ],
+  "commits": 1,
+  "session_id": "88094b35-558f-4713-a40a-23e073246cbd",
+  "num_turns": 33,
+  "workflow_artifacts": [
+    ".workflow/BN-6/commit-msg.txt",
+    ".workflow/BN-6/commit.txt",
+    ".workflow/BN-6/git.log.json",
+    ".workflow/BN-6/light.json",
+    ".workflow/BN-6/run.json",
+    ".workflow/BN-6/triage.json"
+  ],
+  "error": "wb run exited 2: error: BN-6: a whole session made no progress at change todo; stopping rather than paying for another\n  fix: run the step yourself: wb finish BN-6 -m \"<type>: <summary>\"\n  fix: then: wb run BN-6"
+}

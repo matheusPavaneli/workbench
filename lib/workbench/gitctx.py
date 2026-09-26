@@ -332,7 +332,11 @@ def default_branch(cwd: Path) -> str:
     for candidate in ("main", "master", "develop"):
         if _git(["rev-parse", "--verify", "--quiet", candidate], cwd):
             return candidate
-    return "main"
+    # A repo with no commits has no branch to verify, only the one HEAD names.
+    # Guessing "main" there recorded a source branch that never came to exist
+    # when git's default was master, and every later diff against it failed.
+    current = _git(["symbolic-ref", "--quiet", "--short", "HEAD"], cwd)
+    return current or "main"
 
 
 def head(cwd: Path) -> str | None:

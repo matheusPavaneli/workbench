@@ -1,4 +1,4 @@
-"""Country codes to shipping and tax zones. Codes are upper-case ISO 3166 alpha-2."""
+"""Country codes to shipping and tax zones."""
 
 from __future__ import annotations
 
@@ -13,11 +13,6 @@ ZONES = {
 
 
 def zone_for(country: str) -> str:
-    """The zone of a canonical country code.
-
-    Strict on purpose: invoices must carry the code exactly as registered, so a
-    code in any other form is unknown here rather than guessed.
-    """
     try:
         return ZONES[country]
     except KeyError:

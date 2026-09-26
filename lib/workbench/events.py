@@ -70,6 +70,12 @@ DRIFTED = ("moved", "out_of_range")
 # returns an exit code and nothing else, and the event is written after it.
 _pending: dict[str, int] = {}
 
+# Set by a command that stopped at a gate a person has to clear -- impl verify
+# waiting for approval. Its exit code is a refusal, but nothing was tried and
+# nothing failed; counted as a failure, it made the history call the step
+# fragile when the gate was doing its job.
+_held = False
+
 
 def path(cwd: Path | None = None) -> Path:
     return artifacts.root(cwd) / LOG_NAME
@@ -92,11 +98,19 @@ def note_verdicts(verdicts: Iterable[str]) -> None:
     _pending.update(Counter(str(verdict) for verdict in verdicts))
 
 
+def note_held() -> None:
+    """Mark the event this command records as held at a gate, not failed."""
+    global _held
+    _held = True
+
+
 def record(group: str, action: str, key: str | None, exit_code: int, duration_ms: int) -> None:
     """Append one event, here and once per machine. Never raises."""
+    global _held
     # Taken before any early return, so counts never leak onto a later event.
     verdicts = dict(sorted(_pending.items()))
     _pending.clear()
+    held, _held = _held, False
     if (group, action) not in TRACKED:
         return
     if os.environ.get("WORKBENCH_NO_EVENTS"):
@@ -113,6 +127,8 @@ def record(group: str, action: str, key: str | None, exit_code: int, duration_ms
         entry["key"] = key
     if verdicts:
         entry["verdicts"] = verdicts
+    if held:
+        entry["held"] = True
 
     _append(_here, entry, MAX_EVENTS, TRIM_TO)
     _append(_everywhere, entry, MAX_GLOBAL_EVENTS, TRIM_GLOBAL_TO)
@@ -178,10 +194,12 @@ def summarise(events: list[dict]) -> dict:
     counts: dict[str, dict] = {}
     for entry in events:
         name = f"{entry.get('group', '?')} {entry.get('action', '?')}"
-        row = counts.setdefault(name, {"runs": 0, "failed": 0, "ms": 0})
+        row = counts.setdefault(name, {"runs": 0, "failed": 0, "held": 0, "ms": 0})
         row["runs"] += 1
         row["ms"] += int(entry.get("ms") or 0)
-        if int(entry.get("exit") or 0) != 0:
+        if _is_held(entry):
+            row["held"] += 1
+        elif int(entry.get("exit") or 0) != 0:
             row["failed"] += 1
 
     for row in counts.values():
@@ -228,6 +246,11 @@ def _citations(events: list[dict]) -> dict:
     }
 
 
+def _is_held(entry: dict) -> bool:
+    """Only a literal true: the log is read, never trusted."""
+    return entry.get("held") is True
+
+
 def _by_repo(events: list[dict]) -> dict:
     """Runs and failures per checkout, worst first. Empty for a local log.
 
@@ -241,7 +264,7 @@ def _by_repo(events: list[dict]) -> dict:
             continue
         row = counts.setdefault(name, {"runs": 0, "failed": 0})
         row["runs"] += 1
-        if int(entry.get("exit") or 0) != 0:
+        if int(entry.get("exit") or 0) != 0 and not _is_held(entry):
             row["failed"] += 1
     return dict(sorted(counts.items(), key=lambda kv: (kv[1]["failed"], kv[1]["runs"]), reverse=True))
 
@@ -253,8 +276,13 @@ def render(summary: dict) -> str:
     lines = [f"{summary['events']} recorded command(s)"]
     width = max(len(name) for name in summary["commands"])
     for name, row in summary["commands"].items():
-        failed = f"{row['failed']} failed" if row["failed"] else "clean"
-        lines.append(f"  {name:<{width}}  {row['runs']:>3} run(s)  {failed:<10} {row['avg_ms']:>6} ms avg")
+        outcome = ", ".join(
+            part for part in (
+                f"{row['failed']} failed" if row["failed"] else "",
+                f"{row.get('held', 0)} held" if row.get("held") else "",
+            ) if part
+        ) or "clean"
+        lines.append(f"  {name:<{width}}  {row['runs']:>3} run(s)  {outcome:<10} {row['avg_ms']:>6} ms avg")
 
     repos = summary.get("repos") or {}
     if repos:

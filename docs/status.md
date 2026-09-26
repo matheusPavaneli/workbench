@@ -80,8 +80,11 @@ The log is held to three rules:
 
 - **Outcomes, never arguments.** Group, action, exit code, duration, and a key
   if one was given. `sdd audit` and `cite check` add how many citations landed
-  on each verdict -- names and counts, never a path or a quote. No arguments
-  and no output: those are where a secret or a customer name would end up.
+  on each verdict -- names and counts, never a path or a quote. `impl verify`
+  that stopped for approval adds `held: true`: its exit code is a refusal, but
+  nothing ran, so the history counts it as held rather than failed and never
+  calls a step fragile on held runs. No arguments and no output: those are
+  where a secret or a customer name would end up.
 - **Local and capped.** It lives under the ignored `.workflow/`, is trimmed by
   rewriting at `MAX_EVENTS`, and goes nowhere. `WORKBENCH_NO_EVENTS=1` disables it.
 - **Kept twice.** The same line also appends to `~/.workbench/events.jsonl` with

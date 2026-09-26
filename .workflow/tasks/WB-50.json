@@ -2,10 +2,10 @@
   "key": "WB-50",
   "title": "impl verify runs the suite about 40% slower than running it directly",
   "type": "bug",
-  "status": "open",
+  "status": "done",
   "desc": "WB-49's impl verify failed three times on test_budget.OpeningCommands.test_status_is_instant (0.766s, 0.773s, 0.777s against a 0.75s budget). The same suite on the same tree passes when run directly: 1090 tests in 138s, against about 194s under impl verify with the same command and PYTHONPATH=lib. On main, 1056 tests pass in 138s directly; WB-48's verify took 94s earlier the same day. verify._execute passes os.environ plus the declared env and captures output. Find what makes the suite slower under verify, and whether the timing budget or the runner is at fault.",
   "created": "2026-09-26T14:35:29Z",
-  "updated": "2026-09-26T14:35:29Z",
+  "updated": "2026-09-26T16:52:06Z",
   "comments": [],
   "linked": [
     {

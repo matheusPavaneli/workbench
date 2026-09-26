@@ -41,6 +41,16 @@ DEFAULT_CAP_USD = 50.0
 DEFAULT_TIMEOUT_S = 1800
 SMOKE_TICKET = "BN-3"
 
+# The arms whose repo is set up as a workbench user's: `wb init --write` and the
+# ticket in the local backlog.
+FLOW_ARMS = ("workbench", "run")
+# How often the run arm answers a `wb run` that stopped for a person, and the
+# exit code it stops with (workbench.cli.run.EXIT_WAITING).
+MAX_APPROVALS = 4
+WAITING = 8
+# Sessions one `wb run` call may start (its --max-sessions default).
+RUN_SESSIONS = 4
+
 # What the workbench arm loads. bench/ is left out so the hidden tests are not
 # reachable through the plugin root.
 PLUGIN_PARTS = (".claude-plugin", "hooks", "lib", "shared", "skills")
@@ -120,13 +130,13 @@ def copy_plugin(dest: Path, root: Path = ROOT) -> Path:
     return dest
 
 
-def plan_runs(tickets: list[dict], runs: int) -> list[tuple[dict, str, int]]:
+def plan_runs(tickets: list[dict], runs: int, arms: tuple[str, ...] = score.DEFAULT_ARMS) -> list[tuple[dict, str, int]]:
     """Run 1 of every ticket and arm, then run 2, and so on.
 
     Interleaved so a spend cap reached part-way leaves both arms with the same
     number of runs per ticket, give or take one, rather than starving one arm.
     """
-    return [(ticket, arm, n) for n in range(1, runs + 1) for ticket in tickets for arm in score.ARMS]
+    return [(ticket, arm, n) for n in range(1, runs + 1) for ticket in tickets for arm in arms]
 
 
 class Budget:
@@ -222,9 +232,9 @@ def prepare(repo: Path, ticket: dict, arm: str, env: dict, plugin_dir: Path | No
     _git(repo, "init", "-q", env=env)
     _git(repo, "config", "user.email", "bench@workbench.invalid", env=env)
     _git(repo, "config", "user.name", "bench", env=env)
-    if arm == "workbench":
+    if arm in FLOW_ARMS:
         if plugin_dir is None:
-            raise ValueError("the workbench arm needs a plugin directory")
+            raise ValueError(f"the {arm} arm needs a plugin directory")
         wb = [sys.executable, str(plugin_dir / "lib" / "wb.py")]
         _setup([*wb, "init", "--write"], repo, env)
         _setup(
@@ -300,8 +310,10 @@ def run_one(claude: str, ticket: dict, arm: str, n: int, *, model: str, timeout_
     with workdir("wb-bench-") as work:
         repo = work / "repo"
         env = session_env(work)
-        plugin_dir = copy_plugin(work / "plugin") if arm == "workbench" else None
+        plugin_dir = copy_plugin(work / "plugin") if arm in FLOW_ARMS else None
         base = prepare(repo, ticket, arm, env, plugin_dir)
+        if arm == "run" and plugin_dir is not None:
+            return _run_arm(ticket, n, repo, base, env, plugin_dir, model=model, timeout_s=timeout_s)
 
         argv = command(claude, arm, prompt(ticket, arm), model=model, plugin_dir=plugin_dir)
         error = None
@@ -335,6 +347,97 @@ def run_one(claude: str, ticket: dict, arm: str, n: int, *, model: str, timeout_
         )
 
 
+def run_argv(key: str, plugin_dir: Path, *, model: str, timeout_s: int) -> list[str]:
+    """`wb run` as a user who turned it on would call it, in a sandbox that allows every tool."""
+    return [
+        sys.executable, str(plugin_dir / "lib" / "wb.py"), "run", key, "--until", "commit",
+        "--plugin-dir", str(plugin_dir), "--model", model, "--permission-mode", "bypassPermissions",
+        "--timeout", str(timeout_s),
+    ]
+
+
+def approval(stdout: str) -> list[str] | None:
+    """The `wb approve KEY TOKEN` a stopped `wb run` printed, as argv, or None."""
+    for line in stdout.splitlines():
+        if line.startswith("approve: wb approve "):
+            return line[len("approve: wb "):].split()
+    return None
+
+
+def combined(sessions: list[dict]) -> dict:
+    """Every session `wb run` started, as one session record: usage, cost and turns summed.
+
+    A field no session reported stays absent rather than becoming 0, as it does
+    for a single session.
+    """
+    usage: dict[str, int] = {}
+    for entry in sessions:
+        for field, count in (entry.get("usage") or {}).items():
+            if isinstance(count, int) and not isinstance(count, bool):
+                usage[field] = usage.get(field, 0) + count
+    costs = [entry["total_cost_usd"] for entry in sessions if isinstance(entry.get("total_cost_usd"), (int, float))]
+    turns = [entry["num_turns"] for entry in sessions if isinstance(entry.get("num_turns"), int)]
+    return {
+        "usage": usage or None,
+        "total_cost_usd": sum(costs) if costs else None,
+        "num_turns": sum(turns) if turns else None,
+        "session_id": ",".join(str(entry.get("session_id")) for entry in sessions if entry.get("session_id")) or None,
+    }
+
+
+def _run_arm(ticket: dict, n: int, repo: Path, base: str, env: dict, plugin_dir: Path, *, model: str,
+             timeout_s: int) -> dict:
+    """`wb run` to a commit, with the benchmark answering each approval it stops for.
+
+    The person's part is not the machine's cost, so the harness plays it: it
+    approves exactly what `wb run` printed and resumes, up to MAX_APPROVALS
+    times. The sessions `wb run` started are read back from its run.json.
+    """
+    key = ticket["key"]
+    run_env = {**env, "WB_RUN": "1"}
+    error = None
+    started = time.monotonic()
+    for _ in range(MAX_APPROVALS + 1):
+        try:
+            done = subprocess.run(run_argv(key, plugin_dir, model=model, timeout_s=timeout_s), cwd=repo, env=run_env,
+                                  stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                                  timeout=timeout_s * RUN_SESSIONS + 60)
+        except subprocess.TimeoutExpired:
+            error = "wb run timed out"
+            break
+        if done.returncode == 0:
+            error = None
+            break
+        token = approval(done.stdout) if done.returncode == WAITING else None
+        if token is None:
+            error = f"wb run exited {done.returncode}: {(done.stderr or done.stdout).strip()[-300:]}"
+            break
+        _setup([sys.executable, str(plugin_dir / "lib" / "wb.py"), *token], repo, run_env)
+    else:
+        error = f"wb run still waiting after {MAX_APPROVALS} approvals"
+    wall_s = time.monotonic() - started
+
+    record_path = repo / ".workflow" / key / "run.json"
+    try:
+        sessions = json.loads(record_path.read_text(encoding="utf-8")).get("sessions") or []
+    except (OSError, ValueError):
+        sessions = []
+    return score.record(
+        ticket=ticket,
+        arm="run",
+        run=n,
+        session=combined(sessions),
+        changed=_changed(repo, base, env),
+        commits=int(_git(repo, "rev-list", "--count", f"{base}..HEAD", env=env).strip()),
+        hidden_passed=_hidden_passes(repo, key),
+        wall_s=wall_s,
+        error=error,
+        artifacts=_artifacts(repo, key),
+        diff=_diff(repo, base, env),
+        sources=_sources(repo, env),
+    )
+
+
 def load_tickets(only: list[str] | None = None) -> list[dict]:
     tickets = json.loads(TICKETS.read_text(encoding="utf-8"))["tickets"]
     if not only:
@@ -353,6 +456,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--tickets", help="comma-separated keys; default all")
     parser.add_argument("--cap", type=float, default=DEFAULT_CAP_USD, help="spend cap in US$")
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT_S, help="seconds per session")
+    parser.add_argument(
+        "--arms", default=",".join(score.DEFAULT_ARMS), help=f"comma-separated, of {', '.join(score.ARMS)}"
+    )
     args = parser.parse_args(argv)
 
     claude = shutil.which("claude")
@@ -360,6 +466,12 @@ def main(argv: list[str] | None = None) -> int:
     if missing or claude is None:
         for item in missing:
             print(f"error: missing {item}", file=sys.stderr)
+        return 2
+
+    arms = tuple(arm.strip() for arm in args.arms.split(",") if arm.strip())
+    unknown = sorted(set(arms) - set(score.ARMS))
+    if unknown or not arms:
+        print(f"error: unknown arm(s) {', '.join(unknown) or '(none)'}; expected {', '.join(score.ARMS)}", file=sys.stderr)
         return 2
 
     if args.smoke:
@@ -381,7 +493,7 @@ def main(argv: list[str] | None = None) -> int:
     budget = Budget(args.cap)
     records: list[dict] = []
     skipped = 0
-    for ticket, arm, n in plan_runs(tickets, runs):
+    for ticket, arm, n in plan_runs(tickets, runs, arms):
         if not budget.allows():
             skipped += 1
             continue

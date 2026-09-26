@@ -213,6 +213,34 @@ upstream's approvals. `--approve` takes only entries the plan names.
 This is as strong as the permission prompt that shows the call. An agent can
 run it, and under a permission mode that approves everything it gates nothing.
 
+### `wb run`: the flow headless, stopping only for a person
+
+`wb run KEY [--until commit|pr]` picks the ticket up as `wb start` does, then
+starts agent sessions until it reaches its goal (a commit, or a drafted
+`.workflow/KEY/pr.md` by default). Each session gets the ticket and `wb next`'s
+two lines, and is told never to approve anything itself. Between sessions the
+run checks, in order:
+
+- at the goal: it says so and exits 0
+- a decision `wb approve` serves is waiting: it prints it with its token and
+  exits 8, before spending another session
+- the session timed out or crashed: it says the branch and `.workflow/KEY/` are
+  as the session left them, and exits non-zero; `wb run KEY` resumes
+- the session moved nothing: it stops rather than pay for another
+
+State is what it always was, the branch and the artifacts, so a rerun resumes
+from wherever the last one stopped. Each session's turns, usage, cost and wall
+time are appended to `.workflow/KEY/run.json`. At most `--max-sessions`
+(default 4) per call, each within `--timeout` seconds (default 1800).
+
+The agent sits behind one interface (`workbench.agent`): run a session on a
+prompt in a checkout, within a time limit, and report how it ended. Claude
+Code (`claude -p --output-format json`) is the only implementation; `--model`,
+`--permission-mode` and `--plugin-dir` pass through to it. It is off by
+default: `"run": {"enabled": true}` in `.workflow/config.json`, or `WB_RUN=1`
+for one call. An autopilot over an expensive flow spends faster, and a headless
+session is where a stop nobody sees would hide.
+
 ### `wb approve`: one verb for whichever decision waits
 
 A person should not need to know which subsystem is holding the work.

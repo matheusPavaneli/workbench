@@ -50,7 +50,16 @@ model:
   lists what the session left under `.workflow/<KEY>/`, and the report counts
   the workbench runs that used the flow at all.
 
-Both arms run with a fresh `CLAUDE_CONFIG_DIR`, so neither sees the
+- **run** (on request, `--arms plain,workbench,run`) — the workbench arm's
+  setup, then `wb run BN-n --until commit` with `WB_RUN=1`, the same model, the
+  plugin copy and `bypassPermissions`. `wb run` starts its own sessions; the
+  record sums their usage, cost and turns from `.workflow/BN-n/run.json`, and
+  the wall time is the whole call. When `wb run` stops for a person (exit 8),
+  the harness plays that person: it runs exactly the `wb approve` line printed
+  and resumes, up to four times. Approving is the person's time, not the
+  machine's, so it is not what this arm measures.
+
+Every arm runs with a fresh `CLAUDE_CONFIG_DIR`, so none sees the
 maintainer's installed plugins, settings or `CLAUDE.md`. A fresh config has no
 stored login either, so the credential comes from the environment: either
 `CLAUDE_CODE_OAUTH_TOKEN` (made once with `claude setup-token`, drawing on the
@@ -111,7 +120,7 @@ eating the whole usage window. The report states which credential paid. A run
 that hits the usage limit mid-way ends with the session's error in its record;
 rerun the affected tickets with `--tickets` once the window resets.
 
-Options: `--runs N`, `--model <id>`, `--tickets BN-1,BN-4`, `--cap <usd>`,
+Options: `--runs N`, `--model <id>`, `--tickets BN-1,BN-4`, `--arms plain,workbench,run`, `--cap <usd>`,
 `--timeout <seconds>` per session.
 
 ## Reading the result
@@ -127,7 +136,8 @@ failures, `out_of_scope`, `tests_missing`, `invalid_refs`,
 where the two arms' shares differ. It reads both ways: a row where workbench
 made the error and plain did not is as much a finding as the reverse.
 
-The report ends with **Where workbench loses**: every ticket and metric whose
+Each arm other than plain is compared with plain, in the tables, the caught
+errors and its own loss section. The report ends with **Where workbench loses**: every ticket and metric whose
 workbench median is worse than plain's, by that metric's direction. An empty
 section says so in words. That section is the reason the benchmark exists; the
 README may cite a result only if the report supports it.

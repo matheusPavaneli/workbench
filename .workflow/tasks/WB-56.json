@@ -2,10 +2,10 @@
   "key": "WB-56",
   "title": "wb run <KEY>: drive the whole flow and stop only for a human decision",
   "type": "feature",
-  "status": "open",
+  "status": "done",
   "desc": "Build later: only after WB-53 meets its ratio; an autopilot over a 10x flow spends 10x faster. Frame: .workflow/idea-less-friction/frame.md.\n\nACCEPTANCE:\n- wb run <KEY> takes a ticket from triage to a PR draft headless, through an agent adapter; Claude Code is the first and only implementation, behind one interface\n- it stops exactly at the gates wb approve serves, prints the decision and exits; rerunning resumes from the recorded state\n- a timeout or crash leaves the branch and .workflow/<KEY>/ resumable and says so\n- off by default behind a flag; bench gains a third arm (wb run) with the same metrics",
   "created": "2026-09-26T17:51:51Z",
-  "updated": "2026-09-26T17:51:51Z",
+  "updated": "2026-09-26T21:01:24Z",
   "comments": [],
   "linked": [
     {

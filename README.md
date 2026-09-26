@@ -427,6 +427,7 @@ wb doctor  everything that has to be true, in one pass
 wb start  KEY [--refresh]      read the ticket, branch for it, route it: one command to pick up work
 wb finish KEY -m MESSAGE       light path: every check against the real change, then the commit command
 wb approve [KEY] [TOKEN]       show the one decision waiting on you, or approve exactly it by its token
+wb run    KEY [--until commit|pr]   drive it headless through Claude Code, stopping at every decision (off by default)
 wb route   [KEY]               the steps this change actually needs
 wb next    [KEY]               the single command to run now
 wb status  [KEY] | --stats     where work stands, and what to run next
@@ -443,7 +444,7 @@ wb pr      context | check
 wb git     ctx | diff | commit | push        commit, push take --execute
 ```
 
-Exit codes: 2 usage, 3 config, 4 auth, 5 provider, 6 not found, 7 audit failed.
+Exit codes: 2 usage, 3 config, 4 auth, 5 provider, 6 not found, 7 audit failed, 8 waiting on a person (`wb run`).
 
 ## Docs
 

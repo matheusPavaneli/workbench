@@ -153,7 +153,9 @@ class ExecutionSurface(unittest.TestCase):
     """One module writes to a repository. Keeping it that way is a property of
     the source, not a habit."""
 
-    WRITERS = {"gitrun.py", "verify.py"}
+    # agent.py starts the agent session ``wb run`` drives (WB-56); the session
+    # writes to the repository, so it sits with the writers.
+    WRITERS = {"gitrun.py", "verify.py", "agent.py"}
 
     # Everything else that shells out reads: git plumbing, the OS keychain, and
     # `gh auth token` / glab's stored token. Each is here by decision, and adding

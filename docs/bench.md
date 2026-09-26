@@ -59,8 +59,11 @@ model:
   and resumes, up to four times. Approving is the person's time, not the
   machine's, so it is not what this arm measures.
 
-Every arm runs with a fresh `CLAUDE_CONFIG_DIR`, so none sees the
-maintainer's installed plugins, settings or `CLAUDE.md`. A fresh config has no
+Every arm runs with a fresh home (`HOME` and `USERPROFILE`) and a fresh
+`CLAUDE_CONFIG_DIR`, so none sees the
+maintainer's installed plugins, settings or `CLAUDE.md`. The config dir
+alone was not enough: every session of the `092a381` run loaded the owner's
+`~/.claude/CLAUDE.md` through the home directory. A fresh config has no
 stored login either, so the credential comes from the environment: either
 `CLAUDE_CODE_OAUTH_TOKEN` (made once with `claude setup-token`, drawing on the
 subscription's usage limit) or `ANTHROPIC_API_KEY` (billed). When both are set

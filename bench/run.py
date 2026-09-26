@@ -198,15 +198,24 @@ def workdir(prefix: str, attempts: int = 10, pause_s: float = 0.5) -> Iterator[P
 def session_env(work: Path, env: dict | None = None) -> dict:
     """The environment every step of a run sees, setup and session alike.
 
-    A fresh CLAUDE_CONFIG_DIR keeps the owner's plugins and CLAUDE.md out; a
+    A fresh CLAUDE_CONFIG_DIR keeps the owner's plugins and settings out; a
     fresh WORKBENCH_HOME keeps their tracker contexts, approvals and event log
     out, so the workbench arm starts where a new user would.
+
+    A fresh home too. The config dir alone did not keep the owner's
+    ~/.claude/CLAUDE.md out: every session of the 092a381 run loaded it, and
+    some spent turns chasing a tool it names. Claude Code finds the user's
+    memory through the home directory, which is HOME, or USERPROFILE on Windows.
     """
     empty = work / "gitconfig"
     empty.parent.mkdir(parents=True, exist_ok=True)
     empty.touch()
+    user = work / "user"
+    user.mkdir(parents=True, exist_ok=True)
     return {
         **(os.environ if env is None else env),
+        "HOME": str(user),
+        "USERPROFILE": str(user),
         "CLAUDE_CONFIG_DIR": str(work / "config"),
         "WORKBENCH_HOME": str(work / "home"),
         # The owner's ~/.gitconfig stays out too: its aliases, hooks and

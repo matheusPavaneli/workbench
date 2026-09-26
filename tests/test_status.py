@@ -296,6 +296,58 @@ class Closed(StatusBase):
         self.assertEqual("ABC-1", picked.key)
 
 
+class Waiting(StatusBase):
+    """WB-36: a task recorded in the backlog and not yet read in has no
+    directory, so status and next could not see the work task new had named."""
+
+    def task(self, key: str, status: str = "open", title: str = "fix login") -> None:
+        path = self.root / ".workflow" / "tasks" / f"{key}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"key": key, "title": title, "type": "bug", "status": status}), encoding="utf-8")
+
+    def test_an_open_task_with_no_artifacts_is_listed_as_not_started(self) -> None:
+        self.task("WB-1")
+        self.assertEqual(["WB-1"], status_lib.listed())
+        status = status_lib.read("WB-1")
+        self.assertEqual("not started", status.headline)
+        self.assertEqual("fix login", status.title)
+        self.assertEqual("bug", status.kind)
+        self.assertEqual("wb task get WB-1", status.next_command)
+        self.assertIn("fix login", status_lib.render_list([status]))
+
+    def test_a_done_task_with_no_artifacts_is_not_listed(self) -> None:
+        self.task("WB-1", status="done")
+        self.assertEqual([], status_lib.listed())
+        with mock.patch("workbench.gitctx.branch", return_value=None):
+            self.assertIsNone(status_lib.pick())
+
+    def test_a_task_with_artifacts_is_listed_once(self) -> None:
+        self.task("WB-1")
+        self.write("WB-1", "triage.json", {"title": "read in", "type": "bug"})
+        self.assertEqual(["WB-1"], status_lib.listed())
+        self.assertEqual("read in", status_lib.read("WB-1").title)
+
+    def test_newest_first_across_directories_and_tasks(self) -> None:
+        self.write("WB-1", "triage.json", {"title": "t", "type": "feature"})
+        old = time.time() - 3600
+        os.utime(self.root / ".workflow" / "WB-1", (old, old))
+        self.task("WB-2")
+        self.assertEqual(["WB-2", "WB-1"], status_lib.listed())
+
+    def test_the_snapshot_counts_it_and_clean_does_not_select_it(self) -> None:
+        self.task("WB-1")
+        summary = status_lib.summarise([status_lib.read(k) for k in status_lib.listed()])
+        self.assertEqual(1, summary["tickets"])
+        self.assertEqual(1, summary["waiting_at"]["triage"])
+        self.assertEqual([], status_lib.keys())
+
+    def test_a_malformed_backlog_file_is_skipped(self) -> None:
+        path = self.root / ".workflow" / "tasks" / "junk.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"key": "../../etc", "status": "open"}), encoding="utf-8")
+        self.assertEqual([], status_lib.listed())
+
+
 class Aggregate(StatusBase):
     def test_it_counts_where_work_is_waiting(self) -> None:
         for key in ("ABC-1", "ABC-2"):

@@ -34,6 +34,27 @@ class Resolution(CliBase):
         self.assertEqual(EXIT_NOT_FOUND, code)
         self.assertIn("wb task list", err + out)
 
+    def test_a_task_that_was_only_created_is_the_next_work(self) -> None:
+        """WB-36: task new printed `wb task get WB-1`, and next then said there
+        was no work in progress."""
+        self.use_local()
+        code, _, _ = run("task", "new", "fix login", "--type", "bug")
+        self.assertEqual(0, code)
+        with self._on_branch("main"):
+            code, out, _ = run("next")
+        self.assertEqual(0, code)
+        self.assertIn("WB-1", out)
+        self.assertIn("wb task get WB-1", out)
+
+    def test_a_done_task_with_no_artifacts_is_not_work(self) -> None:
+        self.use_local()
+        run("task", "new", "fix login", "--type", "bug")
+        run("task", "done", "WB-1")
+        with self._on_branch("main"):
+            code, out, err = run("next")
+        self.assertEqual(EXIT_NOT_FOUND, code)
+        self.assertNotIn("WB-1", out + err)
+
     def test_an_explicit_key_wins_over_everything(self) -> None:
         self._ticket("ABC-1", triage_json=json.dumps({"title": "one"}))
         self._ticket("ABC-2", triage_json=json.dumps({"title": "two"}))
@@ -153,7 +174,7 @@ class Output(CliBase):
 class Library(unittest.TestCase):
     def test_pick_reports_nothing_rather_than_raising(self) -> None:
         """The CLI turns this into an exit code; the library stays quiet."""
-        with mock.patch.object(status_lib, "keys", return_value=[]), mock.patch(
+        with mock.patch.object(status_lib, "listed", return_value=[]), mock.patch(
             "workbench.gitctx.branch", return_value=None
         ):
             self.assertIsNone(status_lib.pick())

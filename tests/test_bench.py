@@ -12,6 +12,7 @@ import json
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 BENCH = Path(__file__).resolve().parent.parent / "bench"
@@ -285,6 +286,24 @@ class PrepareTest(unittest.TestCase):
     def test_the_owner_s_git_config_does_not_reach_the_repo(self) -> None:
         repo, _ = self._prepare("plain")
         self.assertEqual("", self._git(repo, "config", "--global", "--list").strip())
+
+
+class StdinTest(unittest.TestCase):
+    def test_no_process_a_run_starts_can_wait_on_the_terminal(self) -> None:
+        real = bench_run.subprocess.run
+        calls = []
+
+        def spy(argv, *args, **kwargs):
+            calls.append((argv, kwargs.get("stdin")))
+            return real(argv, *args, **kwargs)
+
+        with bench_run.workdir("wb-bench-test-") as work, mock.patch.object(bench_run.subprocess, "run", spy):
+            ticket = json.loads((BENCH / "tickets.json").read_text(encoding="utf-8"))["tickets"][2]
+            env = bench_run.session_env(work)
+            base = bench_run.prepare(work / "repo", ticket, "workbench", env, bench_run.copy_plugin(work / "plugin"))
+            bench_run._changed(work / "repo", base, env)
+        self.assertTrue(calls)
+        self.assertEqual([], [argv for argv, stdin in calls if stdin is not bench_run.subprocess.DEVNULL])
 
 
 class WorkdirTest(unittest.TestCase):

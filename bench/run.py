@@ -46,6 +46,9 @@ SMOKE_TICKET = "BN-3"
 PLUGIN_PARTS = (".claude-plugin", "hooks", "lib", "shared", "skills")
 
 GIT_TIMEOUT_S = 60
+# Every process a run starts gets an empty stdin. Run from a terminal, an
+# inherited console never reaches end of input: git shortlog in a repo with no
+# commits reads the log from stdin and waits there until the timeout.
 HIDDEN_TIMEOUT_S = 120
 
 
@@ -145,7 +148,7 @@ def parse_session(stdout: str) -> dict:
 
 def _git(repo: Path, *args: str, env: dict | None = None) -> str:
     done = subprocess.run(
-        ["git", *args], cwd=repo, env=env, capture_output=True, text=True, timeout=GIT_TIMEOUT_S, check=True
+        ["git", *args], cwd=repo, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=GIT_TIMEOUT_S, check=True
     )
     return done.stdout
 
@@ -201,7 +204,7 @@ def session_env(work: Path, env: dict | None = None) -> dict:
 
 
 def _setup(argv: list[str], repo: Path, env: dict) -> None:
-    done = subprocess.run(argv, cwd=repo, env=env, capture_output=True, text=True, timeout=GIT_TIMEOUT_S)
+    done = subprocess.run(argv, cwd=repo, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=GIT_TIMEOUT_S)
     if done.returncode != 0:
         raise RuntimeError(f"setup step failed ({done.returncode}): {' '.join(argv[1:4])}\n{done.stderr.strip()}")
 
@@ -250,7 +253,7 @@ def _hidden_passes(repo: Path, key: str) -> bool:
         [sys.executable, "-m", "unittest", "discover", "-s", str(tests), "-t", str(tests)],
         cwd=repo,
         env=env,
-        capture_output=True,
+        stdin=subprocess.DEVNULL, capture_output=True,
         text=True,
         timeout=HIDDEN_TIMEOUT_S,
     )
@@ -269,7 +272,7 @@ def run_one(claude: str, ticket: dict, arm: str, n: int, *, model: str, timeout_
         stdout = ""
         started = time.monotonic()
         try:
-            done = subprocess.run(argv, cwd=repo, env=env, capture_output=True, text=True, timeout=timeout_s)
+            done = subprocess.run(argv, cwd=repo, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout_s)
             stdout = done.stdout
             if done.returncode != 0:
                 error = f"claude exited {done.returncode}: {done.stderr.strip()[:300]}"

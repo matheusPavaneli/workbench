@@ -8,6 +8,9 @@ computes them.
 
 from __future__ import annotations
 
+import ast
+import re
+
 ARMS = ("plain", "workbench")
 
 # Metric -> which direction is better. The report reads a loss off this.
@@ -18,10 +21,18 @@ METRICS = {
     "tokens": "lower",
     "cost_usd": "lower",
     "wall_s": "lower",
+    "tests_missing": "lower",
+    "invalid_refs": "lower",
+    "unexpected_changes": "lower",
 }
+
+# Metrics where a run either made an error or did not; the caught-errors section
+# compares how often each arm made it.
+ERROR_METRICS = ("hidden_pass", "out_of_scope", "tests_missing", "invalid_refs", "unexpected_changes")
 
 # Workflow artifacts are the workbench arm's paperwork, not a change to the code.
 IGNORED_PREFIXES = (".workflow/",)
+TEST_PREFIX = "tests/"
 
 _USAGE_FIELDS = (
     "input_tokens",
@@ -39,6 +50,202 @@ def out_of_scope(changed: list[str], expected: list[str]) -> list[str]:
         for path in set(changed)
         if path not in allowed and not path.startswith(IGNORED_PREFIXES)
     )
+
+
+def _is_test(path: str) -> bool:
+    return path.startswith(TEST_PREFIX)
+
+
+def _is_logic(path: str) -> bool:
+    return path.endswith(".py") and not _is_test(path) and not path.startswith(IGNORED_PREFIXES)
+
+
+def tests_missing(changed: list[str]) -> int:
+    """1 when a logic file changed and no test did, else 0."""
+    logic = any(_is_logic(path) for path in changed)
+    tested = any(_is_test(path) for path in changed)
+    return 1 if logic and not tested else 0
+
+
+def _module_file(module: str, sources: dict[str, str]) -> str | None:
+    base = module.replace(".", "/")
+    for candidate in (f"{base}.py", f"{base}/__init__.py"):
+        if candidate in sources:
+            return candidate
+    return None
+
+
+def _local_roots(sources: dict[str, str]) -> set[str]:
+    """Top-level modules and packages of the repo; imports of anything else are not ours to check."""
+    roots = set()
+    for path in sources:
+        head, sep, rest = path.partition("/")
+        if not sep and head.endswith(".py"):
+            roots.add(head[: -len(".py")])
+        elif rest == "__init__.py":
+            roots.add(head)
+    return roots
+
+
+def _defined(tree: ast.Module) -> set[str] | None:
+    """Names a module defines at top level, or None when a star import makes that unknowable."""
+    names: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(node.name)
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                names.update(n.id for n in ast.walk(target) if isinstance(n, ast.Name))
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            names.add(node.target.id)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            for alias in node.names:
+                if alias.name == "*":
+                    return None
+                names.add(alias.asname or alias.name.split(".")[0])
+    return names
+
+
+def _absolute(path: str, node: ast.ImportFrom) -> str:
+    """The dotted module an import names, with a relative import resolved against path."""
+    if node.level == 0:
+        return node.module or ""
+    package = path.split("/")[:-1]
+    if node.level > 1:
+        package = package[: len(package) - (node.level - 1)]
+    return ".".join(package + ([node.module] if node.module else []))
+
+
+def invalid_refs(changed: list[str], sources: dict[str, str]) -> list[str] | None:
+    """Imports in the changed .py files that name a repo module or name that does not exist.
+
+    sources holds the text of every .py file in the run's final tree. None when a
+    changed file does not parse: its references cannot be read, which is not the
+    same as having none.
+    """
+    roots = _local_roots(sources)
+    trees: dict[str, ast.Module | None] = {}
+
+    def parse(path: str) -> ast.Module | None:
+        if path not in trees:
+            try:
+                trees[path] = ast.parse(sources[path])
+            except SyntaxError:
+                trees[path] = None
+        return trees[path]
+
+    found = []
+    for path in sorted(set(changed)):
+        if not path.endswith(".py") or path.startswith(IGNORED_PREFIXES) or path not in sources:
+            continue
+        tree = parse(path)
+        if tree is None:
+            return None
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.split(".")[0] in roots and _module_file(alias.name, sources) is None:
+                        found.append(f"{path}: import {alias.name}")
+            elif isinstance(node, ast.ImportFrom):
+                module = _absolute(path, node)
+                if node.level == 0 and module.split(".")[0] not in roots:
+                    continue
+                target = _module_file(module, sources)
+                if target is None:
+                    found.append(f"{path}: from {module} import {', '.join(alias.name for alias in node.names)}")
+                    continue
+                target_tree = parse(target)
+                defined = _defined(target_tree) if target_tree is not None else None
+                if defined is None:
+                    continue
+                for alias in node.names:
+                    if alias.name not in defined and _module_file(f"{module}.{alias.name}", sources) is None:
+                        found.append(f"{path}: from {module} import {alias.name}")
+    return sorted(found)
+
+
+_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+
+
+def _diff_path(text: str, prefix: str) -> str | None:
+    if text == "/dev/null":
+        return None
+    return text[len(prefix):] if text.startswith(prefix) else text
+
+
+def diff_lines(diff: str) -> dict[str, list[int]]:
+    """Changed line numbers per path, from `git diff -U0`.
+
+    Added and replaced lines are numbered in the new file. A removed block has no
+    line of its own there, so it maps once to the line it follows. A deleted file
+    is recorded under its old path.
+    """
+    lines: dict[str, list[int]] = {}
+    old: str | None = None
+    path: str | None = None
+    in_header = False
+    for row in diff.splitlines():
+        if row.startswith("diff --git "):
+            in_header, old, path = True, None, None
+        elif in_header and row.startswith("--- "):
+            old = _diff_path(row[4:], "a/")
+        elif in_header and row.startswith("+++ "):
+            path = _diff_path(row[4:], "b/") or old
+        elif row.startswith("@@"):
+            in_header = False
+            hunk = _HUNK.match(row)
+            if hunk is None or path is None:
+                continue
+            start = int(hunk.group(1))
+            count = 1 if hunk.group(2) is None else int(hunk.group(2))
+            lines.setdefault(path, []).extend(range(start, start + count) if count else [start])
+    return lines
+
+
+def function_spans(source: str) -> dict[str, tuple[int, int]]:
+    """qualname -> (first line, last line) for every function and class, decorators included."""
+    spans: dict[str, tuple[int, int]] = {}
+
+    def visit(body: list[ast.stmt], prefix: str) -> None:
+        for node in body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                name = prefix + node.name
+                start = min([node.lineno] + [decorator.lineno for decorator in node.decorator_list])
+                spans[name] = (start, node.end_lineno or node.lineno)
+                visit(node.body, name + ".")
+
+    visit(ast.parse(source).body, "")
+    return spans
+
+
+def unexpected_changes(
+    changed_lines: dict[str, list[int]], sources: dict[str, str], expected_functions: list[str] | None
+) -> int | None:
+    """Changed lines in logic files outside the functions the ticket needed.
+
+    None when the ticket names no functions, or when a file holding one does not
+    parse: without the spans there is nothing to measure against.
+    """
+    if not expected_functions:
+        return None
+    allowed: dict[str, list[tuple[int, int]]] = {}
+    for entry in expected_functions:
+        path, _, name = entry.partition("::")
+        if path not in sources:
+            continue
+        try:
+            spans = function_spans(sources[path])
+        except SyntaxError:
+            return None
+        if name in spans:
+            allowed.setdefault(path, []).append(spans[name])
+    count = 0
+    for path, lines in changed_lines.items():
+        if not _is_logic(path):
+            continue
+        inside = allowed.get(path, [])
+        count += sum(1 for line in lines if not any(start <= line <= end for start, end in inside))
+    return count
 
 
 def rework(commits: int) -> int:
@@ -78,11 +285,24 @@ def record(
     wall_s: float,
     error: str | None = None,
     artifacts: list[str] | None = None,
+    diff: str | None = None,
+    sources: dict[str, str] | None = None,
 ) -> dict:
-    """The JSON record written for one run."""
+    """The JSON record written for one run.
+
+    diff (`git diff -U0` against the base, new files included) and sources (the
+    text of every .py file in the final tree) feed the error metrics; without
+    them those metrics are absent, never 0.
+    """
     if arm not in ARMS:
         raise ValueError(f"unknown arm {arm!r}; expected one of {', '.join(ARMS)}")
     stray = out_of_scope(changed, ticket["expected_files"])
+    refs = invalid_refs(changed, sources) if sources is not None else None
+    unexpected = (
+        unexpected_changes(diff_lines(diff), sources, ticket.get("expected_functions"))
+        if diff is not None and sources is not None
+        else None
+    )
     return {
         "ticket": ticket["key"],
         "arm": arm,
@@ -94,8 +314,12 @@ def record(
             "tokens": tokens(session.get("usage")),
             "cost_usd": _number(session.get("total_cost_usd")),
             "wall_s": round(wall_s, 1),
+            "tests_missing": tests_missing(changed),
+            "invalid_refs": None if refs is None else len(refs),
+            "unexpected_changes": unexpected,
         },
         "out_of_scope_files": stray,
+        "invalid_ref_list": refs,
         "changed": sorted(set(changed)),
         "commits": commits,
         "session_id": session.get("session_id"),
@@ -155,6 +379,35 @@ def losses(summary: dict) -> list[tuple[str, str, float, float]]:
     return found
 
 
+def _made_error(metric: str, value: float) -> bool:
+    return value < 1 if metric == "hidden_pass" else value > 0
+
+
+def caught(records: list[dict]) -> list[tuple[str, str, int, int, int, int]]:
+    """(ticket, metric, plain runs with the error, plain n, workbench runs with it, workbench n).
+
+    Only where the two arms made the error in a different share of their runs.
+    An absent value is left out of n.
+    """
+    counts: dict[tuple[str, str], dict[str, list[int]]] = {}
+    for rec in records:
+        for metric in ERROR_METRICS:
+            value = rec["metrics"].get(metric)
+            if value is None:
+                continue
+            tally = counts.setdefault((rec["ticket"], metric), {}).setdefault(rec["arm"], [0, 0])
+            tally[0] += int(_made_error(metric, value))
+            tally[1] += 1
+    found = []
+    for (ticket, metric), arms in sorted(counts.items(), key=lambda item: (item[0][0], ERROR_METRICS.index(item[0][1]))):
+        if "plain" not in arms or "workbench" not in arms:
+            continue
+        (plain_hits, plain_n), (bench_hits, bench_n) = arms["plain"], arms["workbench"]
+        if plain_hits * bench_n != bench_hits * plain_n:
+            found.append((ticket, metric, plain_hits, plain_n, bench_hits, bench_n))
+    return found
+
+
 def _fmt(value: float) -> str:
     return str(int(value)) if float(value).is_integer() else f"{value:.2f}"
 
@@ -199,6 +452,19 @@ def report(records: list[dict], *, commit: str, model: str, date: str, skipped: 
             plain = _cell(arms.get("plain"))
             bench = _cell(arms.get("workbench"))
             lines.append(f"| {metric} | {direction} | {plain[0]} | {plain[1]} | {bench[0]} | {bench[1]} |")
+
+    lines += [
+        "",
+        "## Caught errors",
+        "",
+        "Runs that made each error, per arm, wherever the arms differ (for hidden_pass: runs that failed the hidden tests).",
+        "",
+    ]
+    differ = caught(records)
+    if not differ:
+        lines.append("None: on every ticket, both arms made each error in the same share of their runs.")
+    for ticket, metric, plain_hits, plain_n, bench_hits, bench_n in differ:
+        lines.append(f"- {ticket} {metric}: plain {plain_hits} of {plain_n} runs, workbench {bench_hits} of {bench_n}")
 
     lines += ["", "## Where workbench loses", ""]
     lost = losses(summary)

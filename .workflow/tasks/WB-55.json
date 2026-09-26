@@ -1,0 +1,16 @@
+{
+  "key": "WB-55",
+  "title": "wb approve: one verb for whatever human decision is pending",
+  "type": "feature",
+  "status": "open",
+  "desc": "Approval today is per subsystem, e.g. wb impl verify --approve '<exact text>', retyped by hand. The user should not need to know which gate is waiting.\n\nACCEPTANCE:\n- wb approve resolves the ticket like wb next and shows the one pending decision (plan, verify commands, scope amend, PR) with what is being approved\n- wb approve with no pending decision says so and exits 0\n- approving never runs anything the user was not shown in that same output\n- wb status and wb next point to wb approve whenever a gate is waiting",
+  "created": "2026-09-26T17:51:50Z",
+  "updated": "2026-09-26T17:51:50Z",
+  "comments": [],
+  "linked": [
+    {
+      "key": "WB-54",
+      "type": "relates"
+    }
+  ]
+}

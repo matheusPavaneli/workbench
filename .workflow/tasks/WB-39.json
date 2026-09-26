@@ -2,10 +2,10 @@
   "key": "WB-39",
   "title": "init writes a config that doctor then warns about",
   "type": "bug",
-  "status": "open",
+  "status": "done",
   "desc": "wb init --write in a fresh repo writes .workflow/config.json and nothing else; the very next wb doctor warns: .workflow/ is not ignored; artifacts will show up in every diff, with the lines to add. init proposes and doctor disposes of the same repo, so the fix doctor prints belongs in the proposal.\n\nACCEPTANCE:\n- wb init lists the .gitignore lines it would add when .workflow/ is not ignored\n- wb init --write appends them (never rewriting existing lines), and says so\n- an already-correct .gitignore is left untouched\n- doctor passes the gitignore check right after init --write\n- tests for missing, partial and correct .gitignore",
   "created": "2026-09-26T03:07:40Z",
-  "updated": "2026-09-26T03:07:40Z",
+  "updated": "2026-09-26T04:02:54Z",
   "comments": [],
   "linked": []
 }

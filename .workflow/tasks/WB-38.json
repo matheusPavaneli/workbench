@@ -2,10 +2,10 @@
   "key": "WB-38",
   "title": "the local backlog numbers every repo's tasks WB-n",
   "type": "feature",
-  "status": "open",
+  "status": "done",
   "desc": "local.KEY_PREFIX is the constant \"WB\", so every repo using the local provider gets WB-1, WB-2 -- this tool's own prefix, not the project's. A key is what a branch, a commit and a PR carry, so it should be the project's.\n\nACCEPTANCE:\n- .workflow/config.json accepts key_prefix (2+ letters, validated); wb task new numbers from it\n- without it, the prefix stays WB, so no existing backlog changes keys\n- wb init proposes a key_prefix derived from the repo directory name for a local provider\n- task new --help names the configured prefix, not WB\n- tests: configured prefix, default, invalid value refused with a fix",
   "created": "2026-09-26T03:07:40Z",
-  "updated": "2026-09-26T03:07:40Z",
+  "updated": "2026-09-26T04:02:53Z",
   "comments": [],
   "linked": []
 }

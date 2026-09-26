@@ -106,8 +106,8 @@ def pre_tool_use(payload: dict, root: Path) -> dict | None:
 
     return _deny(
         f"{relative} is not in the audited plan for {key}. "
-        "Either leave it alone, or say why the plan was wrong, add the file to "
-        f".workflow/{key}/sdd.json and re-run: wb sdd audit {key}"
+        "Either leave it alone, or say why the plan was wrong and add it: "
+        f'wb sdd amend {key} {relative} --why "<reason>" (--new for a file to create)'
     )
 
 

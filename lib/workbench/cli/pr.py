@@ -100,6 +100,8 @@ def _context(args: argparse.Namespace) -> int:
 
     payload["plan"] = _optional(key, "sdd.json", lambda doc: sdd_lib.section(doc, "summary"))
     payload["questions"] = _optional(key, "sdd.json", lambda doc: doc.get("questions") or [])
+    # Files added after the audit: a reviewer should know the plan widened.
+    payload["amended"] = _optional(key, "sdd.json", lambda doc: doc.get("amendments") or [])
     plan = _optional(key, "sdd.json", audit_lib.digest)
     payload["verification"] = _optional(key, "evidence.json", lambda evidence: _verification(evidence, plan, root))
 

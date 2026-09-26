@@ -116,6 +116,42 @@ can make them agree.
 The post-implementation checks remain `impl check` (scope) and `impl verify`
 (behaviour).
 
+## Amending an audited plan
+
+When an implementation needs a file the plan missed, the old route was to
+hand-edit `sdd.json`, copy the zones from `wb repo zones`, and re-run the
+audit. That loop cost more than the file did, and a hand edit is exactly where
+a `zones` block or a `why` goes stale. `wb sdd amend` replaces it:
+
+```
+wb sdd amend <KEY> <path>... --why "<reason>" [--new] [--lines N]
+```
+
+- It refuses a plan that does not stand. Amend widens a plan that passed; it is
+  not a way around the first audit.
+- `--why` is required. Each path must exist unless `--new` marks it as a file
+  the change creates, and `--new` refuses a file that already exists. A path
+  already in the plan is refused.
+- It appends `{path, change, why}` (plus `lines` when given) to `files`,
+  recomputes `zones`, and re-runs the audit at the baseline the plan already
+  has.
+- It prints the new tier. Without `--lines` the new entry has no estimate, so
+  the plan becomes `standard`. If that raises the tier, or enters a critical
+  zone, the audit fails the way any plan missing `steps` or `product` does
+  (exit 7). Nothing is waived silently.
+- `audit.json` is refreshed only on a pass. On a fail the plan stays amended and
+  does not stand, so `impl check`, `impl verify` and the hook refuse to work
+  from it until it is fixed.
+- Each path is recorded in the plan's `amendments` as `{path, why, at}`, and the
+  event log records `sdd amend` with `amended: <count>` (a count only, never the
+  paths). `wb pr context` carries them as `amended`, `wb review context` lists
+  them, and `sdd.md` renders them. A reviewer can see that the plan widened
+  after its audit.
+
+A plan with no `amendments` key validates exactly as it did before.
+
+The pre-tool-use hook's refusal names this command as the way through.
+
 ## Verification
 
 `wb impl verify <KEY>` runs the plan's `verify` list and writes

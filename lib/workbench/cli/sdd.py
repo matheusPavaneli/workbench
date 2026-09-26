@@ -10,12 +10,13 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 
 from .. import artifacts, audit as audit_lib, contract, events, gitctx, profile as profile_lib, sdd as sdd_lib
 from ..errors import EXIT_AUDIT, UsageError, WbError
 
-ACTIONS = ["audit", "get", "render", "handover", "gates"]
+ACTIONS = ["audit", "amend", "get", "render", "handover", "gates"]
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:
@@ -30,6 +31,14 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         action="store_true",
         help="re-anchor the plan's citations to the current commit instead of the one already recorded",
     )
+
+    amend = actions.add_parser("amend", help="add files to an audited plan and re-audit it; exit 7 on failure")
+    amend.add_argument("key")
+    amend.add_argument("paths", nargs="+", metavar="path")
+    amend.add_argument("--why", help="why the plan missed it; required")
+    amend.add_argument("--new", action="store_true", help="the files do not exist yet; the change creates them")
+    amend.add_argument("--lines", type=int, default=None, metavar="N",
+                       help="estimated lines changed in each file; without it the plan is standard")
 
     get = actions.add_parser("get", help="print one section, so consumers do not read the whole plan")
     get.add_argument("key")
@@ -48,7 +57,10 @@ def register(subparsers: argparse._SubParsersAction) -> None:
 def run(args: argparse.Namespace) -> int:
     if not args.action:
         raise UsageError("wb sdd needs an action", fix=[f"actions: {', '.join(ACTIONS)}"])
-    return {"audit": _audit, "get": _get, "render": _render, "handover": _handover, "gates": _gates}[args.action](args)
+    handlers = {
+        "audit": _audit, "amend": _amend, "get": _get, "render": _render, "handover": _handover, "gates": _gates,
+    }
+    return handlers[args.action](args)
 
 
 def _baseline(key: str, root: Path, *, rebaseline: bool) -> str | None:
@@ -88,7 +100,10 @@ def _audit(args: argparse.Namespace) -> int:
     if args.json:
         print(contract.emit("sdd.audit", report.to_dict()))
         return 0 if report.passed else EXIT_AUDIT
+    return _print_report(key, report)
 
+
+def _print_report(key: str, report: audit_lib.Report) -> int:
     checked = len(report.findings)
     tier = f"{report.tier} tier ({report.tier_reason})"
     drifted = [f for f in report.findings if f.verdict in (audit_lib.BASELINE, audit_lib.MOVED)]
@@ -120,6 +135,88 @@ def _audit(args: argparse.Namespace) -> int:
         print(f"  structure     {problem}", file=sys.stderr)
     print("\nfix the plan, not the check. Do not implement from a failed audit.", file=sys.stderr)
     return EXIT_AUDIT
+
+
+def _amend(args: argparse.Namespace) -> int:
+    """Add files to a plan that passed, and re-audit it where it stands.
+
+    The narrow door for "the plan missed a file": no hand edit of sdd.json, no
+    zones copied by hand, the baseline kept -- and a record, in the plan and in
+    the event log, that the plan grew after its audit.
+    """
+    key = artifacts.validate_key(args.key)
+    root = gitctx.checkout()
+    doc = artifacts.read_json(key, "sdd.json")
+    try:
+        previous = artifacts.read_json(key, "audit.json")
+    except WbError:
+        previous = None
+
+    why = audit_lib.standing(previous, doc)
+    if why is not None:
+        raise UsageError(
+            f"the plan for {key} {why}; amend widens a plan that stands",
+            fix=[f"run: wb sdd audit {key}"],
+        )
+    reason = str(args.why or "").strip()
+    if not reason:
+        raise UsageError("an amendment needs --why", fix=["say why the plan missed it: --why \"<reason>\""])
+
+    planned = {str(item.get("path", "")).replace("\\", "/") for item in doc.get("files") or [] if isinstance(item, dict)}
+    paths = []
+    for raw in args.paths:
+        path = _relative(root, raw)
+        if path in planned or path in paths:
+            raise UsageError(f"{path} is already in the plan for {key}")
+        exists = (root / path).is_file()
+        if not args.new and not exists:
+            raise UsageError(f"{path} does not exist", fix=["to plan a file that will be created, pass --new"])
+        if args.new and exists:
+            raise UsageError(f"{path} already exists; --new is for a file the change creates")
+        paths.append(path)
+
+    at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    files = list(doc.get("files") or [])
+    amendments = list(doc.get("amendments") or [])
+    for path in paths:
+        entry: dict = {"path": path, "change": "add" if args.new else "edit", "why": reason}
+        if args.lines is not None:
+            entry["lines"] = args.lines
+        files.append(entry)
+        amendments.append({"path": path, "why": reason, "at": at})
+    doc["files"] = files
+    doc["amendments"] = amendments
+    doc["zones"] = profile_lib.critical_zones(
+        [str(item.get("path")) for item in files if isinstance(item, dict) and item.get("path")]
+    )
+    artifacts.write_json(key, "sdd.json", doc)
+    events.note_amended(len(paths))
+
+    # The anchor the plan passed at, so the citations are judged as before.
+    report = audit_lib.run(doc, root, str(previous.get("baseline") or "") or None)
+    events.note_verdicts(finding.verdict for finding in report.findings)
+    for path in paths:
+        print(f"amended   {path}  ({reason})")
+    if report.passed:
+        # Refreshed only on pass: a failed amendment leaves the plan amended
+        # and not standing, so nothing implements from it until it is fixed.
+        artifacts.write_json(key, "audit.json", report.to_dict())
+    else:
+        print(f"the plan is amended but no longer stands; fix it and re-run: wb sdd audit {key}", file=sys.stderr)
+    return _print_report(key, report)
+
+
+def _relative(root: Path, raw: str) -> str:
+    candidate = Path(raw)
+    if candidate.is_absolute():
+        try:
+            candidate = candidate.resolve().relative_to(root.resolve())
+        except ValueError:
+            raise UsageError(f"{raw} is outside this checkout") from None
+    path = candidate.as_posix().removeprefix("./")
+    if not path or path.startswith("../") or path.split("/", 1)[0] == artifacts.WORKFLOW_DIR:
+        raise UsageError(f"{raw} is not a file this plan can list")
+    return path
 
 
 def _get(args: argparse.Namespace) -> int:

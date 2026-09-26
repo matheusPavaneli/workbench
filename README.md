@@ -402,7 +402,7 @@ wb status  [KEY] | --stats     where work stands, and what to run next
 wb ctx     show | list | add | use | test | record
 wb task    list | get | new | done
 wb repo    profile [--confirm] | zones | gates <paths>
-wb sdd     audit [--rebaseline] | get | render | handover | gates
+wb sdd     audit [--rebaseline] | amend <path>... --why | get | render | handover | gates
 wb flow    show | start | carry | set        start, carry take --execute
 wb impl    check | verify
 wb review  context | gates

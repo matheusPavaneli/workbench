@@ -32,8 +32,14 @@ SECTIONS = [
     "product",
     "handover",
     "questions",
+    "amendments",
     "summary",
 ]
+
+# Files added by `wb sdd amend` after the plan passed its audit: one entry per
+# path, with the reason and the time. Optional -- a plan never amended has no
+# such key and validates exactly as before.
+AMENDMENT_FIELDS = ("path", "why", "at")
 
 # Presets that must state the product effect of a change. Above these, that
 # call belongs to a product owner, not to the plan.
@@ -205,6 +211,27 @@ def _paths(doc: dict) -> list[str]:
     ]
 
 
+def _amendment_problems(doc: dict) -> list[str]:
+    """Only checked when present: a plan never amended is unchanged by this."""
+    if "amendments" not in doc:
+        return []
+    amendments = doc.get("amendments")
+    if not isinstance(amendments, list):
+        return ["amendments must be a list of {path, why, at}"]
+    problems = []
+    planned = set(_paths(doc))
+    for index, item in enumerate(amendments):
+        if not isinstance(item, dict):
+            problems.append(f"amendments[{index}] must be an object, not {type(item).__name__}")
+            continue
+        for field in AMENDMENT_FIELDS:
+            if not str(item.get(field, "")).strip():
+                problems.append(f"amendments[{index}] has no {field}")
+        if item.get("path") and str(item["path"]) not in planned:
+            problems.append(f"amendments[{index}] names {item['path']}, which files does not list")
+    return problems
+
+
 def _zones_problem(doc: dict) -> str | None:
     """How the plan's zones differ from the zones its own files touch.
 
@@ -295,6 +322,8 @@ def validate(doc: dict, max_lines: int = LIGHT_MAX_LINES) -> list[str]:
             problems.append(f"files[{index}] has no why: an untouched-for-no-reason file is scope creep")
         if "lines" in item and _estimate(item) is None:
             problems.append(f"files[{index}].lines must be a whole number of lines changed, 0 or more")
+
+    problems.extend(_amendment_problems(doc))
 
     zones = _zones_problem(doc)
     if zones:
@@ -493,6 +522,13 @@ def render(doc: dict) -> str:
     for item in doc.get("files") or []:
         lines.append(f"- `{item.get('path')}` ({item.get('change')}) — {item.get('why')}")
     lines.append("")
+
+    amendments = [item for item in doc.get("amendments") or [] if isinstance(item, dict)]
+    if amendments:
+        lines += ["## Amendments", "", "Added after the plan passed its audit:", ""]
+        for item in amendments:
+            lines.append(f"- `{item.get('path')}` ({item.get('at')}) — {item.get('why')}")
+        lines.append("")
 
     lines += ["## Steps", ""]
     for index, step in enumerate(doc.get("steps") or [], start=1):

@@ -32,13 +32,10 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
    entry says what must hold — assert that, not that a function was called.
    `impl verify` fails, naming it, on any `target` the branch never changed.
 
-5. **Check the scope.** `impl check <KEY>` after each step or two. It lists
-   planned files as changed or pending, `companion` for a test, declaration,
-   lockfile or generated file tied to a planned one, `other` for a file another
-   audited plan claims, and `overlap` where two plans claim one file. It fails
-   only on a file nothing accounts for. A lockfile without its manifest planned
-   is not a companion. With the plugin's hooks on, an edit to such a
-   file is refused before it lands; the answer is the same either way.
+5. **Check the scope.** `impl check <KEY>` after each step or two: planned files
+   `ok`/`pending`, `companion` (a test, lockfile or generated file tied to a
+   planned one), `other` (another plan's), `overlap`. It fails on a file nothing
+   accounts for; with hooks on, that edit is refused before it lands.
 
 6. **Verify.** `impl verify <KEY>` runs the plan's `verify` commands and writes
    `.workflow/<KEY>/evidence.md`. It refuses anything that is not a known test,
@@ -64,6 +61,9 @@ It happens, and it is not a reason to improvise. Stop, say what the plan assumed
 and what the code actually does, update `sdd.json`, re-run `sdd audit <KEY>`,
 then continue. A deviation that goes through the plan is a correction; one that
 does not is an unreviewed change wearing a reviewed plan's name.
+
+A missed file: `sdd amend <KEY> <path> --why "..." --lines N` (`--new` to
+create it) re-audits in place; if the tier rises, add what the audit asks.
 
 ## Rules
 

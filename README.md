@@ -426,6 +426,7 @@ wb init    [--write]           propose (or write) this repo's config
 wb doctor  everything that has to be true, in one pass
 wb start  KEY [--refresh]      read the ticket, branch for it, route it: one command to pick up work
 wb finish KEY -m MESSAGE       light path: every check against the real change, then the commit command
+wb approve [KEY] [TOKEN]       show the one decision waiting on you, or approve exactly it by its token
 wb route   [KEY]               the steps this change actually needs
 wb next    [KEY]               the single command to run now
 wb status  [KEY] | --stats     where work stands, and what to run next

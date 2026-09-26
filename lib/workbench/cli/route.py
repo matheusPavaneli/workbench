@@ -36,6 +36,7 @@ FULL = [
     ("implement", "implement-change", "wb impl check {key}"),
     ("verify", "implement-change", "wb impl verify {key}"),
     ("handover", "write-handover", "wb sdd handover {key}"),
+    ("review", "review-diff", "wb review gates --key {key}"),
     ("commit", "write-commit", "wb commit check --file <path> --key {key}"),
     ("pr", "draft-pr", "wb pr context {key}"),
 ]
@@ -46,8 +47,13 @@ FULL = [
 MITIGATE = ("mitigate", "trace-incident", "wb cite check .workflow/{key}/incident.md")
 
 # What a change of one or two files, in no critical zone, on a ticket nobody
-# has to explain to QA, actually needs.
-SHORT = {"triage", "plan", "implement", "verify", "commit"}
+# has to explain to QA, actually needs. A self-review is part of the floor: it
+# is the step that costs least on the smallest change.
+SHORT = {"triage", "plan", "implement", "verify", "review", "commit"}
+
+# A product case is owed by work that adds something, not by a fix to what
+# already exists.
+FRAMED_TYPES = {"feature"}
 
 
 def register(subparsers: argparse._SubParsersAction) -> None:
@@ -67,6 +73,8 @@ def run(args: argparse.Namespace) -> int:
 
     tier, reason = _tier(doc, paths, kind)
     steps = [step for step in FULL if tier == sdd_lib.STANDARD or step[0] in SHORT]
+    if not _framed(key, kind, root):
+        steps = [step for step in steps if step[0] != "frame"]
 
     # A handover is owed by the ticket type, never by the size of the diff.
     if kind.lower() in sdd_lib.HANDOVER_TYPES or key.startswith("incident-"):
@@ -128,6 +136,14 @@ def _kind(key: str, root: Path) -> str:
         return str(json.loads(path.read_text(encoding="utf-8")).get("type") or "")
     except (OSError, ValueError):
         return ""
+
+
+def _framed(key: str, kind: str, root: Path) -> bool:
+    """Whether this work gets a frame step: feature work, an idea, or work
+    that has one already -- a frame written by hand is never dropped from view."""
+    if kind.lower() in FRAMED_TYPES or key.startswith("idea-"):
+        return True
+    return (artifacts.ticket_dir(key, root) / "frame.md").is_file()
 
 
 def _tier(doc: dict | None, paths: list[str], kind: str) -> tuple[str, str]:

@@ -208,14 +208,17 @@ ABC-123  light route  (1 file(s), no critical zone)
   2. plan       plan-change        wb sdd audit ABC-123
   3. implement  implement-change   wb impl check ABC-123
   4. verify     implement-change   wb impl verify ABC-123
-  5. commit     write-commit       wb commit check --file <path> --key ABC-123
+  5. review     review-diff        wb review gates --key ABC-123
+  6. commit     write-commit       wb commit check --file <path> --key ABC-123
 
 waived by the light tier: steps, product
 the floor is not waived: citations, the file list, verify and rollback still apply
 ```
 
 Touch a critical zone, exceed two files, or pick up a bug ticket and the same
-command returns the full eight steps, with the reason. It is a router, not an
+command returns the full route, with the reason: a handover for work that owes
+QA one, and a frame only for feature work. Every route reviews the diff right
+before the commit. It is a router, not an
 eleventh skill: ten descriptions are already this plugin's always-on cost, and
 one more to say "do less" would be the joke telling itself.
 

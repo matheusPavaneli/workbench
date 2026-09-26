@@ -242,40 +242,59 @@ class PrepareTest(unittest.TestCase):
     """The setup a run does before any paid session, on a real git repo."""
 
     def _prepare(self, arm: str) -> tuple[Path, str]:
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        work = Path(tmp.name)
+        context = bench_run.workdir("wb-bench-test-")
+        work = context.__enter__()
+        self.addCleanup(context.__exit__, None, None, None)
+        self.env = bench_run.session_env(work)
         plugin = bench_run.copy_plugin(work / "plugin") if arm == "workbench" else None
         ticket = json.loads((BENCH / "tickets.json").read_text(encoding="utf-8"))["tickets"][2]
-        base = bench_run.prepare(work / "repo", ticket, arm, bench_run.session_env(work), plugin)
+        base = bench_run.prepare(work / "repo", ticket, arm, self.env, plugin)
         return work / "repo", base
 
     def _git(self, repo: Path, *args: str) -> str:
-        return bench_run._git(repo, *args)
+        return bench_run._git(repo, *args, env=self.env)
 
     def test_the_workbench_arm_starts_with_its_ticket_and_config_in_the_base_commit(self) -> None:
         repo, base = self._prepare("workbench")
         committed = self._git(repo, "ls-tree", "-r", "--name-only", base).splitlines()
         self.assertIn(".workflow/config.json", committed)
         self.assertIn(".workflow/tasks/BN-3.json", committed)
-        self.assertEqual([], bench_run._changed(repo, base), "setup left changes that would be scored")
+        self.assertEqual([], bench_run._changed(repo, base, self.env), "setup left changes that would be scored")
 
     def test_the_plain_arm_has_no_workbench_setup(self) -> None:
         repo, base = self._prepare("plain")
         self.assertFalse((repo / ".workflow").exists())
-        self.assertEqual([], bench_run._changed(repo, base))
+        self.assertEqual([], bench_run._changed(repo, base, self.env))
 
     def test_bytecode_from_running_the_tests_is_not_a_change(self) -> None:
         repo, base = self._prepare("plain")
         (repo / "shop" / "__pycache__").mkdir()
         (repo / "shop" / "__pycache__" / "format.cpython-312.pyc").write_bytes(b"")
-        self.assertEqual([], bench_run._changed(repo, base))
+        self.assertEqual([], bench_run._changed(repo, base, self.env))
 
-    def test_the_owner_s_workbench_home_never_reaches_a_run(self) -> None:
-        env = bench_run.session_env(Path("/w"), {"WORKBENCH_HOME": "/home/me/.workbench", "PATH": "p"})
-        self.assertEqual(str(Path("/w") / "home"), env["WORKBENCH_HOME"])
-        self.assertEqual(str(Path("/w") / "config"), env["CLAUDE_CONFIG_DIR"])
-        self.assertEqual("p", env["PATH"])
+    def test_the_owner_s_homes_never_reach_a_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            env = bench_run.session_env(work, {"WORKBENCH_HOME": "/home/me/.workbench", "PATH": "p"})
+            self.assertEqual(str(work / "home"), env["WORKBENCH_HOME"])
+            self.assertEqual(str(work / "config"), env["CLAUDE_CONFIG_DIR"])
+            self.assertEqual("", Path(env["GIT_CONFIG_GLOBAL"]).read_text(encoding="utf-8"))
+            self.assertEqual("1", env["GIT_CONFIG_NOSYSTEM"])
+            self.assertEqual("p", env["PATH"])
+
+    def test_the_owner_s_git_config_does_not_reach_the_repo(self) -> None:
+        repo, _ = self._prepare("plain")
+        self.assertEqual("", self._git(repo, "config", "--global", "--list").strip())
+
+
+class WorkdirTest(unittest.TestCase):
+    def test_a_dir_with_read_only_files_is_removed(self) -> None:
+        with bench_run.workdir("wb-bench-test-") as work:
+            locked = work / "objects" / "ab"
+            locked.parent.mkdir()
+            locked.write_text("x", encoding="utf-8")
+            locked.chmod(0o444)
+        self.assertFalse(work.exists())
 
 
 def _run_suite(start: Path) -> unittest.TestResult:

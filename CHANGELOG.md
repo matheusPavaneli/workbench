@@ -15,6 +15,13 @@ renames a key raises its `schema` number in the same release, and
 
 ### Fixed
 
+- **`wb impl verify` fails when a test the plan named was never written.**
+  `tests[].target` was never read: every command passing verified the plan,
+  with or without its tests. Each target must now be among the branch's
+  changes, committed or not; one that is not fails the run with exit 7, is
+  named on stderr, recorded as `tests_missing` in `evidence.json`, and shown by
+  `wb status` under verify.
+
 - **`wb impl verify` no longer asks again on every ticket for the same
   command.** Approvals were verbatim, and a verify list usually names its own
   ticket (`wb sdd audit ABC-1`), so each ticket stopped on an approval nobody
@@ -25,6 +32,16 @@ renames a key raises its `schema` number in the same release, and
   earlier releases keep covering their ticket.
 
 ### Added
+
+- **`wb impl verify --regression` proves a regression test tests the fix.**
+  Each `kind: "regression"` target runs on its own in a temporary worktree at
+  the commit the branch left, with the branch's changed test files carried in,
+  and must fail there; then in the checkout, where it must pass. The working
+  tree is never touched, so it holds for a fix already committed. Both runs
+  land in `evidence.json` under `regression`. Per-file commands exist for
+  unittest, pytest, vitest and jest; another runner is refused, as is a plan
+  with no regression tests. The generated commands go through the same
+  per-machine approval as the plan's own.
 
 - **`wb cite check <file>` audits citations outside a plan.** Review findings,
   incident chains, replies to a reviewer and answers about the code were told

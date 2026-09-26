@@ -29,8 +29,8 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
    along the way: the plan's file list is the scope, and it was reviewed.
 
 4. **Write the tests the plan named.** `sdd get <KEY> --section tests`. Each
-   entry says what must hold — assert that, not that a function was called. A
-   regression test must fail without the fix; check that it does.
+   entry says what must hold — assert that, not that a function was called.
+   `impl verify` fails, naming it, on any `target` the branch never changed.
 
 5. **Check the scope.** `impl check <KEY>` after each step or two. It lists
    planned files as changed or pending, `other` for a file another audited plan
@@ -44,6 +44,9 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
    command appears in a checkout nothing runs: it prints a `--approve` call
    naming each command. Show it to the user; never approve on their behalf.
    The evidence is bound to the tree it saw, so verify last, then commit.
+   For a bug fix, `impl verify <KEY> --regression`: each `regression` target
+   runs on the commit the branch left, with the new tests carried in, and must
+   fail there, then pass here. Report the result either way.
 
 7. **Report honestly.** If verification fails, say so with the failing line.
    Fix the code, never the evidence.

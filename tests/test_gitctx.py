@@ -38,6 +38,44 @@ class WorkingTree(unittest.TestCase):
     def test_grep_files_reports_no_match_as_empty_not_as_failure(self) -> None:
         self.assertEqual([], gitctx.grep_files(self.root, "HEAD", "nowhere_at_all", []))
 
+    def test_a_worktree_shows_the_commit_and_is_gone_afterwards(self) -> None:
+        first = gitctx.head(self.root)
+        (self.root / "src" / "a.py").write_text("two\n", encoding="utf-8")
+        _git(["commit", "-qam", "two"], self.root)
+        (self.root / "src" / "a.py").write_text("three, uncommitted\n", encoding="utf-8")
+
+        with gitctx.worktree(self.root, first) as tree:
+            self.assertEqual("one\n", (tree / "src" / "a.py").read_text(encoding="utf-8"))
+        self.assertFalse(tree.exists())
+        # The user's tree and branch are as they were.
+        self.assertEqual("three, uncommitted\n", (self.root / "src" / "a.py").read_text(encoding="utf-8"))
+        self.assertEqual(self.base, gitctx.branch(self.root))
+        listed = subprocess.run(["git", "worktree", "list"], cwd=str(self.root), capture_output=True, text=True).stdout
+        self.assertEqual(1, len(listed.strip().splitlines()))
+
+    def test_a_worktree_is_removed_when_the_body_raises(self) -> None:
+        with self.assertRaises(RuntimeError):
+            with gitctx.worktree(self.root, "HEAD") as tree:
+                raise RuntimeError("boom")
+        self.assertFalse(tree.exists())
+
+    def test_a_worktree_at_an_unknown_ref_is_refused(self) -> None:
+        with self.assertRaises(UsageError):
+            with gitctx.worktree(self.root, "no-such-ref"):
+                pass
+
+    def test_merge_base_is_the_fork_point(self) -> None:
+        fork = gitctx.head(self.root)
+        _git(["switch", "-qc", "topic"], self.root)
+        (self.root / "src" / "a.py").write_text("topic\n", encoding="utf-8")
+        _git(["commit", "-qam", "topic"], self.root)
+        _git(["switch", "-q", self.base], self.root)
+        (self.root / "src" / "b.py").write_text("base moved\n", encoding="utf-8")
+        _git(["add", "-A"], self.root)
+        _git(["commit", "-qm", "base"], self.root)
+        self.assertEqual(fork, gitctx.merge_base(self.root, "topic", self.base))
+        self.assertIsNone(gitctx.merge_base(self.root, "topic", "no-such-ref"))
+
     def test_grep_files_can_match_whole_words(self) -> None:
         (self.root / "src" / "a.py").write_text("someone\n", encoding="utf-8")
         _git(["commit", "-qam", "longer"], self.root)

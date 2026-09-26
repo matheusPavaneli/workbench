@@ -2,7 +2,8 @@
 
 Read-only. Nothing here commits, pushes, or changes a working tree: those are
 the user's calls, and they go through the agent's own tooling where the user
-can see and approve them.
+can see and approve them. ``worktree`` is the one exception in form only: it
+makes a separate, temporary checkout and removes it again.
 """
 
 from __future__ import annotations
@@ -12,6 +13,8 @@ import re
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -402,6 +405,45 @@ def commits_between(cwd: Path, base: str, branch: str) -> list[str]:
 
 def branch_exists(cwd: Path, name: str) -> bool:
     return _git(["rev-parse", "--verify", "--quiet", name], cwd) is not None
+
+
+def merge_base(cwd: Path, a: str, b: str) -> str | None:
+    """The commit ``a`` and ``b`` last shared, or ``None`` if git cannot say."""
+    return _git(["merge-base", a, b], cwd)
+
+
+@contextmanager
+def worktree(cwd: Path, ref: str) -> Iterator[Path]:
+    """A throwaway checkout of ``ref``, removed on the way out whatever happened.
+
+    Detached, in a temp directory, so neither the user's working tree nor their
+    branches are touched: a run against "the code without the fix" must not be
+    able to lose the fix. The only trace left is the worktree's admin entry
+    until the prune below, and a crash between the two is what ``git worktree
+    prune`` exists for.
+    """
+    scratch = Path(tempfile.mkdtemp(prefix="wb-worktree-"))
+    path = scratch / "tree"
+    try:
+        completed = subprocess.run(
+            ["git", "worktree", "add", "--detach", "--quiet", str(path), ref],
+            cwd=str(cwd), capture_output=True, text=True, timeout=120, check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        shutil.rmtree(scratch, ignore_errors=True)
+        raise UsageError(f"cannot create a worktree at {ref}", fix=["check that git works here"]) from exc
+    if completed.returncode != 0:
+        shutil.rmtree(scratch, ignore_errors=True)
+        raise UsageError(
+            f"cannot create a worktree at {ref}: {(completed.stderr or '').strip()}",
+            fix=["check the ref exists: git rev-parse " + ref],
+        )
+    try:
+        yield path
+    finally:
+        _git(["worktree", "remove", "--force", str(path)], cwd)
+        _git(["worktree", "prune"], cwd)
+        shutil.rmtree(scratch, ignore_errors=True)
 
 
 def identity(cwd: Path) -> dict[str, str]:

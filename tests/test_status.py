@@ -348,6 +348,55 @@ class Waiting(StatusBase):
         self.assertEqual([], status_lib.listed())
 
 
+class Listing(StatusBase):
+    """WB-37: the lines a session reads first."""
+
+    def close(self, key: str) -> None:
+        path = self.root / ".workflow" / "tasks" / f"{key}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"key": key, "status": "done"}), encoding="utf-8")
+
+    def test_next_names_the_plan_skill_once(self) -> None:
+        self.write("ABC-1", "triage.json", {"title": "t", "type": "feature"})
+        out = status_lib.render_next(status_lib.read("ABC-1"), "named")
+        self.assertEqual(1, out.count("plan-change"), out)
+
+    def test_a_skill_not_in_the_command_is_still_named(self) -> None:
+        self.write("ABC-1", "triage.json", {"title": "t", "type": "feature"})
+        self.write("ABC-1", "sdd.json", {"files": [{"path": "a.py"}]})
+        out = status_lib.render_next(status_lib.read("ABC-1"), "named")
+        self.assertIn("wb sdd audit ABC-1", out)
+
+    def test_done_tickets_are_counted_not_listed(self) -> None:
+        for key in ("ABC-1", "ABC-2"):
+            self.write(key, "triage.json", {"title": key.lower(), "type": "feature"})
+        self.close("ABC-2")
+        out = status_lib.render_list([status_lib.read(k) for k in ("ABC-1", "ABC-2")])
+        self.assertIn("ABC-1", out)
+        self.assertNotIn("ABC-2", out)
+        self.assertIn("1 done ticket(s) not shown", out)
+        self.assertIn("wb task clean --merged", out)
+
+    def test_only_done_tickets_is_no_work_in_progress(self) -> None:
+        self.write("ABC-1", "triage.json", {"title": "t", "type": "feature"})
+        self.close("ABC-1")
+        out = status_lib.render_list([status_lib.read("ABC-1")])
+        self.assertTrue(out.startswith("no work in progress"), out)
+        self.assertIn("1 done ticket(s) not shown", out)
+
+    def test_nothing_hidden_says_nothing_about_hiding(self) -> None:
+        self.write("ABC-1", "triage.json", {"title": "t", "type": "feature"})
+        self.assertNotIn("not shown", status_lib.render_list([status_lib.read("ABC-1")]))
+
+    def test_a_cut_title_says_it_was_cut(self) -> None:
+        self.write("ABC-1", "triage.json", {"title": "x" * 60, "type": "feature"})
+        self.write("ABC-2", "triage.json", {"title": "y" * 48, "type": "feature"})
+        lines = status_lib.render_list([status_lib.read(k) for k in ("ABC-1", "ABC-2")]).splitlines()
+        self.assertTrue(lines[0].endswith("x" * 45 + "..."), lines[0])
+        self.assertTrue(lines[1].endswith("y" * 48), lines[1])
+        self.assertEqual(len(lines[0]), len(lines[1]))
+
+
 class Aggregate(StatusBase):
     def test_it_counts_where_work_is_waiting(self) -> None:
         for key in ("ABC-1", "ABC-2"):

@@ -535,6 +535,120 @@ class ImplVerifyApproval(CliBase):
         self.assertIn("not in the plan", err)
 
 
+class ImplVerifyTests(CliBase):
+    """The tests a plan names are part of what verify checks, not a promise in a skill."""
+
+    COMMANDS = ["python -c pass"]
+
+    def plan(self, tests: list[dict]) -> None:
+        plan = {"key": "ABC-1", "files": [{"path": "calc.py"}], "verify": self.COMMANDS, "tests": tests}
+        directory = self.root / ".workflow" / "ABC-1"
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "sdd.json").write_text(json.dumps(plan), encoding="utf-8")
+        (directory / "audit.json").write_text(
+            json.dumps({"verdict": "pass", "plan_sha256": audit_lib.digest(plan)}), encoding="utf-8"
+        )
+
+    def evidence(self) -> dict:
+        return json.loads((self.root / ".workflow" / "ABC-1" / "evidence.json").read_text(encoding="utf-8"))
+
+    def test_a_named_test_the_branch_never_changed_fails_verify(self) -> None:
+        """The regression: every command passed, so an unwritten test verified clean."""
+        self.plan([{"kind": "regression", "target": "tests/test_calc.py", "asserts": "x"}])
+        result = verify_lib.Result(command="x", exit_code=0, duration_ms=1, output="")
+        with mock.patch("workbench.verify._execute", return_value=result), \
+             mock.patch("workbench.status.branch_changes", return_value={"calc.py"}):
+            code, _, err = run("impl", "verify", "ABC-1", "--approve", self.COMMANDS[0])
+        self.assertEqual(EXIT_AUDIT, code)
+        self.assertIn("tests/test_calc.py", err)
+        self.assertEqual("fail", self.evidence()["verdict"])
+        self.assertEqual(["tests/test_calc.py"], self.evidence()["tests_missing"])
+
+    def test_a_named_test_the_branch_changed_passes(self) -> None:
+        self.plan([{"kind": "unit", "target": "tests/test_calc.py", "asserts": "x"}])
+        result = verify_lib.Result(command="x", exit_code=0, duration_ms=1, output="")
+        with mock.patch("workbench.verify._execute", return_value=result), \
+             mock.patch("workbench.status.branch_changes", return_value={"calc.py", "tests/test_calc.py"}):
+            code, _, _ = run("impl", "verify", "ABC-1", "--approve", self.COMMANDS[0])
+        self.assertEqual(0, code)
+        self.assertEqual([], self.evidence()["tests_missing"])
+
+    def test_regression_refuses_a_plan_with_no_regression_tests(self) -> None:
+        self.plan([{"kind": "unit", "target": "tests/test_calc.py", "asserts": "x"}])
+        with mock.patch("workbench.verify._execute") as execute:
+            code, _, err = run("impl", "verify", "ABC-1", "--regression")
+        self.assertEqual(EXIT_USAGE, code)
+        execute.assert_not_called()
+        self.assertIn("no regression tests", err)
+
+
+def _git(root: Path, *args: str) -> None:
+    import subprocess
+
+    subprocess.run(["git", *args], cwd=str(root), capture_output=True, text=True, check=True)
+
+
+class ImplVerifyRegression(ImplVerifyTests):
+    """--regression on a real repo: the test must fail on the base and pass on the branch."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        _git(self.root, "init", "-q", "-b", "main", ".")
+        _git(self.root, "config", "user.email", "t@example.com")
+        _git(self.root, "config", "user.name", "T")
+        (self.root / "calc.py").write_text("def add(a, b):\n    return a - b\n", encoding="utf-8")
+        (self.root / "tests").mkdir()
+        (self.root / "tests" / "test_other.py").write_text(
+            "import unittest\n\nclass T(unittest.TestCase):\n    def test_ok(self):\n        pass\n", encoding="utf-8"
+        )
+        _git(self.root, "add", "calc.py", "tests")
+        _git(self.root, "commit", "-qm", "base")
+        _git(self.root, "switch", "-qc", "topic")
+        # The fix, committed: a stash would not take it out; the base does.
+        (self.root / "calc.py").write_text("def add(a, b):\n    return a + b\n", encoding="utf-8")
+        _git(self.root, "commit", "-qam", "fix")
+
+    def write_test(self, assertion: str) -> None:
+        (self.root / "tests" / "test_calc.py").write_text(
+            "import unittest\n\nimport calc\n\n\nclass Add(unittest.TestCase):\n"
+            f"    def test_it(self):\n        {assertion}\n",
+            encoding="utf-8",
+        )
+
+    def verify_regression(self) -> tuple[int, str, str]:
+        self.plan([{"kind": "regression", "target": "tests/test_calc.py", "asserts": "x"}])
+        command = "python -m unittest tests/test_calc.py"
+        return run("impl", "verify", "ABC-1", "--regression",
+                   "--approve", self.COMMANDS[0], "--approve", command)
+
+    def test_a_test_that_fails_without_the_fix_and_passes_with_it_is_proven(self) -> None:
+        self.write_test("self.assertEqual(3, calc.add(1, 2))")
+        code, _, err = self.verify_regression()
+        self.assertEqual(0, code, err)
+        targets = self.evidence()["regression"]["targets"]
+        self.assertTrue(targets[0]["ok"])
+        self.assertNotEqual(0, targets[0]["without_fix"]["exit_code"])
+        self.assertEqual(0, targets[0]["with_fix"]["exit_code"])
+        # The user's tree still holds the fix.
+        self.assertIn("a + b", (self.root / "calc.py").read_text(encoding="utf-8"))
+
+    def test_a_test_that_passes_without_the_fix_fails_verify(self) -> None:
+        self.write_test("self.assertTrue(callable(calc.add))")
+        code, _, err = self.verify_regression()
+        self.assertEqual(EXIT_AUDIT, code)
+        self.assertIn("passes without the fix", err)
+        self.assertFalse(self.evidence()["regression"]["targets"][0]["ok"])
+
+    def test_an_unapproved_regression_command_is_printed_not_run(self) -> None:
+        self.write_test("self.assertEqual(3, calc.add(1, 2))")
+        self.plan([{"kind": "regression", "target": "tests/test_calc.py", "asserts": "x"}])
+        with mock.patch("workbench.verify._execute") as execute:
+            code, _, err = run("impl", "verify", "ABC-1", "--regression", "--approve", self.COMMANDS[0])
+        self.assertEqual(EXIT_AUDIT, code)
+        execute.assert_not_called()
+        self.assertIn(shlex.quote("python -m unittest tests/test_calc.py"), err)
+
+
 
 class DoctorRunners(unittest.TestCase):
     """unittest is reached through the interpreter, not as a program on PATH.

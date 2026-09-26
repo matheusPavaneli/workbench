@@ -10,8 +10,10 @@ from __future__ import annotations
 import argparse
 import shlex
 import sys
+from pathlib import Path
 
 from .. import artifacts, audit as audit_lib, gitctx, profile as profile_lib, scope as scope_lib, verify as verify_lib
+from .. import status as status_lib
 from ..errors import EXIT_AUDIT, UsageError, WbError
 
 ACTIONS = ["check", "verify"]
@@ -33,6 +35,11 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         default=[],
         metavar="ENTRY",
         help="approve one command, or 'env NAME=value', on this machine; repeatable, exact text",
+    )
+    verify.add_argument(
+        "--regression",
+        action="store_true",
+        help="also run each regression test without the fix (must fail) and with it (must pass)",
     )
 
 
@@ -102,7 +109,8 @@ def _verify(args: argparse.Namespace) -> int:
 
     commands = verify_lib.require_commands(doc.get("verify"))
     env, _ = verify_lib.resolve_env(doc.get("verify_env"))
-    wanted = verify_lib.entries(commands, env, key)
+    regression, base, carried = _regression_plan(doc, root) if args.regression else ([], None, [])
+    wanted = verify_lib.entries([*commands, *(command for _, command in regression)], env, key)
 
     # The printed <KEY> form, or the command as the plan spells it: either way
     # what is stored is the <KEY> form, so the next ticket does not ask again.
@@ -137,6 +145,15 @@ def _verify(args: argparse.Namespace) -> int:
     tree, head = gitctx.tree(root), gitctx.head(root)
     evidence = verify_lib.run(key, commands, root, doc.get("verify_env"))
     evidence.tree, evidence.head, evidence.plan = tree, head, audit_lib.digest(doc)
+    targets = verify_lib.test_targets(doc)
+    if targets:
+        # Only a plan that names tests owes the git call.
+        evidence.tests_missing = verify_lib.missing_tests(targets, status_lib.branch_changes(root))
+    if args.regression and base:
+        for target, command in regression:
+            print(f"regression: {command}  (without the fix at {base[:12]}, then with it)", flush=True)
+        evidence.regression_base = base
+        evidence.regression = verify_lib.run_regression(regression, root, base, carried, doc.get("verify_env"))
     if evidence.env:
         print(f"environment: {', '.join(sorted(evidence.env))}", flush=True)
     artifacts.write_json(key, "evidence.json", evidence.to_dict())
@@ -145,9 +162,21 @@ def _verify(args: argparse.Namespace) -> int:
     for result in evidence.results:
         status = "pass" if result.ok else f"FAIL exit {result.exit_code}"
         print(f"  {status:<14} {result.command}  ({result.duration_ms} ms)")
+    for outcome in evidence.regression or []:
+        status = "pass" if outcome.ok else "FAIL"
+        print(
+            f"  {status:<14} regression {outcome.target}  "
+            f"(without fix exit {outcome.without_fix.exit_code}, with fix exit {outcome.with_fix.exit_code})"
+        )
     sys.stdout.flush()
     for command, reason in evidence.refused:
         print(f"  refused        {command}\n                 {reason}", file=sys.stderr)
+    for target in evidence.tests_missing:
+        print(f"  not written    {target}\n                 the plan names this test; the branch never changed it",
+              file=sys.stderr)
+    for outcome in evidence.regression or []:
+        if not outcome.ok:
+            print(f"  regression     {outcome.target}\n                 {_regression_reason(outcome)}", file=sys.stderr)
 
     print(f"\nwrote {path}")
     if evidence.passed:
@@ -155,6 +184,57 @@ def _verify(args: argparse.Namespace) -> int:
 
     print("verification failed: fix the code, not the evidence", file=sys.stderr)
     return EXIT_AUDIT
+
+
+def _regression_plan(doc: dict, root: Path) -> tuple[list[tuple[str, str]], str, list[str]]:
+    """What --regression runs, against which commit, carrying which files.
+
+    Refuses rather than runs something weaker: a plan with no regression tests,
+    a runner with no per-file form, or a base git cannot resolve would each
+    produce a verdict about something other than "fails without the fix".
+    """
+    targets = verify_lib.regression_targets(doc)
+    if not targets:
+        raise UsageError(
+            "the plan names no regression tests",
+            fix=['add tests[] entries with "kind": "regression" to sdd.json, then re-run the audit'],
+        )
+    conventions = profile_lib.resolve(root).conventions
+    runner = conventions.get("test_runner")
+    pairs = []
+    for target in targets:
+        command, refusal = verify_lib.regression_command(runner, target)
+        if refusal:
+            raise UsageError(f"cannot run {target} on its own: {refusal}",
+                             fix=["run it yourself without the fix, and record the result"])
+        pairs.append((target, command))
+
+    fix = ["check the flow's source branch: wb flow show"]
+    try:
+        from .. import flow as flow_lib
+
+        carry = flow_lib.carry_base(root, flow_lib.resolve(root).source.branch)
+    except Exception as exc:  # noqa: BLE001 - same resolution status uses; here it refuses instead
+        raise UsageError("cannot resolve the branch this work started from", fix=fix) from exc
+    base = gitctx.merge_base(root, "HEAD", carry)
+    if not base:
+        raise UsageError(f"cannot resolve the commit this branch left {carry}", fix=fix)
+
+    test_dir = str(conventions.get("test_dir") or "").strip("/")
+    changed = status_lib.branch_changes(root)
+    carried = sorted(
+        path for path in changed if path in targets or (test_dir and path.startswith(test_dir + "/"))
+    )
+    return pairs, base, carried
+
+
+def _regression_reason(outcome: verify_lib.Regression) -> str:
+    code = outcome.without_fix.exit_code
+    if code == 0:
+        return "passes without the fix, so it does not test the fix"
+    if code in verify_lib.NOT_A_TEST_FAILURE:
+        return f"without the fix it did not run (exit {code}), which proves nothing"
+    return f"fails with the fix too (exit {outcome.with_fix.exit_code})"
 
 
 def _audited_plan(key: str) -> dict:

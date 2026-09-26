@@ -29,6 +29,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -100,6 +101,36 @@ class Result:
         return data
 
 
+# Exit codes that say the command never got as far as a test: timed out, could
+# not run, not found. A regression test "failing" with one of these proves
+# nothing about the fix.
+NOT_A_TEST_FAILURE = frozenset({124, 126, 127})
+
+
+@dataclass
+class Regression:
+    """One regression target, run without the fix and with it."""
+
+    target: str
+    command: str
+    without_fix: Result
+    with_fix: Result
+
+    @property
+    def ok(self) -> bool:
+        failed = self.without_fix.exit_code != 0 and self.without_fix.exit_code not in NOT_A_TEST_FAILURE
+        return failed and self.with_fix.ok
+
+    def to_dict(self) -> dict:
+        return {
+            "target": self.target,
+            "command": self.command,
+            "ok": self.ok,
+            "without_fix": self.without_fix.to_dict(),
+            "with_fix": self.with_fix.to_dict(),
+        }
+
+
 @dataclass
 class Evidence:
     key: str
@@ -111,13 +142,22 @@ class Evidence:
     tree: str | None = None
     head: str | None = None
     plan: str | None = None
+    # Test targets the plan named that the branch never changed.
+    tests_missing: list[str] = field(default_factory=list)
+    # ``None`` when --regression was not asked for; the base it ran against.
+    regression: list[Regression] | None = None
+    regression_base: str | None = None
 
     @property
     def passed(self) -> bool:
+        if self.tests_missing:
+            return False
+        if self.regression is not None and not all(r.ok for r in self.regression):
+            return False
         return bool(self.results) and all(r.ok for r in self.results) and not self.refused
 
     def to_dict(self) -> dict:
-        return {
+        data = {
             "schema": 1,
             "key": self.key,
             "verdict": "pass" if self.passed else "fail",
@@ -127,7 +167,98 @@ class Evidence:
             "tree": self.tree,
             "head": self.head,
             "plan_sha256": self.plan,
+            "tests_missing": list(self.tests_missing),
         }
+        if self.regression is not None:
+            data["regression"] = {
+                "base": self.regression_base,
+                "targets": [r.to_dict() for r in self.regression],
+            }
+        return data
+
+
+def test_targets(plan: dict) -> list[str]:
+    """The files the plan's ``tests[]`` name, as repo-relative paths.
+
+    A pytest node id (``tests/x.py::test_y``) names its file before the ``::``;
+    the file is what the branch has to change.
+    """
+    targets = set()
+    for item in plan.get("tests") or []:
+        if not isinstance(item, dict):
+            continue
+        target = str(item.get("target") or "").split("::", 1)[0].replace("\\", "/").strip()
+        if target:
+            targets.add(target)
+    return sorted(targets)
+
+
+def regression_targets(plan: dict) -> list[str]:
+    return test_targets({"tests": [t for t in plan.get("tests") or [] if isinstance(t, dict) and t.get("kind") == "regression"]})
+
+
+def missing_tests(targets: list[str], changed: set[str]) -> list[str]:
+    """Targets the branch never touched: a test that was named and not written."""
+    return [target for target in targets if target not in changed]
+
+
+# How to run one test file, per runner ``wb repo profile`` can report. A runner
+# that is not here has no per-file form this module knows; --regression refuses
+# it rather than guessing one.
+REGRESSION_RUNNERS: dict[str, list[str]] = {
+    "unittest": ["python", "-m", "unittest"],
+    "pytest": ["python", "-m", "pytest"],
+    "vitest": ["npx", "vitest", "run"],
+    "jest": ["npx", "jest"],
+}
+
+
+def regression_command(runner: str | None, target: str) -> tuple[str | None, str | None]:
+    """``(command, None)`` running one target, or ``(None, why not)``.
+
+    The target comes from a plan a model wrote, so it is held to a path inside
+    the checkout: never an option, never absolute, never climbing out.
+    """
+    prefix = REGRESSION_RUNNERS.get(runner or "")
+    if prefix is None:
+        known = ", ".join(sorted(REGRESSION_RUNNERS))
+        return None, f"no per-file command for test runner {runner or 'unknown'!r} (known: {known})"
+    path = target.replace("\\", "/")
+    if path.startswith("-"):
+        return None, f"{target!r} reads as an option, not a path"
+    if path.startswith("/") or re.match(r"^[A-Za-z]:", path) or ".." in path.split("/"):
+        return None, f"{target!r} is not a path inside the checkout"
+    command = shlex.join([*prefix, path])
+    refusal = check(command)
+    return (None, refusal) if refusal else (command, None)
+
+
+def run_regression(
+    targets: list[tuple[str, str]], root: Path, base: str, carried: list[str], env: dict | None = None
+) -> list[Regression]:
+    """Each ``(target, command)`` at ``base`` with the tests carried in, then here.
+
+    "Without the fix" is the base the branch left, plus the test files the
+    branch changed: the tests as written, the code as it was. A worktree, not a
+    stash, so the user's tree is never touched and a fix already committed is
+    still left out.
+    """
+    from . import gitctx
+
+    overrides, _ = resolve_env(env)
+    outcomes: list[Regression] = []
+    with gitctx.worktree(root, base) as tree:
+        for path in carried:
+            source, destination = root / path, tree / path
+            if source.is_file():
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, destination)
+            elif destination.is_file():
+                destination.unlink()
+        without = [_execute(command, tree, overrides) for _, command in targets]
+    for (target, command), before in zip(targets, without):
+        outcomes.append(Regression(target, command, before, _execute(command, root, overrides)))
+    return outcomes
 
 
 STALE_TREE = "the code changed since it was verified"
@@ -307,6 +438,28 @@ def render(evidence: Evidence) -> str:
         lines += ["## Not run", "", "These were refused and must be run manually:", ""]
         lines += [f"- `{command}` — {reason}" for command, reason in evidence.refused]
         lines.append("")
+
+    if evidence.tests_missing:
+        lines += ["## Planned tests not changed", "", "The plan names these tests; the branch never touched them:", ""]
+        lines += [f"- `{target}`" for target in evidence.tests_missing]
+        lines.append("")
+
+    if evidence.regression is not None:
+        base = f" against `{evidence.regression_base[:12]}`" if evidence.regression_base else ""
+        lines += [f"## Regression{base}", ""]
+        for outcome in evidence.regression:
+            verdict = "pass" if outcome.ok else "FAIL"
+            lines += [
+                f"### `{outcome.target}` — {verdict}",
+                "",
+                f"Without the fix: exit {outcome.without_fix.exit_code} (must fail). "
+                f"With it: exit {outcome.with_fix.exit_code} (must pass).",
+                "",
+                "```",
+                outcome.without_fix.output or "(no output)",
+                "```",
+                "",
+            ]
 
     return "\n".join(lines)
 

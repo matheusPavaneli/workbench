@@ -261,3 +261,97 @@ class Approval(unittest.TestCase):
         verify.approvals_path().write_text("{not json", encoding="utf-8")
         with self.assertRaises(verify.UsageError):
             verify.unapproved(self.repo, ["pytest"])
+
+
+class TestTargets(unittest.TestCase):
+    def test_targets_are_normalised_and_deduplicated(self) -> None:
+        plan = {"tests": [
+            {"kind": "unit", "target": r"tests\test_a.py"},
+            {"kind": "regression", "target": "tests/test_a.py::TestX::test_y"},
+            {"kind": "unit", "target": "tests/test_b.py"},
+            {"kind": "unit", "target": ""},
+            {"kind": "unit"},
+            "not an entry",
+        ]}
+        self.assertEqual(["tests/test_a.py", "tests/test_b.py"], verify.test_targets(plan))
+        self.assertEqual(["tests/test_a.py"], verify.regression_targets(plan))
+
+    def test_a_plan_with_no_tests_names_no_targets(self) -> None:
+        self.assertEqual([], verify.test_targets({}))
+
+    def test_missing_tests_are_the_targets_the_branch_never_changed(self) -> None:
+        targets = ["tests/test_a.py", "tests/test_b.py"]
+        self.assertEqual(["tests/test_b.py"], verify.missing_tests(targets, {"tests/test_a.py", "lib/x.py"}))
+        self.assertEqual([], verify.missing_tests(targets, set(targets)))
+
+
+def _result(code: int) -> verify.Result:
+    return verify.Result(command="x", exit_code=code, duration_ms=1, output="")
+
+
+class Verdict(unittest.TestCase):
+    def evidence(self, **fields) -> verify.Evidence:
+        return verify.Evidence(key="ABC-1", results=[_result(0)], **fields)
+
+    def test_passing_commands_with_a_missing_test_do_not_pass(self) -> None:
+        self.assertTrue(self.evidence().passed)
+        evidence = self.evidence(tests_missing=["tests/test_a.py"])
+        self.assertFalse(evidence.passed)
+        self.assertEqual("fail", evidence.to_dict()["verdict"])
+        self.assertEqual(["tests/test_a.py"], evidence.to_dict()["tests_missing"])
+
+    def regression(self, without: int, with_fix: int) -> verify.Evidence:
+        outcome = verify.Regression("tests/test_a.py", "python -m unittest tests/test_a.py", _result(without), _result(with_fix))
+        return self.evidence(regression=[outcome], regression_base="abc")
+
+    def test_a_regression_that_fails_without_the_fix_and_passes_with_it_passes(self) -> None:
+        evidence = self.regression(1, 0)
+        self.assertTrue(evidence.passed)
+        self.assertEqual("abc", evidence.to_dict()["regression"]["base"])
+        self.assertTrue(evidence.to_dict()["regression"]["targets"][0]["ok"])
+
+    def test_a_regression_that_passes_without_the_fix_fails(self) -> None:
+        self.assertFalse(self.regression(0, 0).passed)
+
+    def test_a_regression_that_fails_with_the_fix_fails(self) -> None:
+        self.assertFalse(self.regression(1, 1).passed)
+
+    def test_a_run_that_never_reached_a_test_proves_nothing(self) -> None:
+        for code in (124, 126, 127):
+            with self.subTest(code=code):
+                self.assertFalse(self.regression(code, 0).passed)
+
+    def test_without_regression_the_payload_has_no_regression_key(self) -> None:
+        self.assertNotIn("regression", self.evidence().to_dict())
+
+    def test_render_names_missing_tests_and_regression_outcomes(self) -> None:
+        text = verify.render(self.evidence(tests_missing=["tests/test_z.py"]))
+        self.assertIn("tests/test_z.py", text)
+        text = verify.render(self.regression(0, 0))
+        self.assertIn("`tests/test_a.py` — FAIL", text)
+
+
+class RegressionCommand(unittest.TestCase):
+    def test_each_known_runner_gets_a_per_file_command(self) -> None:
+        expected = {
+            "unittest": "python -m unittest tests/test_a.py",
+            "pytest": "python -m pytest tests/test_a.py",
+            "vitest": "npx vitest run tests/test_a.py",
+            "jest": "npx jest tests/test_a.py",
+        }
+        for runner, command in expected.items():
+            with self.subTest(runner=runner):
+                self.assertEqual((command, None), verify.regression_command(runner, "tests/test_a.py"))
+
+    def test_an_unknown_runner_is_refused(self) -> None:
+        command, reason = verify.regression_command("mocha", "tests/a.js")
+        self.assertIsNone(command)
+        self.assertIn("mocha", reason)
+        self.assertIsNone(verify.regression_command(None, "tests/a.py")[0])
+
+    def test_a_target_outside_the_checkout_or_shaped_as_an_option_is_refused(self) -> None:
+        for target in ("/etc/passwd", "C:/x/test.py", "../other/test_a.py", "tests/../../x.py", "-c", "--pdb"):
+            with self.subTest(target=target):
+                command, reason = verify.regression_command("unittest", target)
+                self.assertIsNone(command)
+                self.assertTrue(reason)

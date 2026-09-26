@@ -109,6 +109,42 @@ class Pipeline(StatusBase):
         self.write("ABC-1", "evidence.json", {"verdict": "fail", "results": results, "refused": []})
         self.assertEqual("1 failed", self.stage("ABC-1", "verify").detail)
 
+    def test_tests_the_plan_named_and_nobody_wrote_are_named_under_verify(self) -> None:
+        """The regression: every command passed, so a missing test read as a clean verify."""
+        self.write("ABC-1", "triage.json", {"title": "t", "type": "bug"})
+        self.audited("ABC-1", {"files": [{"path": "a.py"}], "steps": [1]})
+        self.write("ABC-1", "evidence.json", {
+            "verdict": "fail", "results": [{"command": "pytest", "exit_code": 0}], "refused": [],
+            "tests_missing": ["tests/test_a.py", "tests/test_b.py"],
+        })
+        stage = self.stage("ABC-1", "verify")
+        self.assertEqual(status_lib.FAIL, stage.state)
+        self.assertIn("tests/test_a.py, tests/test_b.py", stage.detail)
+        self.assertIn("impl verify ABC-1", stage.command)
+
+    def test_a_long_missing_list_is_cut_with_a_count(self) -> None:
+        self.write("ABC-1", "triage.json", {"title": "t", "type": "bug"})
+        self.audited("ABC-1", {"files": [{"path": "a.py"}], "steps": [1]})
+        missing = [f"tests/test_{n}.py" for n in "abcde"]
+        self.write("ABC-1", "evidence.json", {"verdict": "fail", "results": [], "refused": [], "tests_missing": missing})
+        detail = self.stage("ABC-1", "verify").detail
+        self.assertIn("tests/test_c.py (+2 more)", detail)
+        self.assertNotIn("tests/test_d.py", detail)
+
+    def test_a_regression_that_passed_without_the_fix_is_named(self) -> None:
+        self.write("ABC-1", "triage.json", {"title": "t", "type": "bug"})
+        self.audited("ABC-1", {"files": [{"path": "a.py"}], "steps": [1]})
+        self.write("ABC-1", "evidence.json", {
+            "verdict": "fail", "results": [{"command": "pytest", "exit_code": 0}], "refused": [], "tests_missing": [],
+            "regression": {"base": "abc", "targets": [
+                {"target": "tests/test_a.py", "ok": True},
+                {"target": "tests/test_b.py", "ok": False},
+            ]},
+        })
+        detail = self.stage("ABC-1", "verify").detail
+        self.assertIn("regression not proven: tests/test_b.py", detail)
+        self.assertNotIn("tests/test_a.py", detail)
+
 
 class StaleEvidence(StatusBase):
     """A pass recorded before the last edit is a claim about code that is gone."""

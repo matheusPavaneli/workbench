@@ -379,7 +379,19 @@ def _evidence(
     parts = [f"{failed} failed"] if failed else []
     if refused:
         parts.append(f"{len(refused)} refused")
+    missing = [str(t) for t in evidence.get("tests_missing") or []]
+    if missing:
+        parts.append(f"test(s) not changed: {_names(missing)}")
+    regression = (evidence.get("regression") or {}).get("targets") or []
+    broken = [str(r.get("target")) for r in regression if isinstance(r, dict) and not r.get("ok")]
+    if broken:
+        parts.append(f"regression not proven: {_names(broken)}")
     return Stage("verify", FAIL, ", ".join(parts) or "no commands ran", f"wb impl verify {key}")
+
+
+def _names(items: list[str], shown: int = 3) -> str:
+    more = f" (+{len(items) - shown} more)" if len(items) > shown else ""
+    return ", ".join(items[:shown]) + more
 
 
 def _handover(key: str, directory: Path, plan: dict | None, kind: str) -> Stage:

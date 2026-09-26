@@ -1,0 +1,11 @@
+{
+  "key": "WB-37",
+  "title": "next repeats the skill, status lists shipped tickets and cuts titles silently",
+  "type": "bug",
+  "status": "open",
+  "desc": "Three output defects in the commands a session runs first:\n1. wb next on a ticket with no plan prints: next: (plan-change) then wb sdd audit KEY   (plan-change) -- the skill is named twice.\n2. wb status with no key lists every done ticket in the local backlog among the work in flight (12 of 13 lines in this repo), though its help says it lists everything in flight.\n3. titles are cut at 48 characters with no mark, so a cut title reads as a complete one (\"...separates citation drift from inv\").\n\nACCEPTANCE:\n- render_next names the skill once\n- wb status without a key hides done tickets and says how many it hid, with the clean command; --json keeps every ticket\n- a cut title ends in ... and fits the same width\n- regression tests for each",
+  "created": "2026-09-26T03:07:39Z",
+  "updated": "2026-09-26T03:07:39Z",
+  "comments": [],
+  "linked": []
+}

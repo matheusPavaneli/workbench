@@ -9,7 +9,8 @@ losing time", which is the question worth acting on.
 One line per invocation, appended locally. Deliberately small:
 
 - **command and outcome only.** The group, the action, the exit code, the
-  duration and a key if one was given. No arguments, no output, no paths --
+  duration and a key if one was given; for a command that checks citations,
+  how many landed on each verdict. No arguments, no output, no paths --
   those are where a secret or a customer name would end up.
 - **local and disposable.** It lives under ``.workflow/``, which is ignored, and
   is capped by rewriting rather than by growing. Nothing is uploaded anywhere.
@@ -22,6 +23,8 @@ from __future__ import annotations
 import json
 import os
 import time
+from collections import Counter
+from collections.abc import Iterable
 from pathlib import Path
 
 from . import artifacts
@@ -52,7 +55,20 @@ TRACKED = {
     ("review", "gates"),
     ("commit", "check"),
     ("pr", "check"),
+    ("cite", "check"),
 }
+
+# The audit's verdict names, spelled out rather than imported: this module is
+# loaded by every command and must stay light. A test holds them to audit.py.
+# Invented is a claim the code never supported -- the hallucination rate.
+# Drifted is a claim that was true and whose line has since shifted -- the
+# bookkeeping cost of implementing a plan. One exit code cannot tell them apart.
+INVENTED = ("mismatch", "missing_file")
+DRIFTED = ("moved", "out_of_range")
+
+# Counts noted by the running command, taken by the next record(). A handler
+# returns an exit code and nothing else, and the event is written after it.
+_pending: dict[str, int] = {}
 
 
 def path(cwd: Path | None = None) -> Path:
@@ -66,8 +82,21 @@ def global_path() -> Path:
     return contexts.home() / GLOBAL_LOG_NAME
 
 
+def note_verdicts(verdicts: Iterable[str]) -> None:
+    """Attach per-verdict citation counts to the event this command records.
+
+    Names and numbers only: which verdicts, how many of each. Never the file, the
+    line or the quote, which is where the no-arguments rule would break.
+    """
+    _pending.clear()
+    _pending.update(Counter(str(verdict) for verdict in verdicts))
+
+
 def record(group: str, action: str, key: str | None, exit_code: int, duration_ms: int) -> None:
     """Append one event, here and once per machine. Never raises."""
+    # Taken before any early return, so counts never leak onto a later event.
+    verdicts = dict(sorted(_pending.items()))
+    _pending.clear()
     if (group, action) not in TRACKED:
         return
     if os.environ.get("WORKBENCH_NO_EVENTS"):
@@ -82,6 +111,8 @@ def record(group: str, action: str, key: str | None, exit_code: int, duration_ms
     }
     if key:
         entry["key"] = key
+    if verdicts:
+        entry["verdicts"] = verdicts
 
     _append(_here, entry, MAX_EVENTS, TRIM_TO)
     _append(_everywhere, entry, MAX_GLOBAL_EVENTS, TRIM_GLOBAL_TO)
@@ -168,6 +199,32 @@ def summarise(events: list[dict]) -> dict:
         "commands": dict(ordered),
         "most_retried": retried[0][0] if retried else "",
         "repos": _by_repo(events),
+        "citations": _citations(events),
+    }
+
+
+def _citations(events: list[dict]) -> dict:
+    """Citation verdicts summed over every event that recorded them.
+
+    Lines written before counts were recorded carry none and are skipped, as is
+    any value that is not a count: the log is read, never trusted.
+    """
+    runs = 0
+    by_verdict: dict[str, int] = {}
+    for entry in events:
+        counts = entry.get("verdicts")
+        if not isinstance(counts, dict):
+            continue
+        runs += 1
+        for verdict, count in counts.items():
+            if isinstance(count, int) and not isinstance(count, bool) and count > 0:
+                by_verdict[str(verdict)] = by_verdict.get(str(verdict), 0) + count
+    return {
+        "runs": runs,
+        "checked": sum(by_verdict.values()),
+        "invented": sum(by_verdict.get(verdict, 0) for verdict in INVENTED),
+        "drifted": sum(by_verdict.get(verdict, 0) for verdict in DRIFTED),
+        "by_verdict": dict(sorted(by_verdict.items())),
     }
 
 
@@ -206,6 +263,16 @@ def render(summary: dict) -> str:
         for name, row in repos.items():
             failed = f"{row['failed']} failed" if row["failed"] else "clean"
             lines.append(f"  {name:<{width}}  {row['runs']:>3} run(s)  {failed}")
+
+    citations = summary.get("citations") or {}
+    if citations.get("runs"):
+        lines.append(f"\ncitations: {citations['checked']} checked in {citations['runs']} run(s)")
+        lines.append(
+            f"  invented  {citations['invented']:>4}  ({', '.join(INVENTED)}) -- a claim the code never supported"
+        )
+        lines.append(
+            f"  drifted   {citations['drifted']:>4}  ({', '.join(DRIFTED)}) -- a true claim whose line has moved"
+        )
 
     if summary["most_retried"]:
         lines.append(

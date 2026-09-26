@@ -15,6 +15,13 @@ renames a key raises its `schema` number in the same release, and
 
 ### Added
 
+- **`wb status --stats` tells invented citations from drifted ones.** The
+  events for `wb sdd audit` and `wb cite check` now record how many citations
+  landed on each verdict, and the history reports `mismatch` + `missing_file`
+  (a claim the code never supported) apart from `moved` + `out_of_range` (a
+  true claim whose line has shifted). `cite check` is now tracked. The
+  `--json` payload gains `history.citations`. **Upgrade cost:** none; log lines
+  written before this carry no counts and are read as before.
 - **CI lints and type-checks `lib/`.** A `lint` job runs `ruff check lib` and
   `mypy` at pinned versions, blocking, with the rules committed in `ruff.toml`
   and `mypy.ini`. The 11 ruff findings and 13 mypy errors already in `lib/`

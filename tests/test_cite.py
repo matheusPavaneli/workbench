@@ -9,7 +9,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
-from workbench import audit, cite
+from workbench import audit, cite, events
 from workbench.errors import EXIT_AUDIT, EXIT_USAGE
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -135,6 +135,22 @@ class Cli(Checkout):
         code, out, _ = self.run_cli("cite", "check", "notes.md")
         self.assertEqual(0, code)
         self.assertIn("no citations found", out)
+
+    def test_a_checked_artifact_logs_its_counts_per_verdict(self) -> None:
+        os.environ.pop("WORKBENCH_NO_EVENTS", None)
+        previous = os.environ.get("WORKBENCH_HOME")
+        os.environ["WORKBENCH_HOME"] = str(self.root / "home")
+        self.addCleanup(
+            lambda: os.environ.pop("WORKBENCH_HOME", None)
+            if previous is None
+            else os.environ.__setitem__("WORKBENCH_HOME", previous)
+        )
+        self.write("review.md", "`src/checkout.py:2` — `charge = stripe.pay(total)`\n")
+        code, _, _ = self.run_cli("cite", "check", "review.md")
+        self.assertEqual(EXIT_AUDIT, code)
+        (entry,) = events.read()
+        self.assertEqual(("cite", "check"), (entry["group"], entry["action"]))
+        self.assertEqual({"mismatch": 1}, entry["verdicts"])
 
     def test_a_failed_citation_exits_7_with_its_line(self) -> None:
         self.write("review.md", "finding\n`src/checkout.py:2` — `charge = stripe.pay(total)`\n")

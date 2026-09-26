@@ -652,6 +652,37 @@ class ImplementingFromAPlan(unittest.TestCase):
         self.write("audit.json", audit.run(doc, self.root).to_dict())
         self.assertEqual(doc, impl._audited_plan("ABC-1"))
 
+    def test_the_audit_logs_its_counts_per_verdict(self) -> None:
+        """What --stats needs to tell a moved line from a quote that was never true."""
+        import io
+        from contextlib import redirect_stderr, redirect_stdout
+
+        import wb
+        from workbench import events
+        from workbench.errors import EXIT_AUDIT
+
+        for name, value in (("WORKBENCH_HOME", str(self.root / "home")), ("WORKBENCH_NO_EVENTS", None)):
+            previous = os.environ.get(name)
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+            self.addCleanup(
+                lambda n=name, p=previous: os.environ.pop(n, None) if p is None else os.environ.__setitem__(n, p)
+            )
+
+        (true,) = _doc()["evidence"]
+        self.write("sdd.json", _doc(evidence=[
+            true,
+            {**true, "quote": "charge = stripe.pay(total)"},
+            {**true, "file": "src/refunds.py"},
+        ]))
+        with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            code = wb.main(["sdd", "audit", "ABC-1"])
+        self.assertEqual(EXIT_AUDIT, code)
+        (entry,) = events.read()
+        self.assertEqual({"missing_file": 1, "mismatch": 1, "ok": 1}, entry["verdicts"])
+
     def test_a_failed_first_audit_does_not_make_the_next_one_lenient(self) -> None:
         """Re-running a failed first audit was a way past its strictness."""
         from workbench.cli import sdd as sdd_cli

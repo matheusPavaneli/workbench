@@ -63,6 +63,181 @@ class ReworkTest(unittest.TestCase):
         self.assertEqual(2, score.rework(3))
 
 
+class TestsMissingTest(unittest.TestCase):
+    def test_logic_changed_with_no_test_changed_is_missing(self) -> None:
+        self.assertEqual(1, score.tests_missing(["shop/x.py"]))
+
+    def test_a_changed_test_beside_the_logic_is_not_missing(self) -> None:
+        self.assertEqual(0, score.tests_missing(["shop/x.py", "tests/test_x.py"]))
+
+    def test_only_tests_or_docs_changed_is_not_missing(self) -> None:
+        self.assertEqual(0, score.tests_missing(["tests/test_x.py"]))
+        self.assertEqual(0, score.tests_missing(["README.md"]))
+        self.assertEqual(0, score.tests_missing([]))
+
+    def test_workflow_files_are_never_logic(self) -> None:
+        self.assertEqual(0, score.tests_missing([".workflow/BN-9/helper.py"]))
+
+
+SHOP = {
+    "shop/__init__.py": "",
+    "shop/stock.py": "import json\n\ndef available(stock, sku, quantity=1):\n    return True\n",
+    "shop/billing/__init__.py": "",
+    "shop/billing/charge.py": "from ..stock import available\nfrom . import charge\n",
+}
+
+
+class InvalidRefsTest(unittest.TestCase):
+    def _refs(self, changed: dict[str, str]) -> list[str] | None:
+        return score.invalid_refs(list(changed), {**SHOP, **changed})
+
+    def test_a_name_the_module_does_not_define_is_invalid(self) -> None:
+        refs = self._refs({"tests/test_stock.py": "from shop.stock import in_stock\n"})
+        self.assertEqual(["tests/test_stock.py: from shop.stock import in_stock"], refs)
+
+    def test_a_repo_module_that_does_not_exist_is_invalid(self) -> None:
+        refs = self._refs({"tests/test_x.py": "import shop.inventory\nfrom shop.money import fmt\n"})
+        self.assertEqual(
+            ["tests/test_x.py: from shop.money import fmt", "tests/test_x.py: import shop.inventory"], refs
+        )
+
+    def test_stdlib_and_outside_imports_are_not_checked(self) -> None:
+        self.assertEqual([], self._refs({"tests/test_x.py": "import json\nfrom requests import nope\n"}))
+
+    def test_valid_imports_submodules_and_relative_imports_resolve(self) -> None:
+        refs = self._refs({
+            "shop/billing/charge.py": "from ..stock import available, json\nfrom . import charge\nfrom shop import stock\n",
+            "tests/test_y.py": "import shop.billing.charge\n",
+        })
+        self.assertEqual([], refs)
+
+    def test_a_relative_import_of_a_missing_name_is_invalid(self) -> None:
+        refs = self._refs({"shop/billing/charge.py": "from ..stock import in_stock\n"})
+        self.assertEqual(["shop/billing/charge.py: from shop.stock import in_stock"], refs)
+
+    def test_a_changed_file_that_does_not_parse_is_absent_not_zero(self) -> None:
+        self.assertIsNone(self._refs({"shop/stock.py": "def available(:\n"}))
+
+    def test_files_the_run_did_not_change_are_not_read(self) -> None:
+        sources = {**SHOP, "shop/old.py": "from shop.stock import gone\n"}
+        self.assertEqual([], score.invalid_refs(["shop/stock.py"], sources))
+
+
+DIFF = """diff --git a/shop/stock.py b/shop/stock.py
+index 1111111..2222222 100644
+--- a/shop/stock.py
++++ b/shop/stock.py
+@@ -9 +9 @@ def available(stock: dict, sku: str, quantity: int = 1) -> bool:
+-    return stock.get(sku, 0) > quantity
++    return stock.get(sku, 0) >= quantity
+@@ -14,2 +13,0 @@ def restock(stock: dict, sku: str, units: int) -> None:
+--- a removed line that looks like a header
+-    stock[sku] = stock.get(sku, 0) + units
+diff --git a/tests/test_stock.py b/tests/test_stock.py
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/tests/test_stock.py
+@@ -0,0 +1,3 @@
++import unittest
++
++x = 1
+diff --git a/shop/gone.py b/shop/gone.py
+deleted file mode 100644
+--- a/shop/gone.py
++++ /dev/null
+@@ -1,2 +0,0 @@
+-a = 1
+-b = 2
+"""
+
+STOCK = (
+    '"""Stock."""\n'
+    "\n"
+    "from __future__ import annotations\n"
+    "\n"
+    "\n"
+    "def available(stock: dict, sku: str, quantity: int = 1) -> bool:\n"
+    "    if quantity < 1:\n"
+    '        raise ValueError("quantity must be at least 1")\n'
+    "    return stock.get(sku, 0) >= quantity\n"
+    "\n"
+    "\n"
+    "def restock(stock: dict, sku: str, units: int) -> None:\n"
+    "    stock[sku] = units\n"
+)
+
+
+class DiffLinesTest(unittest.TestCase):
+    def test_hunks_map_to_new_file_lines(self) -> None:
+        lines = score.diff_lines(DIFF)
+        self.assertEqual([9, 13], lines["shop/stock.py"])
+
+    def test_a_new_file_is_every_one_of_its_lines(self) -> None:
+        self.assertEqual([1, 2, 3], score.diff_lines(DIFF)["tests/test_stock.py"])
+
+    def test_a_deleted_file_is_kept_under_its_old_path(self) -> None:
+        self.assertEqual([0], score.diff_lines(DIFF)["shop/gone.py"])
+
+    def test_no_diff_is_no_lines(self) -> None:
+        self.assertEqual({}, score.diff_lines(""))
+
+
+class UnexpectedChangesTest(unittest.TestCase):
+    def test_spans_cover_methods_and_decorators(self) -> None:
+        spans = score.function_spans("class A:\n    @staticmethod\n    def f():\n        return 1\n")
+        self.assertEqual((1, 4), spans["A"])
+        self.assertEqual((2, 4), spans["A.f"])
+
+    def test_lines_inside_the_needed_function_do_not_count(self) -> None:
+        count = score.unexpected_changes({"shop/stock.py": [9]}, {"shop/stock.py": STOCK}, ["shop/stock.py::available"])
+        self.assertEqual(0, count)
+
+    def test_lines_outside_the_needed_function_count(self) -> None:
+        count = score.unexpected_changes({"shop/stock.py": [9, 13]}, {"shop/stock.py": STOCK}, ["shop/stock.py::available"])
+        self.assertEqual(1, count)
+
+    def test_every_line_of_a_logic_file_the_ticket_did_not_need_counts(self) -> None:
+        count = score.unexpected_changes(
+            {"shop/stock.py": [9], "shop/regions.py": [3, 4, 5]}, {"shop/stock.py": STOCK}, ["shop/stock.py::available"]
+        )
+        self.assertEqual(3, count)
+
+    def test_tests_workflow_and_non_python_files_never_count(self) -> None:
+        lines = {"tests/test_stock.py": [1, 2], ".workflow/BN-9/x.py": [1], "README.md": [4]}
+        self.assertEqual(0, score.unexpected_changes(lines, {"shop/stock.py": STOCK}, ["shop/stock.py::available"]))
+
+    def test_a_ticket_without_expected_functions_is_absent_not_zero(self) -> None:
+        self.assertIsNone(score.unexpected_changes({"shop/stock.py": [9]}, {"shop/stock.py": STOCK}, None))
+        self.assertIsNone(score.unexpected_changes({"shop/stock.py": [9]}, {"shop/stock.py": STOCK}, []))
+
+    def test_a_needed_file_that_does_not_parse_is_absent(self) -> None:
+        self.assertIsNone(score.unexpected_changes({"shop/stock.py": [1]}, {"shop/stock.py": "def (:\n"}, ["shop/stock.py::available"]))
+
+
+class ErrorMetricsInTheRecordTest(unittest.TestCase):
+    def _record(self, changed: tuple[str, ...] = ("shop/stock.py",), **kwargs) -> dict:
+        ticket = _ticket(expected_files=["shop/stock.py", "tests/test_stock.py"], expected_functions=["shop/stock.py::available"])
+        return score.record(
+            ticket=ticket, arm="plain", run=1, session={}, changed=list(changed), commits=1,
+            hidden_passed=True, wall_s=1.0, **kwargs,
+        )
+
+    def test_without_diff_and_sources_the_error_metrics_are_absent_not_zero(self) -> None:
+        metrics = self._record()["metrics"]
+        self.assertIsNone(metrics["invalid_refs"])
+        self.assertIsNone(metrics["unexpected_changes"])
+        self.assertEqual(1, metrics["tests_missing"], "tests_missing needs only the changed paths")
+
+    def test_with_diff_and_sources_every_error_metric_is_scored(self) -> None:
+        sources = {"shop/__init__.py": "", "shop/stock.py": STOCK, "tests/test_stock.py": "from shop.stock import in_stock\n"}
+        rec = self._record(changed=("shop/stock.py", "tests/test_stock.py", "shop/gone.py"), diff=DIFF, sources=sources)
+        self.assertEqual(0, rec["metrics"]["tests_missing"])
+        self.assertEqual(1, rec["metrics"]["invalid_refs"])
+        self.assertEqual(["tests/test_stock.py: from shop.stock import in_stock"], rec["invalid_ref_list"])
+        self.assertEqual(2, rec["metrics"]["unexpected_changes"], "line 13 of stock.py and the deleted shop/gone.py")
+
+
 class TokensTest(unittest.TestCase):
     def test_every_kind_of_token_is_summed(self) -> None:
         usage = {
@@ -165,6 +340,51 @@ class ReportTest(unittest.TestCase):
         self.assertIn("claude-sonnet-5", text)
         self.assertIn("2026-09-26", text)
         self.assertIn("skipped by the spend cap: 5", text)
+
+    def test_the_report_lists_caught_errors_before_the_losses(self) -> None:
+        records = [
+            _record("BN-7", "plain", tests_missing=1),
+            _record("BN-7", "workbench", tests_missing=0),
+        ]
+        text = self._report(records)
+        caught = text.split("## Caught errors", 1)[1].split("## Where workbench loses", 1)[0]
+        self.assertIn("- BN-7 tests_missing: plain 1 of 1 runs, workbench 0 of 1", caught)
+
+    def test_the_report_says_so_when_no_error_separates_the_arms(self) -> None:
+        records = [_record("BN-1", "plain"), _record("BN-1", "workbench")]
+        caught = self._report(records).split("## Caught errors", 1)[1].split("## Where workbench loses", 1)[0]
+        self.assertIn("None:", caught)
+
+
+class CaughtTest(unittest.TestCase):
+    def test_an_error_one_arm_made_more_often_is_listed(self) -> None:
+        records = [_record("BN-7", "plain", tests_missing=v) for v in (1, 1, 0)]
+        records += [_record("BN-7", "workbench", tests_missing=0) for _ in range(3)]
+        self.assertEqual([("BN-7", "tests_missing", 2, 3, 0, 3)], score.caught(records))
+
+    def test_the_same_share_in_both_arms_is_not_listed(self) -> None:
+        records = [_record("BN-5", "plain", out_of_scope=v) for v in (1, 0)]
+        records += [_record("BN-5", "workbench", out_of_scope=v) for v in (0, 0, 1, 1)]
+        self.assertEqual([], score.caught(records))
+
+    def test_a_hidden_test_failure_is_an_error(self) -> None:
+        records = [_record("BN-1", "plain", hidden_pass=0), _record("BN-1", "workbench", hidden_pass=1)]
+        self.assertEqual([("BN-1", "hidden_pass", 1, 1, 0, 1)], score.caught(records))
+
+    def test_absent_values_are_left_out_of_n(self) -> None:
+        records = [
+            _record("BN-6", "plain", invalid_refs=1),
+            _record("BN-6", "plain", invalid_refs=None),
+            _record("BN-6", "workbench", invalid_refs=0),
+        ]
+        self.assertEqual([("BN-6", "invalid_refs", 1, 1, 0, 1)], score.caught(records))
+
+    def test_a_ticket_one_arm_never_ran_is_not_listed(self) -> None:
+        self.assertEqual([], score.caught([_record("BN-6", "plain", invalid_refs=2)]))
+
+    def test_records_from_before_the_error_metrics_still_read(self) -> None:
+        old = {"ticket": "BN-1", "arm": "plain", "run": 1, "metrics": {"hidden_pass": 1, "out_of_scope": 0}}
+        self.assertEqual([], score.caught([old, dict(old, arm="workbench")]))
 
 
 class CommandTest(unittest.TestCase):
@@ -287,6 +507,26 @@ class PrepareTest(unittest.TestCase):
         (repo / "shop" / "__pycache__" / "format.cpython-312.pyc").write_bytes(b"")
         self.assertEqual([], bench_run._changed(repo, base, self.env))
 
+    def test_the_diff_carries_edited_and_new_files_and_no_workflow(self) -> None:
+        repo, base = self._prepare("workbench")
+        loyalty = repo / "shop" / "loyalty.py"
+        loyalty.write_text(loyalty.read_text(encoding="utf-8").replace("// 1000", "// 100"), encoding="utf-8")
+        (repo / "tests" / "test_loyalty.py").write_text("import unittest\n\nx = 1\n", encoding="utf-8")
+        (repo / ".workflow" / "BN-3").mkdir(parents=True, exist_ok=True)
+        (repo / ".workflow" / "BN-3" / "helper.py").write_text("y = 2\n", encoding="utf-8")
+
+        changed = bench_run._changed(repo, base, self.env)
+        lines = score.diff_lines(bench_run._diff(repo, base, self.env))
+        self.assertEqual([10], lines["shop/loyalty.py"])
+        self.assertEqual([1, 2, 3], lines["tests/test_loyalty.py"])
+        self.assertFalse(any(path.startswith(".workflow/") for path in lines))
+        self.assertEqual(changed, bench_run._changed(repo, base, self.env), "the diff must not change what counts as changed")
+
+        sources = bench_run._sources(repo, self.env)
+        self.assertIn("tests/test_loyalty.py", sources)
+        self.assertIn("// 100", sources["shop/loyalty.py"])
+        self.assertFalse(any(path.startswith(".workflow/") for path in sources))
+
     def test_the_owner_s_homes_never_reach_a_run(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp)
@@ -369,9 +609,18 @@ class FixtureTest(unittest.TestCase):
                 with self.subTest(ticket=ticket["key"], path=path):
                     self.assertTrue((FIXTURE / path).parent.is_dir(), path)
 
-    def test_the_four_shapes_are_all_there(self) -> None:
-        self.assertEqual(["BN-1", "BN-2", "BN-3", "BN-4"], [t["key"] for t in self.tickets])
-        self.assertEqual(4, len({t["hidden"] for t in self.tickets}))
+    def test_the_seven_shapes_are_all_there(self) -> None:
+        self.assertEqual([f"BN-{n}" for n in range(1, 8)], [t["key"] for t in self.tickets])
+        self.assertEqual(7, len({t["hidden"] for t in self.tickets}))
+
+    def test_every_expected_function_exists_in_the_pristine_fixture(self) -> None:
+        for ticket in self.tickets:
+            for entry in ticket.get("expected_functions", []):
+                with self.subTest(ticket=ticket["key"], entry=entry):
+                    path, _, name = entry.partition("::")
+                    self.assertIn(path, ticket["expected_files"])
+                    spans = score.function_spans((FIXTURE / path).read_text(encoding="utf-8"))
+                    self.assertIn(name, spans)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@
       "title": "Cart total is wrong for some orders",
       "desc": "A customer was charged less than the items in their cart. Not every order is affected.",
       "expected_files": ["shop/cart.py", "tests/test_cart.py"],
+      "expected_functions": ["shop/cart.py::Cart.total_cents"],
       "hidden": "BN-1"
     },
     {
@@ -23,6 +24,7 @@
       "title": "format_money prints refunds with the wrong amount",
       "desc": "format_money(-150) prints \"USD -2.50\"; it should print \"USD -1.50\". Negative amounts are refunds and must show their real value with a leading minus, including amounts under one unit (-5 is \"USD -0.05\"). Positive amounts are unchanged.",
       "expected_files": ["shop/format.py", "tests/test_format.py"],
+      "expected_functions": ["shop/format.py::format_money"],
       "hidden": "BN-3"
     },
     {
@@ -31,7 +33,35 @@
       "title": "display_name keeps stray whitespace",
       "desc": "Names come padded from the admin export, and a user with only a first name is shown with a trailing space. display_name should trim each part and join the non-empty parts with one space, falling back to the email when both parts are blank.",
       "expected_files": ["shop/users.py", "tests/test_users.py"],
+      "expected_functions": ["shop/users.py::display_name"],
       "hidden": "BN-4"
+    },
+    {
+      "key": "BN-5",
+      "kind": "bug",
+      "title": "Shipping to a lower-case country code is charged as international",
+      "desc": "The checkout form sends the country as the customer typed it. A customer in Germany who typed \"de\" was quoted the international rate instead of the EU one. The shipping quote must accept a country code in any case.",
+      "expected_files": ["shop/shipping.py", "tests/test_shipping.py"],
+      "expected_functions": ["shop/shipping.py::shipping_cents"],
+      "hidden": "BN-5"
+    },
+    {
+      "key": "BN-6",
+      "kind": "bug",
+      "title": "in_stock refuses the last unit on hand",
+      "desc": "in_stock says no when a customer orders exactly the units left: with 2 on hand, an order for 2 is refused. Ordering up to the units on hand must be allowed; more than that is still refused.",
+      "expected_files": ["shop/stock.py", "tests/test_stock.py"],
+      "expected_functions": ["shop/stock.py::available"],
+      "hidden": "BN-6"
+    },
+    {
+      "key": "BN-7",
+      "kind": "bug",
+      "title": "Loyalty points are a tenth of what they should be",
+      "desc": "A $45.00 order earned 4 points instead of 45. The rule is one point per whole dollar of the order total.",
+      "expected_files": ["shop/loyalty.py", "tests/test_loyalty.py"],
+      "expected_functions": ["shop/loyalty.py::points"],
+      "hidden": "BN-7"
     }
   ]
 }

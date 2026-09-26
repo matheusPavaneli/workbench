@@ -17,10 +17,22 @@ Defined here, before any run, so the numbers cannot choose the metrics.
 | `tokens` | input + output + cache read + cache creation, from the session's `usage` | lower |
 | `cost_usd` | `total_cost_usd` as the session reports it | lower |
 | `wall_s` | wall time of the session, in seconds | lower |
+| `tests_missing` | 1 when the run changed a logic file (a `.py` outside `tests/`) and changed nothing under `tests/`, else 0 | lower |
+| `invalid_refs` | imports in the changed `.py` files that name a repo module, or a name in one, that does not exist in the run's final tree | lower |
+| `unexpected_changes` | changed lines in logic files outside the functions the ticket's `expected_functions` names; a removed block counts as one line, and a logic file the ticket did not need counts every changed line | lower |
 
 A field the session did not report is recorded as absent and left out of that
 metric's summary. It is never read as zero: a missing token count that turned
-into a zero would make the arm that lost it look cheap.
+into a zero would make the arm that lost it look cheap. The same holds for the
+error metrics: `invalid_refs` is absent when a changed file does not parse, and
+`unexpected_changes` is absent for a ticket that declares no
+`expected_functions` (BN-2, whose needed code is a module the run creates).
+
+The error metrics are deliberately narrow, so a hit is a real error and not a
+matter of taste. `invalid_refs` reads imports only, with `ast`: a call through
+an attribute (`stock.in_stock()`) or a path in a string is not seen; imports of
+the standard library or of anything outside the repo are ignored. Test files
+never count toward `unexpected_changes`: writing a test is never out of scope.
 
 ## The arms
 
@@ -50,7 +62,7 @@ reachable through it.
 
 ## The tickets
 
-`bench/tickets.json` holds four tickets over a small shop in `bench/fixture/`,
+`bench/tickets.json` holds seven tickets over a small shop in `bench/fixture/`,
 each shaped to exercise one claim:
 
 | Key | Shape | Claim it tests |
@@ -59,8 +71,16 @@ each shaped to exercise one claim:
 | BN-2 | feature crossing `shop/billing/` | the critical zone raises the bar where it should |
 | BN-3 | one-file chore | the light tier keeps small work cheap |
 | BN-4 | small fix beside tempting duplication | the scope guard stops the drive-by refactor |
+| BN-5 | fix whose natural edit spills into a shared neighbour (`regions.zone_for`, also used by tax) | scope and the visible suite keep the fix where the ticket is; tempts `out_of_scope` and `unexpected_changes` |
+| BN-6 | ticket that names a function by its old name (`in_stock`, now `available`) | reading the code before writing stops an invented reference; tempts `invalid_refs` and `unexpected_changes` |
+| BN-7 | one-character bug in a module with no test file | the flow's test gate holds when the fix is obvious; tempts `tests_missing` |
 
-`expected_files` is declared by hand per ticket. Hidden tests live in
+BN-1 to BN-4 were written before the error metrics and never tempted an error;
+BN-5 to BN-7 each tempt one. Whether a ticket actually tempts is only known
+after a run: a tie on it is a result, not a fixture bug.
+
+`expected_files` and `expected_functions` (`path::qualname`) are declared by
+hand per ticket. Hidden tests live in
 `bench/hidden/<key>/` and never enter the run's working tree: scoring runs them
 from where they are, with the run's repo on `PYTHONPATH`. `tests/test_bench.py`
 holds the fixture to two invariants — its visible tests pass, and every hidden
@@ -78,10 +98,12 @@ WB_BENCH=1 CLAUDE_CODE_OAUTH_TOKEN=... python bench/run.py
 ```
 
 `--smoke` runs BN-3 once per arm. Run it first: it is the cheap way to see that
-isolation and flags behave before paying for the rest. A full run is 4 tickets ×
-2 arms × 5 runs on Sonnet, about US$50, capped by `--cap` (default 50). The cap
-is checked before each session; once it is reached the remaining runs are
-skipped and the report counts them.
+isolation and flags behave before paying for the rest. A full run is 7 tickets ×
+2 arms × 5 runs on Sonnet, 70 sessions, capped by `--cap` (default 50). The
+default cap will not finish it: at the 0d3ff79 prices it covers roughly half.
+Raise `--cap` knowingly, or run a subset with `--tickets`. The cap is checked
+before each session; once it is reached the remaining runs are skipped and the
+report counts them.
 
 On a subscription nothing is billed: `total_cost_usd` is Claude Code's estimate,
 and the cap still stops the run at that estimate, which keeps a full run from
@@ -98,6 +120,12 @@ Each run writes one JSON record to `bench/results/<date>-<commit>/`, and the run
 ends with `report.md` beside them: the workbench commit, the model and the date,
 then median, min and max per ticket, metric and arm. With five runs a spread is
 honest where a standard deviation would not be.
+
+**Caught errors** comes first: per ticket and error metric (`hidden_pass`
+failures, `out_of_scope`, `tests_missing`, `invalid_refs`,
+`unexpected_changes`), how many runs of each arm made that error, listed only
+where the two arms' shares differ. It reads both ways: a row where workbench
+made the error and plain did not is as much a finding as the reverse.
 
 The report ends with **Where workbench loses**: every ticket and metric whose
 workbench median is worse than plain's, by that metric's direction. An empty

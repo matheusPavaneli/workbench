@@ -249,6 +249,32 @@ def _changed(repo: Path, base: str, env: dict | None = None) -> list[str]:
     return sorted({path for path in tracked + untracked if path})
 
 
+def _diff(repo: Path, base: str, env: dict | None = None) -> str:
+    """`git diff -U0` against base, with new files in it as added lines.
+
+    Intent-to-add records a new file's path, not its content, so the diff sees it
+    without anything being staged for real. Line endings are ignored: a session
+    on Windows that rewrites a file with CRLF has not changed every line of it.
+    """
+    _git(repo, "add", "--intent-to-add", "--all", env=env)
+    return _git(
+        repo, "diff", "-U0", "--no-color", "--no-ext-diff", "--ignore-cr-at-eol", base,
+        "--", ".", ":(exclude).workflow",
+        env=env,
+    )
+
+
+def _sources(repo: Path, env: dict | None = None) -> dict[str, str]:
+    """The text of every .py file in the run's final tree, tracked or new; .workflow/ left out."""
+    listed = _git(repo, "ls-files", "--cached", "--others", "--exclude-standard", env=env).splitlines()
+    found = {}
+    for path in listed:
+        full = repo / path
+        if path.endswith(".py") and not path.startswith(score.IGNORED_PREFIXES) and full.is_file():
+            found[path] = full.read_text(encoding="utf-8", errors="replace")
+    return found
+
+
 def _artifacts(repo: Path, key: str) -> list[str]:
     folder = repo / ".workflow" / key
     if not folder.is_dir():
@@ -304,6 +330,8 @@ def run_one(claude: str, ticket: dict, arm: str, n: int, *, model: str, timeout_
             wall_s=wall_s,
             error=error,
             artifacts=_artifacts(repo, ticket["key"]),
+            diff=_diff(repo, base, env),
+            sources=_sources(repo, env),
         )
 
 

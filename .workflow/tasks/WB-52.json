@@ -1,0 +1,16 @@
+{
+  "key": "WB-52",
+  "title": "A benchmark fixture that can show what workbench catches, not only what it costs",
+  "type": "feature",
+  "status": "done",
+  "desc": "The smoke bench at 0d3ff79 has both arms passing every hidden test with zero out-of-scope files; the only difference is cost (3-10x tokens and wall time). The fixture never tempts an error, so it can prove the cost and cannot prove the value. Frame: .workflow/idea-less-friction/frame.md.\n\nACCEPTANCE:\n- new metrics defined in docs/bench.md before any run: tests_missing (a logic file changed with no test changed), invalid_refs (a symbol, path or import the diff references that does not exist), unexpected_changes (changed lines outside the functions the ticket needed)\n- scoring for each is pure and unit-tested in tests/test_bench.py; an unreported value is absent, never 0\n- at least three new tickets that tempt one error each: a fix whose natural edit spills into a neighbouring module, a ticket naming a function that was renamed, a bug where the obvious fix skips the test\n- the report adds a caught-errors section: per ticket, what one arm did that the other did not",
+  "created": "2026-09-26T17:51:48Z",
+  "updated": "2026-09-26T20:09:54Z",
+  "comments": [],
+  "linked": [
+    {
+      "key": "WB-49",
+      "type": "relates"
+    }
+  ]
+}

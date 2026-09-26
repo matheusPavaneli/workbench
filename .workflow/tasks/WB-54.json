@@ -1,0 +1,16 @@
+{
+  "key": "WB-54",
+  "title": "wb start <KEY>: one command to pick up a ticket",
+  "type": "feature",
+  "status": "open",
+  "desc": "Picking up work is wb task get, wb flow start and wb route today: three commands for one intent.\n\nACCEPTANCE:\n- wb start <KEY> fetches the ticket into triage.json, creates or checks out the branch per the flow, and prints the route and the single next command (as wb next does)\n- rerunning it on a ticket already started is a no-op that prints where it stands\n- every failure names the fix, as the other commands do",
+  "created": "2026-09-26T17:51:50Z",
+  "updated": "2026-09-26T17:51:50Z",
+  "comments": [],
+  "linked": [
+    {
+      "key": "WB-53",
+      "type": "relates"
+    }
+  ]
+}

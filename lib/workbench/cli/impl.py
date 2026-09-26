@@ -150,7 +150,7 @@ def _verify(args: argparse.Namespace) -> int:
         # Only a plan that names tests owes the git call.
         evidence.tests_missing = verify_lib.missing_tests(targets, status_lib.branch_changes(root))
     if args.regression and base:
-        for target, command in regression:
+        for _target, command in regression:
             print(f"regression: {command}  (without the fix at {base[:12]}, then with it)", flush=True)
         evidence.regression_base = base
         evidence.regression = verify_lib.run_regression(regression, root, base, carried, doc.get("verify_env"))
@@ -204,7 +204,7 @@ def _regression_plan(doc: dict, root: Path) -> tuple[list[tuple[str, str]], str,
     pairs = []
     for target in targets:
         command, refusal = verify_lib.regression_command(runner, target)
-        if refusal:
+        if command is None:
             raise UsageError(f"cannot run {target} on its own: {refusal}",
                              fix=["run it yourself without the fix, and record the result"])
         pairs.append((target, command))

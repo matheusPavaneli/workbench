@@ -222,8 +222,8 @@ def _task_to_cache(task: Task) -> dict:
         "updated": task.updated,
         "desc": task.desc,
         "linked": [
-            {"key": l.key, "type": l.type, "status": l.status, "title": l.title, "url": l.url}
-            for l in task.linked
+            {"key": link.key, "type": link.type, "status": link.status, "title": link.title, "url": link.url}
+            for link in task.linked
         ],
         "unmapped": task.unmapped,
     }

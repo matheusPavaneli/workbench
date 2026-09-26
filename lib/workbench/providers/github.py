@@ -147,7 +147,7 @@ class GithubProvider(Provider):
         unmapped: list[str] = []
         body = normalise(str(issue.get("body") or ""))
 
-        labels = [str(l.get("name", "")) for l in issue.get("labels") or [] if isinstance(l, dict)]
+        labels = [str(label.get("name", "")) for label in issue.get("labels") or [] if isinstance(label, dict)]
 
         return Task(
             key=str(issue.get("number", key)),
@@ -307,7 +307,7 @@ def _status(issue: dict) -> str:
 
 def _type_from(labels: list[str], unmapped: list[str]) -> str:
     """GitHub has no issue type, so the label set is the only signal there is."""
-    lowered = {l.lower() for l in labels}
+    lowered = {label.lower() for label in labels}
     for label, kind in (
         ("bug", "bug"),
         ("defect", "bug"),

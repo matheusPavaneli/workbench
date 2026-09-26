@@ -408,6 +408,15 @@ PYTHONPATH="lib:tests" python -m unittest discover -s tests -q   # macOS, Linux
 CI runs the suite on Linux and Windows against Python 3.9 and 3.12
 (`.github/workflows/tests.yml`).
 
+It also lints and type-checks `lib/`, blocking on either. The rules live in
+`ruff.toml` and `mypy.ini`; the tools are dev-only and pinned:
+
+```sh
+python -m pip install ruff==0.16.9 mypy==2.3.1
+ruff check lib
+mypy
+```
+
 Fixtures under `tests/fixtures/` follow the vendors' published contracts, which
 were checked against the documentation — endpoints, parameter names, response
 shapes and link-direction semantics are verified. What they cannot cover is your

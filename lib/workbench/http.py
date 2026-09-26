@@ -33,7 +33,7 @@ USER_AGENT = f"workbench/{__version__} (+https://github.com/matheusPavaneli/work
 
 
 def basic_auth(user: str, secret: str) -> str:
-    raw = f"{user}:{secret}".encode("utf-8")
+    raw = f"{user}:{secret}".encode()
     return "Basic " + base64.b64encode(raw).decode("ascii")
 
 

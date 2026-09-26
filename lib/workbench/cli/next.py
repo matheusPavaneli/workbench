@@ -14,7 +14,6 @@ same work.
 from __future__ import annotations
 
 import argparse
-import json
 
 from .. import contract, status as status_lib
 from ..errors import NotFoundError

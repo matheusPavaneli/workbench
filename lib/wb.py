@@ -18,6 +18,7 @@ import io
 import sys
 import time
 from pathlib import Path
+from typing import TextIO
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -78,7 +79,7 @@ class _StrictParser(argparse.ArgumentParser):
 class _ScrubbedStream(io.TextIOBase):
     """Last line of defence: nothing reaches a terminal unscrubbed."""
 
-    def __init__(self, stream: io.TextIOBase) -> None:
+    def __init__(self, stream: TextIO) -> None:
         self._stream = stream
 
     def write(self, text: str) -> int:

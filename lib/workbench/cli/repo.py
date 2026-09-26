@@ -9,7 +9,6 @@ rules do not.
 from __future__ import annotations
 
 import argparse
-import json
 
 from .. import contract, gitctx, profile as profile_lib
 from ..errors import UsageError

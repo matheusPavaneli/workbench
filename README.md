@@ -270,17 +270,6 @@ ten here total ~2.0 KB, about **500 tokens always on**, and a test asserts that
 ceiling so it cannot creep. Everything else is paid only on use: a SKILL.md when
 it triggers, a reference file only if that skill reads one.
 
-Using the flow costs far more than having it installed. The first benchmark run
-([report](bench/results/2026-09-26-0d3ff79/report.md); method in
-[bench.md](docs/bench.md)) put four small seeded tickets through a plain Claude
-Code session and through the workbench flow, on Sonnet, two to three times
-each. Both arms passed every hidden acceptance test, changed nothing outside
-the ticket and needed no rework commit. The flow cost **3.6-5.6x** as much per
-ticket (median US$0.40-0.59 against US$0.10-0.16) and took **3.4-7.7x** as long.
-On tickets this small a plain session made no mistake for the gates to catch,
-so this run measures only the price of the flow; whether it buys fewer defects
-on harder work is not yet measured.
-
 Provider quirks, depth policy and the preset table are **not** in that path.
 They are enforced in code and emitted as resolved output — `wb repo profile`
 prints the six gates that apply rather than a table of five presets for the

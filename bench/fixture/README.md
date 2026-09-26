@@ -9,8 +9,8 @@ A small shop used as a benchmark fixture. Amounts are integer cents.
 - `shop/regions.py` — country codes to zones, shared by shipping and tax
 - `shop/shipping.py` — shipping quotes for the checkout form
 - `shop/tax.py` — VAT on invoices
-- `shop/stock.py` — stock checks before an order is accepted (`in_stock` was
-  renamed `available` in 2.0)
+- `shop/stock.py` — stock checks before an order is accepted
+- `shop/legacy.py` — helpers kept for the 1.x export script
 - `shop/loyalty.py` — loyalty points earned on an order
 
 Tests use the standard library runner:

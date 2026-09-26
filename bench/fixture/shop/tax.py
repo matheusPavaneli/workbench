@@ -12,7 +12,9 @@ VAT = {
 
 
 def vat_rate(country: str) -> int:
-    """The VAT rate for an invoice country; a code that is not canonical is refused."""
+    # Invoices must carry the country code exactly as the tax authority
+    # registered it (upper case). zone_for's KeyError on any other spelling is
+    # what refuses one here; an invoice to "de" is a compliance error.
     try:
         return VAT[zone_for(country)]
     except KeyError as exc:

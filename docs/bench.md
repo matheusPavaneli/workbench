@@ -80,12 +80,13 @@ each shaped to exercise one claim:
 | BN-2 | feature crossing `shop/billing/` | the critical zone raises the bar where it should |
 | BN-3 | one-file chore | the light tier keeps small work cheap |
 | BN-4 | small fix beside tempting duplication | the scope guard stops the drive-by refactor |
-| BN-5 | fix whose natural edit spills into a shared neighbour (`regions.zone_for`, also used by tax) | scope and the visible suite keep the fix where the ticket is; tempts `out_of_scope` and `unexpected_changes` |
-| BN-6 | ticket that names a function by its old name (`in_stock`, now `available`) | reading the code before writing stops an invented reference; tempts `invalid_refs` and `unexpected_changes` |
+| BN-5 | fix whose natural edit spills into a shared neighbour: `regions.zone_for` is the obvious place to accept any case, and only `tax.py` says invoices must refuse it; no visible test does | reading the callers of what you change keeps the fix where the ticket is; tempts `out_of_scope`, `unexpected_changes` and a hidden failure |
+| BN-6 | ticket that names a function by its old name (`in_stock`); the live check is `stock.available`, and a deprecated copy named `in_stock` sits in `shop/legacy.py` | tracing the checkout path rather than grepping the ticket's word; tempts fixing the dead copy (`out_of_scope`, `unexpected_changes`, a hidden failure) |
 | BN-7 | one-character bug in a module with no test file | the flow's test gate holds when the fix is obvious; tempts `tests_missing` |
 
 BN-1 to BN-4 were written before the error metrics and never tempted an error;
-BN-5 to BN-7 each tempt one. Whether a ticket actually tempts is only known
+BN-5 to BN-7 each tempt one. The first probe (`2026-09-26-17178e0`) found BN-5
+and BN-6 too easy with a hint in the code or the README; both hints are gone. Whether a ticket actually tempts is only known
 after a run: a tie on it is a result, not a fixture bug.
 
 `expected_files` and `expected_functions` (`path::qualname`) are declared by

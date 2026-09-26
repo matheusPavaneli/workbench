@@ -1,0 +1,7 @@
+[
+  { "id": 5, "body": "changed the description", "system": true, "created_at": "2026-08-10T09:10:00.000Z", "author": { "username": "ana", "name": "Ana Ruiz" } },
+  { "id": 4, "body": "Fix should validate before the charge.", "system": false, "created_at": "2026-08-09T11:30:00.000Z", "author": { "username": "ana", "name": "Ana Ruiz" } },
+  { "id": 3, "body": "added ~\"type::bug\" label", "system": true, "created_at": "2026-08-09T09:00:00.000Z", "author": { "username": "bo", "name": "Bo Lin" } },
+  { "id": 2, "body": "Reproduced on staging.", "system": false, "created_at": "2026-08-08T10:00:00.000Z", "author": { "username": "bo", "name": "Bo Lin" } },
+  { "id": 1, "body": "First report came from support.", "system": false, "created_at": "2026-08-07T08:00:00.000Z", "author": null }
+]

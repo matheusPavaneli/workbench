@@ -25,7 +25,7 @@ from typing import Any
 from . import gitctx
 from .errors import ConfigError, unknown_choice
 
-PROVIDERS = ["jira", "azure", "github", "linear", "local"]
+PROVIDERS = ["jira", "azure", "github", "gitlab", "linear", "local"]
 PRESETS = ["prototype", "solo-saas", "startup", "scaleup", "enterprise"]
 
 # What a provider cannot work without. A hosted tracker needs a site and a
@@ -37,6 +37,7 @@ REQUIRED_FIELDS = {
     "jira": ("base_url", "project"),
     "azure": ("base_url", "project"),
     "github": (),
+    "gitlab": (),
     "linear": (),
     "local": (),
 }
@@ -45,6 +46,7 @@ REQUIRED_FIELDS = {
 # credential to leak, so the transport rules below do not apply to it.
 DEFAULT_BASE_URL = {
     "github": "https://api.github.com",
+    "gitlab": "https://gitlab.com",
     "linear": "https://api.linear.app",
     "local": "file://.workflow/tasks",
 }

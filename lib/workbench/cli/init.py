@@ -199,6 +199,8 @@ def _detect_provider(root: Path) -> str:
     host = (remote.host if remote else "").lower()
     if "github" in host:
         return "github"
+    if "gitlab" in host:
+        return "gitlab"
     if "dev.azure" in host or "visualstudio" in host:
         return "azure"
     return "local"

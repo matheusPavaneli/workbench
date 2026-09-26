@@ -1,0 +1,22 @@
+[
+  {
+    "id": 190300, "iid": 40, "project_id": 3911, "title": "Charge API migration", "state": "closed",
+    "link_type": "is_blocked_by", "issue_link_id": 11,
+    "references": { "short": "#40", "relative": "#40", "full": "acme/platform/widgets#40" }
+  },
+  {
+    "id": 190350, "iid": 50, "project_id": 3911, "title": "Release 2.4", "state": "opened",
+    "link_type": "blocks", "issue_link_id": 12,
+    "references": { "short": "#50", "relative": "#50", "full": "acme/platform/widgets#50" }
+  },
+  {
+    "id": 200001, "iid": 8, "project_id": 4100, "title": "Refund runbook", "state": "opened",
+    "link_type": "relates_to", "issue_link_id": 13,
+    "references": { "short": "#8", "relative": "acme/billing#8", "full": "acme/billing#8" }
+  },
+  {
+    "id": 200002, "iid": 61, "project_id": 3911, "title": "Coupon rounding", "state": "opened",
+    "link_type": "mitigates", "issue_link_id": 14,
+    "references": { "short": "#61", "relative": "#61", "full": "acme/platform/widgets#61" }
+  }
+]

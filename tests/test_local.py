@@ -47,6 +47,31 @@ class Creating(LocalBase):
         local.task_path("WB-1").unlink()
         self.assertEqual("WB-3", self.make("third")["key"])
 
+    def _prefix(self, value) -> None:
+        path = self.root / ".workflow" / "config.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"provider": "local", "key_prefix": value}), encoding="utf-8")
+
+    def test_a_configured_prefix_numbers_the_keys(self) -> None:
+        """WB-38: every repo's backlog was numbered with this tool's own prefix."""
+        self.make("an older one", key="WB-7")
+        self._prefix("acme")
+        self.assertEqual("ACME-1", self.make("first")["key"])
+        self.assertEqual("ACME-2", self.make("second")["key"])
+
+    def test_without_a_prefix_the_keys_stay_wb(self) -> None:
+        self.assertEqual("WB", local.prefix())
+        self.assertEqual("WB-1", self.make("first")["key"])
+
+    def test_an_unusable_prefix_is_refused_naming_the_setting(self) -> None:
+        from workbench.errors import ConfigError
+
+        for value in ("1X", "A", "ABCDEFGHIJK", "A-B", ""):
+            self._prefix(value)
+            with self.assertRaises(ConfigError, msg=value) as caught:
+                self.make("first")
+            self.assertIn("key_prefix", str(caught.exception))
+
     def test_refuses_to_overwrite_an_existing_task(self) -> None:
         self.make("first", key="WB-9")
         with self.assertRaises(UsageError):

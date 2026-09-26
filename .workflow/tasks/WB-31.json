@@ -2,10 +2,10 @@
   "key": "WB-31",
   "title": "incident work: defer the handover gate and record mitigations that are not code",
   "type": "feature",
-  "status": "open",
+  "status": "done",
   "desc": "An incident-* plan lands on the standard tier and its audit fails until handover.* (QA steps for non-engineers) is written (sdd.py tier / validate needs_handover). During an outage that blocks the hotfix on documentation. And a mitigation with no code change (rollback, flag flip, config) has no route: everything is pushed into sdd.json.\n\nACCEPTANCE:\n- for incident-* keys the audit reports a missing handover as pending, not failed; wb commit check or wb pr check fails until it is filled\n- wb route incident-<slug> names a mitigation step before plan, recorded in incident.md timeline, that needs no sdd.json\n- the floor still holds: citations, files, verify, rollback\n- regression tests for the deferred gate and for its enforcement at commit/PR time",
   "created": "2026-09-25T19:32:52Z",
-  "updated": "2026-09-25T19:32:52Z",
+  "updated": "2026-09-26T00:36:11Z",
   "comments": [],
   "linked": []
 }

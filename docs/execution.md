@@ -241,6 +241,16 @@ default: `"run": {"enabled": true}` in `.workflow/config.json`, or `WB_RUN=1`
 for one call. An autopilot over an expensive flow spends faster, and a headless
 session is where a stop nobody sees would hide.
 
+### `wb finish --commit`
+
+The one place `wb` stages. On a light-path pass, `--commit` runs
+`git add -- <the files it checked>` and `git commit -F .workflow/KEY/commit.txt`,
+through the same allowlist as every other write: `add` takes paths after `--`
+and no flag, so `-A`, `-u` and `--force` are refused. It is asked for by flag,
+so what goes into a commit is still the caller's decision; without the flag
+`wb finish` prints the command. The probe transcripts showed two turns after
+every pass going to reading the message and committing by hand.
+
 ### `wb approve`: one verb for whichever decision waits
 
 A person should not need to know which subsystem is holding the work.

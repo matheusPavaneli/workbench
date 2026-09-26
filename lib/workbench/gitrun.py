@@ -41,6 +41,8 @@ OUTPUT_CAP = 2000
 # something that may already be pushed.
 ALLOWED: dict[str, frozenset[str]] = {
     "fetch": frozenset({"--prune", "origin"}),
+    # Paths only, after "--": the files wb finish checked, nothing broader.
+    "add": frozenset({"--"}),
     "switch": frozenset({"-c", "--create", "--no-track"}),
     "cherry-pick": frozenset({"--continue", "--abort", "-x"}),
     "commit": frozenset({"-F", "--author"}),

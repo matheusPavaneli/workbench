@@ -259,9 +259,9 @@ the real change instead of a forecast of it:
 $ wb start ABC-7
 ...
 route   light path: triage, change, commit, pr  (no plan up front; wb finish holds the change to the floor)
-$ wb finish ABC-7 -m "fix: print refunds with their real amount"
+$ wb finish ABC-7 -m "fix: print refunds with their real amount" --commit
 ABC-7  clear: 2 file(s), 6 line(s), 1 suite run(s) passed, 1 regression test(s) proven
-  commit: git add -- shop/format.py tests/test_format.py && git commit -F .workflow/ABC-7/commit.txt
+  committed 3f2a91c0: fix: print refunds with their real amount
 ```
 
 `wb finish` checks the commit message against the repo's convention, refuses a
@@ -269,7 +269,9 @@ logic change with no test change, runs the suite by the command the detected
 runner implies, and on a bug proves each changed test fails on the base the
 branch left. Past the light bound, or into a critical zone, the work leaves the
 path for the standard route with its change intact: it gets a plan. It speaks
-only when something blocks, and leaves nothing to open, edit or approve.
+only when something blocks, and leaves nothing to open, edit or approve. With
+`--commit` it stages exactly the files it checked and commits them; without it,
+it prints that command instead.
 
 Feature work (it owes a product frame), support and incident work (a reader
 outside engineering), and anything already planned take the standard route.
@@ -425,7 +427,7 @@ question about the code cite as `` `path:line` — `the line` ``, and
 wb init    [--write]           propose (or write) this repo's config
 wb doctor  everything that has to be true, in one pass
 wb start  KEY [--refresh]      read the ticket, branch for it, route it: one command to pick up work
-wb finish KEY -m MESSAGE       light path: every check against the real change, then the commit command
+wb finish KEY -m MESSAGE [--commit]   light path: every check against the real change, then the commit (or its command)
 wb approve [KEY] [TOKEN]       show the one decision waiting on you, or approve exactly it by its token
 wb run    KEY [--until commit|pr]   drive it headless through Claude Code, stopping at every decision (off by default)
 wb route   [KEY]               the steps this change actually needs

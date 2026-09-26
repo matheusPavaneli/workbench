@@ -14,9 +14,9 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
 
 ## Steps
 
-0. **Resuming?** `status` first. It lists every ticket with work in flight and
-   the one command that moves each on, read off the artifacts on disk. If the
-   ticket already has a `triage.json`, do not re-fetch it.
+0. **Key given?** Go straight to step 2: `start <KEY>` resumes as well as
+   starts. With no key, `status` lists every ticket with work in flight and
+   the one command that moves each on.
 
 1. **No key given** — `task list`. Four columns, newest first. Show them and ask
    which one, unless the request already names one.
@@ -32,13 +32,16 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
    branching, or deeper, use `task get <KEY>` — depth 1 by default: the task,
    plus one line per linked item.
 
-   **Light path** (the route says so): no plan and no other skill. Make the
-   change and a test that covers it, then `finish <KEY> -m "<type>: <summary>"`
-   and run the commit command it prints. If it says the work outgrew the path,
-   continue with `plan-change`.
    - Use `--depth 0` when the ticket is self-contained and links do not matter.
    - Use `--depth 2` only when a blocker or a parent decides the approach. It
      fetches bodies for blocking and hierarchy links, never for `relates`.
+
+   **Light path** (the route says so): no plan, no other skill, no `status`.
+   Make the change and a test that covers it, then
+   `finish <KEY> -m "<type>: <summary>" --commit`. It runs the suite, the
+   regression check and the message check itself, so do not run them first;
+   on a pass it commits exactly the checked files. If it says the work
+   outgrew the path, continue with `plan-change`.
 
 3. **Go deeper only where it pays** — the `_expand` list names what exists but
    was not included. Pass a handle back **verbatim**:

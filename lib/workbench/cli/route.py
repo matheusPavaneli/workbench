@@ -57,8 +57,8 @@ SHORT = {"triage", "plan", "implement", "verify", "review", "commit"}
 LIGHT_PATH = "light path"
 LIGHT_STEPS = [
     ("triage", "", "wb start {key}"),
-    ("change", "", 'wb finish {key} -m "<type>: <summary>"'),
-    ("commit", "", "git commit -F .workflow/{key}/commit.txt"),
+    ("change", "", 'wb finish {key} -m "<type>: <summary>" --commit'),
+    ("commit", "", "(wb finish --commit)"),
     ("pr", "draft-pr", "wb pr context {key}"),
 ]
 

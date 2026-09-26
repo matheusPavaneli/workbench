@@ -63,8 +63,9 @@ def run(args: argparse.Namespace) -> int:
     tier, reason, steps = route_cli.compute(key, root)
     print(f"route   {tier}: {', '.join(name for name, _, _ in steps)}  ({reason})")
     if light.marker(key, root) is not None:
-        print("        no plan, no other skill: make the change and a test that covers it; wb finish runs")
-        print("        the checks and prints the commit command, and speaks only if something blocks")
+        print("        no plan, no other skill: make the change and a test that covers it, then")
+        print(f'        wb finish {key} -m "<type>: <summary>" --commit -- it runs the suite and every check,')
+        print("        commits exactly the checked files, and speaks only if something blocks")
 
     picked = status_lib.pick(key, root)
     if picked is not None:

@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import argparse
 import shlex
+from pathlib import Path
 
-from .. import artifacts, flow as flow_lib, gitctx, light, status as status_lib
+from .. import artifacts, flow as flow_lib, gitctx, gitrun, light, status as status_lib
 from ..errors import EXIT_AUDIT, UsageError, WbError
 
 ACTIONS: list[str] = []
@@ -21,6 +22,9 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     )
     parser.add_argument("key", help="the ticket wb start put on the light path")
     parser.add_argument("-m", "--message", required=True, help="the commit message, in the repo's convention")
+    parser.add_argument(
+        "--commit", action="store_true", help="on a pass, stage exactly the checked files and commit them with it"
+    )
 
 
 def run(args: argparse.Namespace) -> int:
@@ -69,6 +73,27 @@ def run(args: argparse.Namespace) -> int:
     if result.note:
         print(f"  note: {result.note}")
     message = gitctx.shown(artifacts.ticket_dir(key, root) / "commit.txt", root)
+    if args.commit:
+        return _commit(key, root, result.changed, artifacts.ticket_dir(key, root) / "commit.txt")
     # The files checked, named: committing exactly what was checked is the point.
     print(f"  commit: git add -- {shlex.join(result.changed)} && git commit -F {message}")
+    return 0
+
+
+def _commit(key: str, root: Path, checked: list[str], message: Path) -> int:
+    """Stage the checked files and nothing else, then commit them. Asked for by
+    flag: wb never decides on its own what goes into a commit."""
+    actions = [
+        gitrun.Action(["add", "--", *checked], why=f"stage what wb finish checked for {key}"),
+        gitrun.Action(["commit", "-F", str(message)], why=f"commit {key}", precondition=gitrun.NOT_PROTECTED),
+    ]
+    result = gitrun.apply(actions, root, protected=flow_lib.protected(root))
+    gitrun.record(result, key, root)
+    if not result.ok:
+        raise WbError(
+            f"{key} is clear but not committed: {gitrun.render(result).strip()}",
+            fix=[action.rendered for action in actions],
+        )
+    subject = message.read_text(encoding="utf-8").splitlines()[0]
+    print(f"  committed {(gitctx.head(root) or '')[:8]}: {subject}")
     return 0

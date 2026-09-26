@@ -1,0 +1,11 @@
+{
+  "key": "WB-43",
+  "title": "status --stats counts a verify waiting for approval as a failed verify",
+  "type": "bug",
+  "status": "open",
+  "desc": "wb status --stats reports impl verify 38 runs, 13 failed, and concludes the step is fragile. In the log, 10 of the 13 failures ran in under 300 ms: impl verify stopped before running anything because the commands were not yet approved on this machine. That is a gate doing its job, not a failed verification, and counting it as one makes the history accuse the wrong stage.\n\nACCEPTANCE:\n- impl verify notes when it stops for approval; the event records it as held, exit code unchanged\n- --stats reports held runs apart from failed ones and never calls a step fragile on held runs alone\n- --json history gains the held count per command; schema bumped only if a key changes\n- older log lines read as before\n- regression test built from the pattern in this repo's log",
+  "created": "2026-09-26T03:07:41Z",
+  "updated": "2026-09-26T03:07:41Z",
+  "comments": [],
+  "linked": []
+}

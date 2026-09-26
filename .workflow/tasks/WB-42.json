@@ -1,0 +1,11 @@
+{
+  "key": "WB-42",
+  "title": "wb is not a command a person can type",
+  "type": "feature",
+  "status": "open",
+  "desc": "The README writes wb everywhere, but only skills have it: a person in a terminal has to type python \"<plugin root>/lib/wb.py\". Around it: an unknown command answers with the usage line as its fix; doctor, init and task new print absolute paths three times the width of the message.\n\nACCEPTANCE:\n- a launcher script (bin/wb, bin/wb.cmd) runs lib/wb.py with the current python; README says how to put it on PATH\n- an unknown command or action suggests the closest name (difflib) as its fix\n- paths inside the checkout print repo-relative in doctor, init and task new\n- README opens with a five-command quickstart\n- tests for the suggestion and the relative paths",
+  "created": "2026-09-26T03:07:41Z",
+  "updated": "2026-09-26T03:07:41Z",
+  "comments": [],
+  "linked": []
+}

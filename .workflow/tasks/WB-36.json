@@ -1,0 +1,11 @@
+{
+  "key": "WB-36",
+  "title": "status and next do not see a task that was only created",
+  "type": "bug",
+  "status": "open",
+  "desc": "In a fresh checkout, wb task new \"fix login\" --type bug prints next: wb task get WB-1, and then wb next says error: no work in progress in this checkout (exit 6) and wb status says no work in progress. status_lib.keys() only lists .workflow/<KEY>/ directories, and a task that has only been recorded in the local backlog has none. The first step a new user takes breaks the guided flow.\n\nACCEPTANCE:\n- an open local task with no artifacts is listed by wb status, reported as not started with its backlog title\n- wb next with no key picks it (after the branch, by recency) and says: wb task get <KEY>\n- a done local task with no artifacts is not listed and never picked\n- --stats counts it like any other ticket in the snapshot\n- regression tests for each rule",
+  "created": "2026-09-26T03:07:39Z",
+  "updated": "2026-09-26T03:07:39Z",
+  "comments": [],
+  "linked": []
+}

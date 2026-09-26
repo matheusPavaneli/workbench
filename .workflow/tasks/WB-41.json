@@ -1,0 +1,11 @@
+{
+  "key": "WB-41",
+  "title": "route sends bug tickets through frame-product and never through review-diff",
+  "type": "bug",
+  "status": "open",
+  "desc": "wb route on a bug ticket returns the full route with frame (frame-product) as step 2 -- framing the product case of a bug fix. And no route, light or full, has a review step, though review-diff exists to self-review before a PR.\n\nACCEPTANCE:\n- frame appears only for feature tickets, or when a frame.md already exists\n- review (review-diff, wb review gates KEY) sits between verify and commit on every route, light included\n- --json carries the same steps\n- tests for bug, feature and light routes",
+  "created": "2026-09-26T03:07:41Z",
+  "updated": "2026-09-26T03:07:41Z",
+  "comments": [],
+  "linked": []
+}

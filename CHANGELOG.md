@@ -11,7 +11,7 @@ command's own output, and one that removes it. A `--json` payload that loses or
 renames a key raises its `schema` number in the same release, and
 `contract.VERSIONS` is asserted against the real output so it cannot drift.
 
-## Unreleased
+## 0.11.1
 
 ### Fixed
 

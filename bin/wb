@@ -1,0 +1,8 @@
+#!/bin/sh
+# wb for a terminal: the same entry point the skills call, so a person and a
+# session run the same code. Put this directory on PATH.
+here=$(dirname "$0")
+if command -v python3 >/dev/null 2>&1; then
+    exec python3 "$here/../lib/wb.py" "$@"
+fi
+exec python "$here/../lib/wb.py" "$@"

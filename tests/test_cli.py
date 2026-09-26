@@ -84,6 +84,59 @@ class Surface(CliBase):
                 self.assertEqual(EXIT_USAGE, run("task", "list", flag, "x")[0])
 
 
+class ForPeople(CliBase):
+    """WB-42: what a person at a terminal meets first."""
+
+    REPO = Path(__file__).resolve().parent.parent
+
+    def test_a_mistyped_group_suggests_the_closest(self) -> None:
+        code, _, err = run("taks")
+        self.assertEqual(EXIT_USAGE, code)
+        self.assertIn("did you mean: wb task", err)
+
+    def test_a_mistyped_action_suggests_the_closest(self) -> None:
+        code, _, err = run("task", "lst")
+        self.assertEqual(EXIT_USAGE, code)
+        self.assertIn("did you mean: wb task list", err)
+
+    def test_nothing_close_suggests_nothing(self) -> None:
+        _, _, err = run("zzzzzz")
+        self.assertNotIn("did you mean", err)
+
+    def test_both_quoting_styles_of_argparse_are_read(self) -> None:
+        quoted = "invalid choice: 'lst' (choose from 'list', 'get', 'new')"
+        self.assertEqual(["did you mean: wb task list"], wb._suggest("wb task", quoted))
+
+    def test_task_new_names_the_file_relative_to_the_checkout(self) -> None:
+        self.use_local()
+        _, out, _ = run("task", "new", "Do the thing")
+        self.assertIn("wrote .workflow/tasks/WB-1.json", out)
+        self.assertNotIn(str(self.root), out)
+
+    def test_a_path_outside_the_checkout_stays_whole(self) -> None:
+        from workbench import gitctx
+
+        outside = Path(tempfile.gettempdir()).resolve() / "elsewhere.json"
+        self.assertEqual(str(outside), gitctx.shown(outside, self.root))
+
+    def test_the_launchers_run_the_same_entry_point(self) -> None:
+        for name in ("wb", "wb.cmd"):
+            text = (self.REPO / "bin" / name).read_text(encoding="utf-8")
+            self.assertIn("lib", text, name)
+            self.assertIn("wb.py", text, name)
+
+    @unittest.skipUnless(__import__("shutil").which("sh"), "no POSIX shell here")
+    def test_the_posix_launcher_runs(self) -> None:
+        import subprocess
+
+        completed = subprocess.run(
+            ["sh", str(self.REPO / "bin" / "wb"), "surface", "task"],
+            capture_output=True, text=True, timeout=60, check=False,
+        )
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        self.assertIn("wb task new", completed.stdout)
+
+
 class TaskNew(CliBase):
     def test_it_writes_a_task_and_names_the_next_command(self) -> None:
         self.use_local()

@@ -119,6 +119,18 @@ def origin(cwd: Path) -> Remote | None:
     return parse_remote(url) if url else None
 
 
+def shown(path: Path, cwd: Path | None = None) -> str:
+    """``path`` as a person reads it: relative to the checkout when inside it.
+
+    An absolute path under a temp or home directory is three times the width of
+    the message around it, and says nothing the checkout does not.
+    """
+    try:
+        return path.resolve().relative_to(checkout(cwd).resolve()).as_posix()
+    except (OSError, ValueError):
+        return str(path)
+
+
 def has_origin(cwd: Path) -> bool:
     """Whether an ``origin`` remote exists, whatever its URL.
 

@@ -53,7 +53,7 @@ def run(args: argparse.Namespace) -> int:
     elif ignore:
         notes.append(f"gitignore {'adding' if args.write else 'would add'} to .gitignore: {'  '.join(ignore)}")
 
-    print(f"{'writing' if args.write else 'proposed'}  {path}")
+    print(f"{'writing' if args.write else 'proposed'}  {gitctx.shown(path, root)}")
     print()
     for line in json.dumps(proposal, indent=2).splitlines():
         print(f"  {line}")
@@ -69,10 +69,10 @@ def run(args: argparse.Namespace) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(proposal, indent=2) + "\n", encoding="utf-8")
     print()
-    print(f"wrote {path}")
+    print(f"wrote {gitctx.shown(path, root)}")
     if ignore:
         _append_ignores(root, ignore)
-        print(f"added {len(ignore)} line(s) to {root / '.gitignore'}")
+        print(f"added {len(ignore)} line(s) to .gitignore")
     print("check the whole chain:  wb doctor")
     return 0
 

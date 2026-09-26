@@ -187,7 +187,7 @@ class LocalProvider(Provider):
         directory = tasks_dir()
         count = len(list(directory.glob("*.json"))) if directory.is_dir() else 0
         who = gitctx.identity(Path.cwd()).get("email") or "this checkout"
-        return Identity(account=who, detail=f"{count} task(s) in {directory}")
+        return Identity(account=who, detail=f"{count} task(s) in {gitctx.shown(directory)}")
 
     def _load_task(self, key: str, *, use_cache: bool) -> Task:
         # A file read is already cheaper than the cache write it would trigger,

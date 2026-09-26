@@ -121,7 +121,7 @@ def _new(args: argparse.Namespace) -> int:
         args.title, kind=args.kind, desc=args.desc, key=args.key, links=args.link
     )
     print(f"{data['key']}  {data['type']:<8} {data['title']}")
-    print(f"wrote {local.task_path(data['key'])}")
+    print(f"wrote {gitctx.shown(local.task_path(data['key']))}")
     print(f"next: wb task get {data['key']}")
     return 0
 

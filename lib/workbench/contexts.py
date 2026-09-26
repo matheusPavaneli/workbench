@@ -205,7 +205,7 @@ def _from_repo_config(cwd: Path) -> Resolution | None:
         if str(data.get("provider", "")).lower() == "local":
             return Resolution(
                 _build("repo", data, path),
-                source=f"repo config ({path}), defined inline",
+                source=f"repo config ({gitctx.shown(path, cwd)}), defined inline",
             )
         raise ConfigError(
             f"{path} has no \"context\" key",
@@ -216,7 +216,7 @@ def _from_repo_config(cwd: Path) -> Resolution | None:
         )
 
     overrides = {k: v for k, v in data.items() if k in {"project", "preset", "board", "flow"}}
-    return Resolution(load(str(name), overrides), source=f"repo config ({path})")
+    return Resolution(load(str(name), overrides), source=f"repo config ({gitctx.shown(path, cwd)})")
 
 
 def _from_rules(cwd: Path) -> Resolution | None:

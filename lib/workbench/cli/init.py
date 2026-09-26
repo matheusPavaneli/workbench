@@ -47,6 +47,11 @@ def run(args: argparse.Namespace) -> int:
         )
 
     proposal, notes = _propose(root, args, existing)
+    ignore = _missing_ignores(root)
+    if ignore is None:
+        notes.append("gitignore could not ask git whether .workflow/ is ignored; check it with: wb doctor")
+    elif ignore:
+        notes.append(f"gitignore {'adding' if args.write else 'would add'} to .gitignore: {'  '.join(ignore)}")
 
     print(f"{'writing' if args.write else 'proposed'}  {path}")
     print()
@@ -65,8 +70,49 @@ def run(args: argparse.Namespace) -> int:
     path.write_text(json.dumps(proposal, indent=2) + "\n", encoding="utf-8")
     print()
     print(f"wrote {path}")
+    if ignore:
+        _append_ignores(root, ignore)
+        print(f"added {len(ignore)} line(s) to {root / '.gitignore'}")
     print("check the whole chain:  wb doctor")
     return 0
+
+
+# What doctor asks for, and what this repo commits: artifacts are per-checkout
+# scratch, except the config and a local backlog, which are shared.
+IGNORE_BLOCK = [".workflow/*", "!.workflow/config.json", "!.workflow/tasks/"]
+IGNORE_COMMENT = "# workbench: per-checkout scratch; the config and a local backlog are shared"
+
+
+def _missing_ignores(root: Path) -> list[str] | None:
+    """The lines of the standard block .gitignore lacks, if .workflow/ is not
+    ignored at all. ``None`` when git could not say.
+
+    Asked of git rather than read off the file, the way doctor asks it: a
+    global excludes file or a parent .gitignore may already cover it.
+    """
+    ignored = gitctx.is_ignored(root, ".workflow/scratch")
+    if ignored is None:
+        return None
+    if ignored:
+        return []
+    try:
+        present = {line.strip() for line in (root / ".gitignore").read_text(encoding="utf-8").splitlines()}
+    except OSError:
+        present = set()
+    return [line for line in IGNORE_BLOCK if line not in present]
+
+
+def _append_ignores(root: Path, lines: list[str]) -> None:
+    """Append, never rewrite: every line already there is somebody's decision."""
+    target = root / ".gitignore"
+    try:
+        current = target.read_text(encoding="utf-8")
+    except OSError:
+        current = ""
+    lead = "" if not current or current.endswith("\n") else "\n"
+    gap = "\n" if current else ""
+    with target.open("a", encoding="utf-8", newline="\n") as handle:
+        handle.write(lead + gap + "\n".join([IGNORE_COMMENT, *lines]) + "\n")
 
 
 def _propose(root: Path, args: argparse.Namespace, existing: dict) -> tuple[dict, list[str]]:

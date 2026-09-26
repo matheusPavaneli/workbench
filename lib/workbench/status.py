@@ -18,7 +18,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import artifacts, audit as audit_lib, gitctx, sdd as sdd_lib, verify as verify_lib
+from . import artifacts, audit as audit_lib, gitctx, light as light_lib, sdd as sdd_lib, verify as verify_lib
 from .errors import UsageError
 
 # Stage states, worst-first when deciding what to report as blocking.
@@ -275,6 +275,18 @@ def read(
         provider=str((triage or {}).get("provider") or ""),
         closed=closed(key, cwd),
     )
+    mark = light_lib.marker(key, root) if not plan else None
+    if mark is not None:
+        # The light path has no plan to audit or scope: its checks run at
+        # wb finish, against the change itself.
+        status.stages = [
+            _intake(key, directory, triage, frame),
+            _light(key, mark, root, tree),
+            _artifact(directory / "commit.txt", "commit", ""),
+            _artifact(directory / "pr.md", "pr", f"wb pr context {key}"),
+        ]
+        return status
+
     # The later stages read the audit only while it still describes this plan.
     current = audit if audit_lib.standing(audit, plan) is None else None
     status.stages = [
@@ -434,6 +446,18 @@ def _evidence(
 def _names(items: list[str], shown: int = 3) -> str:
     more = f" (+{len(items) - shown} more)" if len(items) > shown else ""
     return ", ".join(items[:shown]) + more
+
+
+def _light(key: str, mark: dict, root: Path, tree: str | None) -> Stage:
+    """Light-path work: open until wb finish passes, and again once the code moves on from that pass."""
+    finish = f'wb finish {key} -m "<type>: <summary>"'
+    if mark.get("verdict") != "pass":
+        return Stage("change", TODO, "light path: make the change and a test that covers it", finish)
+    if tree == UNRESOLVED:
+        tree = gitctx.tree(root)
+    if mark.get("tree") and tree and mark.get("tree") != tree:
+        return Stage("change", PENDING, "the code changed since wb finish passed", finish)
+    return Stage("change", OK, "light path: every check passed", "")
 
 
 def _handover(key: str, directory: Path, plan: dict | None, kind: str) -> Stage:

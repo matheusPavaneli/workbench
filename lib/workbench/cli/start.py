@@ -20,7 +20,7 @@ import argparse
 import json
 from pathlib import Path
 
-from .. import artifacts, contexts, flow as flow_lib, gitctx, gitrun, providers, status as status_lib
+from .. import artifacts, contexts, flow as flow_lib, gitctx, gitrun, light, providers, status as status_lib
 from ..errors import UsageError, WbError
 from . import route as route_cli
 
@@ -59,13 +59,35 @@ def run(args: argparse.Namespace) -> int:
         print("triage  already read (--refresh to read it again)")
     print(f"branch  {where}")
 
+    _choose_path(key, kind, root)
     tier, reason, steps = route_cli.compute(key, root)
     print(f"route   {tier}: {', '.join(name for name, _, _ in steps)}  ({reason})")
+    if light.marker(key, root) is not None:
+        print("        no plan, no other skill: make the change and a test that covers it; wb finish runs")
+        print("        the checks and prints the commit command, and speaks only if something blocks")
 
     picked = status_lib.pick(key, root)
     if picked is not None:
         print(status_lib.render_next(*picked).rstrip())
     return 0
+
+
+def _choose_path(key: str, kind: str, root: Path) -> None:
+    """Put eligible work on the light path, once, before anything is planned.
+
+    A ticket that already has a plan keeps it: the path is chosen at the start,
+    and a plan written by hand is never dropped from view.
+    """
+    if (artifacts.ticket_dir(key, root) / "sdd.json").is_file():
+        light.unmark(key, root)
+        return
+    if light.marker(key, root) is not None:
+        if not light.enabled(root):
+            light.unmark(key, root)
+        return
+    allowed, _ = light.eligible(key, kind, root)
+    if allowed:
+        light.mark(key, root)
 
 
 def _triage(key: str, root: Path, *, refresh: bool) -> tuple[dict, bool]:

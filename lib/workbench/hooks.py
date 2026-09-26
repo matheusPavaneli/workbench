@@ -29,7 +29,7 @@ import json
 import os
 from pathlib import Path
 
-from . import artifacts, audit, gitctx, scope, status, verify
+from . import artifacts, audit, companions, gitctx, scope, status, verify
 
 OFF = "off"
 ON = "on"
@@ -98,6 +98,10 @@ def pre_tool_use(payload: dict, root: Path) -> dict | None:
 
     planned = _planned(plan)
     if relative in planned or relative in scope.claims(key, root):
+        return None
+    if companions.reason(relative, planned, companions.generated_globs(root)):
+        # The same tie impl check accepts: a test, declaration, lockfile or
+        # generated file following a planned one.
         return None
 
     return _deny(

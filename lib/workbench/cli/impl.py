@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 from .. import artifacts, audit as audit_lib, gitctx, profile as profile_lib, scope as scope_lib, sdd as sdd_lib
-from .. import verify as verify_lib
+from .. import companions as companions_lib, verify as verify_lib
 from .. import events, status as status_lib
 from ..errors import EXIT_AUDIT, UsageError, WbError
 
@@ -63,8 +63,13 @@ def _check(args: argparse.Namespace) -> int:
     # accounted for. Without this, a second ticket in the same checkout read as
     # scope creep on the first, which is the ordinary state of a working day.
     claimed = scope_lib.claims(key)
-    elsewhere = sorted((changed - planned) & set(claimed))
-    unplanned = sorted(changed - planned - set(claimed))
+    # A file tied to a planned one -- its test, its lockfile -- follows it
+    # through. companions.reason is the same call the edit hook makes.
+    globs = companions_lib.generated_globs(root)
+    ties = {path: companions_lib.reason(path, planned, globs) for path in changed - planned}
+    companions = {path: tie for path, tie in ties.items() if tie}
+    elsewhere = sorted((changed - planned - set(companions)) & set(claimed))
+    unplanned = sorted(changed - planned - set(companions) - set(claimed))
     untouched = sorted(planned - changed)
     overlap = sorted(planned & set(claimed))
 
@@ -72,6 +77,8 @@ def _check(args: argparse.Namespace) -> int:
         print(f"  ok        {path}")
     for path in untouched:
         print(f"  pending   {path}  (planned, not changed yet)")
+    for path in sorted(companions):
+        print(f"  companion {path}  ({companions[path]})")
     for path in elsewhere:
         print(f"  other     {path}  (claimed by {', '.join(claimed[path])})")
     for path in overlap:
@@ -81,7 +88,8 @@ def _check(args: argparse.Namespace) -> int:
     oversize = _oversize(key, doc, root, sorted(planned), staged=args.staged)
 
     if not unplanned and not oversize:
-        carried = f", {len(elsewhere)} carried by another ticket" if elsewhere else ""
+        carried = f", {len(companions)} companion(s)" if companions else ""
+        carried += f", {len(elsewhere)} carried by another ticket" if elsewhere else ""
         print(
             f"\nin plan: {len(changed & planned)} of {len(planned)} planned file(s) changed, "
             f"nothing outside{carried}"

@@ -17,8 +17,32 @@ read-only git façade.
   guard that fails on ordinary work is one people learn to ignore.
 - **Claimed by this plan and another** — reported as `overlap`. Two plans
   editing one file is worth knowing before either lands.
+- **Tied to a planned file** — reported as `companion`, naming the tie
+  (`companion tests/test_util.py  (test of src/util.py)`), and counted apart
+  from `ok` and `other`. See below.
 - **Changed but unplanned** — a deviation. Exit 7, and any critical zone the
   stray paths touch is named alongside them.
+
+### Companions
+
+Tests, type declarations, lockfiles and generated code change mechanically
+when a planned file changes. Listing them is ceremony, and forgetting one
+stopped a session mid-implementation. A companion is released only by its tie
+to a planned file, decided by `companions.reason()` in
+`lib/workbench/companions.py`. `impl check` and the pre-tool-use hook both call
+it, so they never disagree.
+
+| Tie | Released when |
+|---|---|
+| test | same stem as a planned non-test source in the same language family, under a test marker: `test_x.py`, `x_test.py`, `x_test.go`, `x.test.*`, `x.spec.*`, or any file under `__tests__/` |
+| declaration | `x.d.ts` in the same directory as a planned `x.ts` or `x.js` |
+| lockfile | its manifest in the same directory is planned (`package.json`, `pyproject.toml`, `Pipfile`, `go.mod`, `Cargo.toml`, `Gemfile`, `composer.json`) |
+| generated | it matches a glob in the `generated` list of `.workflow/config.json`; no list, no release |
+
+A lockfile changed without its manifest stays a deviation: unplanned
+dependency drift is exactly what the guard is for. A path in a critical zone is
+never a companion, whatever it matches. A companion is never measured toward a
+light plan's size, because only planned paths are.
 
 Only an **audited** plan may account for a path. An unaudited plan is a file
 somebody wrote, and letting one excuse a change would leave a hole straight

@@ -1,0 +1,34 @@
+{
+  "ticket": "BN-2",
+  "arm": "workbench",
+  "run": 2,
+  "metrics": {
+    "hidden_pass": 1,
+    "out_of_scope": 0,
+    "rework": 0,
+    "tokens": 1759550,
+    "cost_usd": 0.5927256000000001,
+    "wall_s": 205.8
+  },
+  "out_of_scope_files": [],
+  "changed": [
+    "shop/billing/charge.py",
+    "shop/billing/coupons.py",
+    "tests/test_billing.py"
+  ],
+  "commits": 1,
+  "session_id": "0d9e364b-63c2-49bf-a582-7f5703fd4942",
+  "num_turns": 43,
+  "workflow_artifacts": [
+    ".workflow/BN-2/audit.json",
+    ".workflow/BN-2/commit.txt",
+    ".workflow/BN-2/commit_draft.txt",
+    ".workflow/BN-2/evidence.json",
+    ".workflow/BN-2/evidence.md",
+    ".workflow/BN-2/git.log.json",
+    ".workflow/BN-2/sdd.json",
+    ".workflow/BN-2/sdd.md",
+    ".workflow/BN-2/triage.json"
+  ],
+  "error": null
+}

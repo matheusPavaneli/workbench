@@ -1,0 +1,33 @@
+{
+  "ticket": "BN-1",
+  "arm": "workbench",
+  "run": 2,
+  "metrics": {
+    "hidden_pass": 1,
+    "out_of_scope": 0,
+    "rework": 0,
+    "tokens": 1603034,
+    "cost_usd": 0.5347918,
+    "wall_s": 178.9
+  },
+  "out_of_scope_files": [],
+  "changed": [
+    "shop/cart.py",
+    "tests/test_cart.py"
+  ],
+  "commits": 1,
+  "session_id": "45e22842-4fbe-4b39-93c6-757b89922458",
+  "num_turns": 38,
+  "workflow_artifacts": [
+    ".workflow/BN-1/audit.json",
+    ".workflow/BN-1/commit-draft.txt",
+    ".workflow/BN-1/commit.txt",
+    ".workflow/BN-1/evidence.json",
+    ".workflow/BN-1/evidence.md",
+    ".workflow/BN-1/git.log.json",
+    ".workflow/BN-1/sdd.json",
+    ".workflow/BN-1/sdd.md",
+    ".workflow/BN-1/triage.json"
+  ],
+  "error": null
+}

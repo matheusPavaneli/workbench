@@ -10,6 +10,12 @@
   "repository": "https://github.com/matheusPavaneli/workbench",
   "license": "MIT",
   "keywords": [
+    "claude-code",
+    "claude-code-plugin",
+    "ai-agents",
+    "agentic-coding",
+    "hallucination",
+    "developer-tools",
     "jira",
     "azure-devops",
     "github-issues",

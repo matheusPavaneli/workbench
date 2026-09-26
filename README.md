@@ -423,6 +423,7 @@ Exit codes: 2 usage, 3 config, 4 auth, 5 provider, 6 not found, 7 audit failed.
 - [CHANGELOG.md](CHANGELOG.md) — what changed, and the deprecation policy
 - [status.md](docs/status.md) — the pipeline, the command history, rigour tiers, settled gates
 - [flow.md](docs/flow.md) — source and validation branches, cherry-pick carrying, branch naming
+- [bench.md](docs/bench.md) — the benchmark: metrics, the two arms, running it, reading the report
 
 These are for maintainers. Agents do not read them: the behaviour they describe
 is enforced in code, and loading them into a session would pay twice for the
@@ -446,6 +447,10 @@ python -m pip install ruff==0.16.9 mypy==2.3.1
 ruff check lib
 mypy
 ```
+
+The benchmark in `bench/` never runs in the suite: it drives paid sessions and
+is gated on `WB_BENCH=1`. Its scoring and its fixture are held by
+`tests/test_bench.py`. See [bench.md](docs/bench.md).
 
 Fixtures under `tests/fixtures/` follow the vendors' published contracts, which
 were checked against the documentation — endpoints, parameter names, response

@@ -11,7 +11,7 @@ command's own output, and one that removes it. A `--json` payload that loses or
 renames a key raises its `schema` number in the same release, and
 `contract.VERSIONS` is asserted against the real output so it cannot drift.
 
-## Unreleased
+## 0.11.0
 
 ### Changed
 
@@ -24,7 +24,9 @@ renames a key raises its `schema` number in the same release, and
   handover gets that check once the key is passed; `incident-*` keys now owe
   one in the audit too, as they already did in `wb route` and `wb status`.
   Citations, files, verify and rollback still fail an incident's audit. A
-  hotfix pushed without a PR is not gated.
+  hotfix pushed without a PR is not gated. **Upgrade cost:** `draft-pr` now
+  passes `--key`, so a bug or support PR whose `handover.md` was never
+  rendered fails `pr check` until `wb sdd handover` runs.
 
 ### Added
 

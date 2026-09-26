@@ -40,8 +40,8 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
 6. **Verify.** `impl verify <KEY>` runs the plan's `verify` commands and writes
    `.workflow/<KEY>/evidence.md`. It refuses anything that is not a known test,
    build or lint runner — run those yourself and say so. The first time a
-   command appears in a checkout nothing runs: it prints a `--approve` call
-   naming each command. Show it to the user; never approve on their behalf.
+   command appears in a checkout nothing runs: `approve <KEY>` then shows the
+   commands and a token. Show it to the user; never approve on their behalf.
    The evidence is bound to the tree it saw, so verify last, then commit.
    For a bug fix, `impl verify <KEY> --regression`: each `regression` target
    runs on the commit the branch left, with the new tests carried in, and must

@@ -399,7 +399,7 @@ def _scope(
     stray = changed - planned
 
     if stray:
-        return Stage("scope", FAIL, f"{len(stray)} file(s) outside the plan", f"wb impl check {key}")
+        return Stage("scope", FAIL, f"{len(stray)} file(s) outside the plan", f"wb approve {key}")
     if not touched:
         return Stage("scope", TODO, f"0 of {len(planned)} planned file(s) changed", f"wb impl check {key}")
     if touched < planned:
@@ -418,6 +418,10 @@ def _evidence(
     if not audit or audit.get("verdict") != "pass":
         return Stage("verify", TODO, "", "")
     if not evidence:
+        waiting = _awaiting_approval(key, plan, root)
+        if waiting:
+            return Stage("verify", TODO, f"{waiting} verify entr{'y' if waiting == 1 else 'ies'} await your approval",
+                         f"wb approve {key}")
         return Stage("verify", TODO, "", f"wb impl verify {key}")
     results = evidence.get("results") or []
     refused = evidence.get("refused") or []
@@ -441,6 +445,22 @@ def _evidence(
     if broken:
         parts.append(f"regression not proven: {_names(broken)}")
     return Stage("verify", FAIL, ", ".join(parts) or "no commands ran", f"wb impl verify {key}")
+
+
+def _awaiting_approval(key: str, plan: dict | None, root: Path) -> int:
+    """How many of the plan's verify entries this machine has not approved.
+
+    A file read, never a process: status runs first and runs often. A corrupt
+    approvals file reads as nothing waiting here; wb approve reports it.
+    """
+    if not isinstance(plan, dict):
+        return 0
+    try:
+        commands = [str(command) for command in plan.get("verify") or []]
+        env, _ = verify_lib.resolve_env(plan.get("verify_env"))
+        return len(verify_lib.unapproved(root, verify_lib.entries(commands, env, key), key))
+    except UsageError:
+        return 0
 
 
 def _names(items: list[str], shown: int = 3) -> str:

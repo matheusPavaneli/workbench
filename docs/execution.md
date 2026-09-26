@@ -213,6 +213,36 @@ upstream's approvals. `--approve` takes only entries the plan names.
 This is as strong as the permission prompt that shows the call. An agent can
 run it, and under a permission mode that approves everything it gates nothing.
 
+### `wb approve`: one verb for whichever decision waits
+
+A person should not need to know which subsystem is holding the work.
+`wb approve [KEY]` resolves the ticket as `wb next` does and shows the one
+decision waiting, in the order the flow meets them:
+
+| Decision | Waiting when | Approving does |
+|---|---|---|
+| `scope` | files changed that the audited plan does not list | adds each to the plan with its measured size and re-audits, as `wb sdd amend` does, with the approval as the reason |
+| `verify` | the plan's verify entries are not approved on this machine | records them; nothing runs until `wb impl verify` |
+| `publish` | `pr.md` is drafted and the branch was never pushed | the first push, `git push -u origin <branch>` |
+
+Each decision prints a token, a digest of exactly the entries shown:
+
+```
+$ wb approve ABC-123
+ABC-123  verify: 2 verify entries from the plan wait for your approval; they run with your permissions
+  python -m unittest discover -s tests -q
+  env PYTHONPATH=lib
+approving records them for this checkout; nothing runs until wb impl verify ABC-123
+or change the plan's verify list and re-run wb sdd audit
+approve: wb approve ABC-123 3fa9c2d1e0
+```
+
+`wb approve ABC-123 3fa9c2d1e0` recomputes the decision and carries it out only
+if the token still matches, so an approval never covers anything the person was
+not shown in the output they approved. Nothing waiting: it says so and exits 0.
+`wb status` and `wb next` name `wb approve <KEY>` as the command whenever the
+stage they report is held by one of these gates.
+
 ### Bound to the tree
 
 `evidence.json` records `tree` — the git tree the working tree would commit as,

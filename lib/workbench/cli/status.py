@@ -56,7 +56,7 @@ def _stats(args: argparse.Namespace) -> int:
     """
     changed, tree = status_lib.branch_changes(), gitctx.tree(gitctx.checkout())
     snapshot = status_lib.summarise(
-        [status_lib.read(key, changed=changed, tree=tree) for key in status_lib.keys()]
+        [status_lib.read(key, changed=changed, tree=tree) for key in status_lib.listed()]
     )
     history = events.summarise(events.read(everywhere=args.everywhere))
 
@@ -84,7 +84,7 @@ def _one(args: argparse.Namespace) -> int:
 
 
 def _all(args: argparse.Namespace) -> int:
-    keys = status_lib.keys()
+    keys = status_lib.listed()
     if not keys and not args.json:
         print("no work in progress")
         print("start one: wb task list, or wb task get <KEY>")

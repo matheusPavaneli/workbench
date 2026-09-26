@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import artifacts, audit as audit_lib, gitctx, sdd as sdd_lib, verify as verify_lib
+from .errors import UsageError
 
 # Stage states, worst-first when deciding what to report as blocking.
 FAIL = "fail"
@@ -132,6 +133,36 @@ def keys(cwd: Path | None = None) -> list[str]:
     return [p.name for p in found]
 
 
+def listed(cwd: Path | None = None) -> list[str]:
+    """Every key a session could act on: ``keys()`` plus open backlog tasks.
+
+    A task that has only been recorded has no directory yet, so ``keys()``
+    cannot see it -- and ``wb task new`` names it as the next step, so status
+    and next reporting "no work in progress" right after contradicted the
+    command before them. Closed tasks with no artifacts have nothing left to
+    say and stay out. Newest first, across both kinds.
+    """
+    from .providers import local
+
+    root = artifacts.root(cwd)
+    found = [(key, (root / key).stat().st_mtime) for key in keys(cwd)]
+    seen = {key for key, _ in found}
+    for path in local.tasks_dir(cwd).glob("*.json"):
+        task = _json(path)
+        if task is None:
+            continue
+        key = str(task.get("key") or "")
+        if not key or key in seen or task.get("status") == local.DONE:
+            continue
+        try:
+            artifacts.validate_key(key)
+        except UsageError:  # a malformed backlog file is not work in flight
+            continue
+        found.append((key, path.stat().st_mtime))
+    found.sort(key=lambda item: item[1], reverse=True)
+    return [key for key, _ in found]
+
+
 # A branch name carries the key in every convention this tool detects, so the
 # ticket a session is working on is a fact about the checkout, not a question.
 #
@@ -179,7 +210,7 @@ def pick(key: str | None = None, cwd: Path | None = None) -> tuple[Status, str] 
     if key:
         return read(key, cwd), "named"
 
-    available = keys(cwd)
+    available = listed(cwd)
     from_branch = key_from_branch(available, cwd)
     if from_branch:
         return read(from_branch, cwd), "branch"
@@ -234,10 +265,13 @@ def read(
     audit = _json(directory / "audit.json")
     evidence = _json(directory / "evidence.json")
 
+    # A task that has only been recorded names itself in the backlog, and
+    # nowhere else yet.
+    task = _backlog(key, cwd) if not triage else None
     status = Status(
         key=key,
-        title=str((triage or {}).get("title") or (plan or {}).get("objective") or ""),
-        kind=str((triage or {}).get("type") or ""),
+        title=str((triage or {}).get("title") or (plan or {}).get("objective") or (task or {}).get("title") or ""),
+        kind=str((triage or task or {}).get("type") or ""),
         provider=str((triage or {}).get("provider") or ""),
         closed=closed(key, cwd),
     )
@@ -270,10 +304,16 @@ def closed(key: str, cwd: Path | None = None) -> bool:
     """
     from .providers import local
 
-    task = _json(local.task_path(key, cwd))
+    task = _backlog(key, cwd)
     if not task:
         return False
     return task.get("status") == local.DONE
+
+
+def _backlog(key: str, cwd: Path | None = None) -> dict | None:
+    from .providers import local
+
+    return _json(local.task_path(key, cwd))
 
 
 # ---- stages -------------------------------------------------------------

@@ -502,7 +502,9 @@ def render_next(status: Status, origin: str) -> str:
     state = "BLOCKED" if status.blocked else stage.state
     detail = f"  {stage.detail}" if stage.detail else ""
     command = stage.command or (f"run the {stage.skill} skill" if stage.skill else "nothing outstanding")
-    if stage.command and stage.skill:
+    # The plan stage spells its skill into the command already; naming it twice
+    # reads as two things to run.
+    if stage.command and stage.skill and f"({stage.skill})" not in stage.command:
         command = f"{command}   ({stage.skill})"
     return _lines(f"{head}  {stage.name} {state}{detail}", f"  next: {command}")
 
@@ -564,17 +566,33 @@ def render_summary(summary: dict) -> str:
     return "\n".join(lines)
 
 
+TITLE_WIDTH = 48
+
+
 def render_list(items: list[Status]) -> str:
-    if not items:
-        return "no work in progress"
-    width = max(len(s.key) for s in items)
-    lines = []
-    for status in items:
+    """Work in flight, one line each.
+
+    A shipped ticket keeps its artifacts until someone cleans them, so listing
+    every ticket buried the open ones under the finished: twelve of thirteen
+    lines in this repo. Closed tickets are counted instead, with the command
+    that clears them; ``--json`` still carries every ticket.
+    """
+    shown = [status for status in items if not status.closed]
+    hidden = len(items) - len(shown)
+    lines = [] if shown else ["no work in progress"]
+    width = max((len(s.key) for s in shown), default=0)
+    for status in shown:
         blocked = status.blocked
         state = f"BLOCKED at {blocked.name}" if blocked else status.headline
-        title = status.title[:48]
-        lines.append(f"{status.key:<{width}}  {state:<16}  {title}")
+        lines.append(f"{status.key:<{width}}  {state:<16}  {_cut(status.title)}")
+    if hidden:
+        lines.append(f"\n{hidden} done ticket(s) not shown -- wb task clean --merged lists what can go")
     return "\n".join(lines)
+
+
+def _cut(title: str, width: int = TITLE_WIDTH) -> str:
+    """A cut title says so; cut silently, it reads as the whole title."""
+    return title if len(title) <= width else title[: width - 3].rstrip() + "..."
 
 
 # ---- reading ------------------------------------------------------------

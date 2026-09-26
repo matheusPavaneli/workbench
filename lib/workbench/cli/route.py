@@ -22,7 +22,7 @@ import argparse
 import json
 from pathlib import Path
 
-from .. import artifacts, contract, gitctx, sdd as sdd_lib, status as status_lib
+from .. import artifacts, contract, gitctx, light, sdd as sdd_lib, status as status_lib
 from ..errors import UsageError
 
 ACTIONS: list[str] = []
@@ -50,6 +50,17 @@ MITIGATE = ("mitigate", "trace-incident", "wb cite check .workflow/{key}/inciden
 # has to explain to QA, actually needs. A self-review is part of the floor: it
 # is the step that costs least on the smallest change.
 SHORT = {"triage", "plan", "implement", "verify", "review", "commit"}
+
+# Small work with no plan up front (``workbench.light``): the guardrails run at
+# ``wb finish`` against the real change, and the commit uses the message given
+# there, so no plan, audit or commit skill is paid for.
+LIGHT_PATH = "light path"
+LIGHT_STEPS = [
+    ("triage", "", "wb start {key}"),
+    ("change", "", 'wb finish {key} -m "<type>: <summary>"'),
+    ("commit", "", "git commit -F .workflow/{key}/commit.txt"),
+    ("pr", "draft-pr", "wb pr context {key}"),
+]
 
 # A product case is owed by work that adds something, not by a fix to what
 # already exists.
@@ -106,6 +117,8 @@ def compute(
 ) -> tuple[str, str, list[tuple[str, str, str]]]:
     """(tier, reason, steps) for a ticket: what ``wb route`` prints and ``wb start`` summarises."""
     doc = _plan(key, root)
+    if doc is None and not files and light.marker(key, root) is not None:
+        return LIGHT_PATH, light.eligible(key, _kind(key, root), root)[1], LIGHT_STEPS
     paths = list(files or []) or [str(item.get("path", "")) for item in (doc or {}).get("files") or []]
     kind = _kind(key, root)
 

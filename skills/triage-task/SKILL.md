@@ -31,6 +31,11 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
    any time: it is a no-op that says where the ticket stands. To read without
    branching, or deeper, use `task get <KEY>` — depth 1 by default: the task,
    plus one line per linked item.
+
+   **Light path** (the route says so): no plan and no other skill. Make the
+   change and a test that covers it, then `finish <KEY> -m "<type>: <summary>"`
+   and run the commit command it prints. If it says the work outgrew the path,
+   continue with `plan-change`.
    - Use `--depth 0` when the ticket is self-contained and links do not matter.
    - Use `--depth 2` only when a blocker or a parent decides the approach. It
      fetches bodies for blocking and hierarchy links, never for `relates`.
@@ -58,4 +63,4 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
 - One tracker per context, resolved automatically. If `wb` reports no context,
   relay its fix lines — do not guess a project or a URL.
 
-Next: `plan-change` reads the artifact this produced.
+Next, on the standard route: `plan-change` reads the artifact this produced.

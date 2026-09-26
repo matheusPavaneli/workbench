@@ -248,6 +248,33 @@ eleventh skill: ten descriptions are already this plugin's always-on cost, and
 one more to say "do less" would be the joke telling itself.
 
 
+### The light path
+
+The first benchmark run put a one-file chore at 18 s plain and 190 s through the
+full flow, with the same result. For small work, `wb start` skips the paperwork
+and keeps the guardrails, moved to the one moment they can be checked against
+the real change instead of a forecast of it:
+
+```
+$ wb start ABC-7
+...
+route   light path: triage, change, commit, pr  (no plan up front; wb finish holds the change to the floor)
+$ wb finish ABC-7 -m "fix: print refunds with their real amount"
+ABC-7  clear: 2 file(s), 6 line(s), 1 suite run(s) passed, 1 regression test(s) proven
+  commit: git add -- shop/format.py tests/test_format.py && git commit -F .workflow/ABC-7/commit.txt
+```
+
+`wb finish` checks the commit message against the repo's convention, refuses a
+logic change with no test change, runs the suite by the command the detected
+runner implies, and on a bug proves each changed test fails on the base the
+branch left. Past the light bound, or into a critical zone, the work leaves the
+path for the standard route with its change intact: it gets a plan. It speaks
+only when something blocks, and leaves nothing to open, edit or approve.
+
+Feature work (it owes a product frame), support and incident work (a reader
+outside engineering), and anything already planned take the standard route.
+`"light_path": false` in `.workflow/config.json` puts every ticket back on it.
+
 A seven-section plan for a one-line change costs more than the change, and a
 gate that does not pay for itself is one people route around. `sdd audit`
 computes a **tier** from the plan's own file list: an estimated 100 lines
@@ -398,6 +425,7 @@ question about the code cite as `` `path:line` — `the line` ``, and
 wb init    [--write]           propose (or write) this repo's config
 wb doctor  everything that has to be true, in one pass
 wb start  KEY [--refresh]      read the ticket, branch for it, route it: one command to pick up work
+wb finish KEY -m MESSAGE       light path: every check against the real change, then the commit command
 wb route   [KEY]               the steps this change actually needs
 wb next    [KEY]               the single command to run now
 wb status  [KEY] | --stats     where work stands, and what to run next

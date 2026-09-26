@@ -30,6 +30,7 @@ from workbench.cli import cite as cite_cli  # noqa: E402
 from workbench.cli import ctx as ctx_cli  # noqa: E402
 from workbench.cli import commit as commit_cli  # noqa: E402
 from workbench.cli import doctor as doctor_cli  # noqa: E402
+from workbench.cli import finish as finish_cli  # noqa: E402
 from workbench.cli import flow as flow_cli  # noqa: E402
 from workbench.cli import git as git_cli  # noqa: E402
 from workbench.cli import impl as impl_cli  # noqa: E402
@@ -51,6 +52,7 @@ GROUPS = {
     "ctx": ctx_cli,
     "doctor": doctor_cli,
     "start": start_cli,
+    "finish": finish_cli,
     "status": status_cli,
     "next": next_cli,
     "route": route_cli,

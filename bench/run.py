@@ -13,14 +13,17 @@ reads back what they did.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
 import time
 from datetime import datetime, timezone
+from collections.abc import Iterator
 from pathlib import Path
 
 import score
@@ -43,6 +46,9 @@ SMOKE_TICKET = "BN-3"
 PLUGIN_PARTS = (".claude-plugin", "hooks", "lib", "shared", "skills")
 
 GIT_TIMEOUT_S = 60
+# Every process a run starts gets an empty stdin. Run from a terminal, an
+# inherited console never reaches end of input: git shortlog in a repo with no
+# commits reads the log from stdin and waits there until the timeout.
 HIDDEN_TIMEOUT_S = 120
 
 
@@ -80,7 +86,10 @@ def prompt(ticket: dict, arm: str) -> str:
         "Work in this repository until the ticket is done, then commit your change with git."
     )
     if arm == "workbench":
-        return f"Ticket {ticket['key']}.\n\n{body}"
+        # Asked the way a user who installed workbench asks. A bare "Ticket
+        # BN-3." left the skills uncalled in the first smoke runs: the plugin
+        # loaded, the flow never ran, and the arm measured a plain session.
+        return f"Pick up ticket {ticket['key']} and take it through the workbench flow to a commit.\n\n{body}"
     return body
 
 
@@ -140,27 +149,111 @@ def parse_session(stdout: str) -> dict:
     return payload if isinstance(payload, dict) else {}
 
 
-def _git(repo: Path, *args: str) -> str:
+def _git(repo: Path, *args: str, env: dict | None = None) -> str:
     done = subprocess.run(
-        ["git", *args], cwd=repo, capture_output=True, text=True, timeout=GIT_TIMEOUT_S, check=True
+        ["git", *args], cwd=repo, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=GIT_TIMEOUT_S, check=True
     )
     return done.stdout
 
 
-def _init_repo(repo: Path) -> str:
+def _force_remove(function, path, _excinfo) -> None:
+    # git writes its objects read-only; Windows refuses to delete those.
+    os.chmod(path, stat.S_IWRITE)
+    function(path)
+
+
+@contextlib.contextmanager
+def workdir(prefix: str, attempts: int = 10, pause_s: float = 0.5) -> Iterator[Path]:
+    """A temp dir removed with retries.
+
+    On Windows a file the session or a scanner still holds cannot be deleted
+    for a moment after the last process exits (WinError 32). A leftover temp
+    dir is reported, never allowed to end a run that has already paid.
+    """
+    path = Path(tempfile.mkdtemp(prefix=prefix))
+    try:
+        yield path
+    finally:
+        for attempt in range(attempts):
+            try:
+                shutil.rmtree(path, onerror=_force_remove)
+                break
+            except OSError as exc:
+                if attempt == attempts - 1:
+                    print(f"warning: left {path} behind: {exc}", file=sys.stderr)
+                else:
+                    time.sleep(pause_s)
+
+
+def session_env(work: Path, env: dict | None = None) -> dict:
+    """The environment every step of a run sees, setup and session alike.
+
+    A fresh CLAUDE_CONFIG_DIR keeps the owner's plugins and CLAUDE.md out; a
+    fresh WORKBENCH_HOME keeps their tracker contexts, approvals and event log
+    out, so the workbench arm starts where a new user would.
+    """
+    empty = work / "gitconfig"
+    empty.parent.mkdir(parents=True, exist_ok=True)
+    empty.touch()
+    return {
+        **(os.environ if env is None else env),
+        "CLAUDE_CONFIG_DIR": str(work / "config"),
+        "WORKBENCH_HOME": str(work / "home"),
+        # The owner's ~/.gitconfig stays out too: its aliases, hooks and
+        # core.fsmonitor (a daemon per repo that holds the temp dir open).
+        "GIT_CONFIG_GLOBAL": str(empty),
+        "GIT_CONFIG_NOSYSTEM": "1",
+    }
+
+
+def _setup(argv: list[str], repo: Path, env: dict) -> None:
+    done = subprocess.run(argv, cwd=repo, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=GIT_TIMEOUT_S)
+    if done.returncode != 0:
+        raise RuntimeError(f"setup step failed ({done.returncode}): {' '.join(argv[1:4])}\n{done.stderr.strip()}")
+
+
+def prepare(repo: Path, ticket: dict, arm: str, env: dict, plugin_dir: Path | None) -> str:
+    """Copy the fixture, set the arm up as a new user would, commit it as the base.
+
+    The workbench arm's setup -- wb init --write and the ticket in the local
+    backlog -- is part of the base commit, so none of it is scored as a change.
+    """
     shutil.copytree(FIXTURE, repo, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    _git(repo, "init", "-q")
-    _git(repo, "config", "user.email", "bench@workbench.invalid")
-    _git(repo, "config", "user.name", "bench")
-    _git(repo, "add", "-A")
-    _git(repo, "commit", "-q", "-m", "base")
-    return _git(repo, "rev-parse", "HEAD").strip()
+    _git(repo, "init", "-q", env=env)
+    _git(repo, "config", "user.email", "bench@workbench.invalid", env=env)
+    _git(repo, "config", "user.name", "bench", env=env)
+    if arm == "workbench":
+        if plugin_dir is None:
+            raise ValueError("the workbench arm needs a plugin directory")
+        wb = [sys.executable, str(plugin_dir / "lib" / "wb.py")]
+        _setup([*wb, "init", "--write"], repo, env)
+        _setup(
+            [*wb, "task", "new", ticket["title"], "--type", ticket["kind"], "--desc", ticket["desc"], "--key", ticket["key"]],
+            repo,
+            env,
+        )
+    _git(repo, "add", "-A", env=env)
+    _git(repo, "commit", "-q", "-m", "base", env=env)
+    return _git(repo, "rev-parse", "HEAD", env=env).strip()
 
 
-def _changed(repo: Path, base: str) -> list[str]:
-    tracked = _git(repo, "diff", "--name-only", base).splitlines()
-    untracked = _git(repo, "ls-files", "--others", "--exclude-standard").splitlines()
+def preflight(ticket: dict) -> None:
+    """Set up the workbench arm once before any paid session, so a broken setup costs nothing."""
+    with workdir("wb-bench-preflight-") as work:
+        prepare(work / "repo", ticket, "workbench", session_env(work), copy_plugin(work / "plugin"))
+
+
+def _changed(repo: Path, base: str, env: dict | None = None) -> list[str]:
+    tracked = _git(repo, "diff", "--name-only", base, env=env).splitlines()
+    untracked = _git(repo, "ls-files", "--others", "--exclude-standard", env=env).splitlines()
     return sorted({path for path in tracked + untracked if path})
+
+
+def _artifacts(repo: Path, key: str) -> list[str]:
+    folder = repo / ".workflow" / key
+    if not folder.is_dir():
+        return []
+    return sorted(path.relative_to(repo).as_posix() for path in folder.rglob("*") if path.is_file())
 
 
 def _hidden_passes(repo: Path, key: str) -> bool:
@@ -170,7 +263,7 @@ def _hidden_passes(repo: Path, key: str) -> bool:
         [sys.executable, "-m", "unittest", "discover", "-s", str(tests), "-t", str(tests)],
         cwd=repo,
         env=env,
-        capture_output=True,
+        stdin=subprocess.DEVNULL, capture_output=True,
         text=True,
         timeout=HIDDEN_TIMEOUT_S,
     )
@@ -178,42 +271,18 @@ def _hidden_passes(repo: Path, key: str) -> bool:
 
 
 def run_one(claude: str, ticket: dict, arm: str, n: int, *, model: str, timeout_s: int) -> dict:
-    with tempfile.TemporaryDirectory(prefix="wb-bench-") as tmp:
-        work = Path(tmp)
+    with workdir("wb-bench-") as work:
         repo = work / "repo"
-        base = _init_repo(repo)
-        env = {**os.environ, "CLAUDE_CONFIG_DIR": str(work / "config")}
-
-        plugin_dir = None
-        if arm == "workbench":
-            plugin_dir = copy_plugin(work / "plugin")
-            subprocess.run(
-                [
-                    sys.executable,
-                    str(plugin_dir / "lib" / "wb.py"),
-                    "task",
-                    "new",
-                    ticket["title"],
-                    "--type",
-                    ticket["kind"],
-                    "--desc",
-                    ticket["desc"],
-                    "--key",
-                    ticket["key"],
-                ],
-                cwd=repo,
-                capture_output=True,
-                text=True,
-                timeout=GIT_TIMEOUT_S,
-                check=True,
-            )
+        env = session_env(work)
+        plugin_dir = copy_plugin(work / "plugin") if arm == "workbench" else None
+        base = prepare(repo, ticket, arm, env, plugin_dir)
 
         argv = command(claude, arm, prompt(ticket, arm), model=model, plugin_dir=plugin_dir)
         error = None
         stdout = ""
         started = time.monotonic()
         try:
-            done = subprocess.run(argv, cwd=repo, env=env, capture_output=True, text=True, timeout=timeout_s)
+            done = subprocess.run(argv, cwd=repo, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout_s)
             stdout = done.stdout
             if done.returncode != 0:
                 error = f"claude exited {done.returncode}: {done.stderr.strip()[:300]}"
@@ -229,11 +298,12 @@ def run_one(claude: str, ticket: dict, arm: str, n: int, *, model: str, timeout_
             arm=arm,
             run=n,
             session=session,
-            changed=_changed(repo, base),
-            commits=int(_git(repo, "rev-list", "--count", f"{base}..HEAD").strip()),
+            changed=_changed(repo, base, env),
+            commits=int(_git(repo, "rev-list", "--count", f"{base}..HEAD", env=env).strip()),
             hidden_passed=_hidden_passes(repo, ticket["key"]),
             wall_s=wall_s,
             error=error,
+            artifacts=_artifacts(repo, ticket["key"]),
         )
 
 
@@ -273,6 +343,12 @@ def main(argv: list[str] | None = None) -> int:
     date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     out = RESULTS / f"{date}-{commit}{'-smoke' if args.smoke else ''}"
     out.mkdir(parents=True, exist_ok=True)
+
+    try:
+        preflight(tickets[0])
+    except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
+        print(f"error: the workbench arm cannot be set up; nothing was run\n{exc}", file=sys.stderr)
+        return 3
 
     budget = Budget(args.cap)
     records: list[dict] = []

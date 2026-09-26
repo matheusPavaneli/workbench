@@ -1,0 +1,28 @@
+{
+  "ticket": "BN-4",
+  "arm": "workbench",
+  "run": 1,
+  "metrics": {
+    "hidden_pass": 1,
+    "out_of_scope": 0,
+    "rework": 0,
+    "tokens": 1138495,
+    "cost_usd": 0.3863814,
+    "wall_s": 109.8
+  },
+  "out_of_scope_files": [],
+  "changed": [
+    ".workflow/config.json",
+    "shop/users.py",
+    "tests/test_users.py"
+  ],
+  "commits": 0,
+  "session_id": "e088cc14-7432-4e0f-af74-f69a204450ea",
+  "num_turns": 29,
+  "workflow_artifacts": [
+    ".workflow/BN-4/audit.json",
+    ".workflow/BN-4/sdd.json",
+    ".workflow/BN-4/triage.json"
+  ],
+  "error": null
+}

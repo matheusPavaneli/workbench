@@ -1,0 +1,24 @@
+{
+  "ticket": "BN-2",
+  "arm": "plain",
+  "run": 1,
+  "metrics": {
+    "hidden_pass": 1,
+    "out_of_scope": 0,
+    "rework": 0,
+    "tokens": 402134,
+    "cost_usd": 0.15914540000000002,
+    "wall_s": 40.9
+  },
+  "out_of_scope_files": [],
+  "changed": [
+    "shop/billing/charge.py",
+    "shop/billing/coupons.py",
+    "tests/test_billing.py"
+  ],
+  "commits": 1,
+  "session_id": "86026572-efd3-4fdf-934b-3bfc54a25346",
+  "num_turns": 13,
+  "workflow_artifacts": [],
+  "error": null
+}

@@ -12,6 +12,7 @@ import json
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 BENCH = Path(__file__).resolve().parent.parent / "bench"
@@ -84,6 +85,14 @@ class TokensTest(unittest.TestCase):
         self.assertIsNone(rec["metrics"]["tokens"])
         self.assertIsNone(rec["metrics"]["cost_usd"])
 
+    def test_the_record_keeps_turns_and_workflow_artifacts(self) -> None:
+        rec = score.record(
+            ticket=_ticket(), arm="workbench", run=1, session={"num_turns": 7}, changed=[], commits=1,
+            hidden_passed=True, wall_s=1.0, artifacts=[".workflow/BN-9/sdd.json", ".workflow/BN-9/triage.json"],
+        )
+        self.assertEqual(7, rec["num_turns"])
+        self.assertEqual([".workflow/BN-9/sdd.json", ".workflow/BN-9/triage.json"], rec["workflow_artifacts"])
+
     def test_an_unknown_arm_is_refused(self) -> None:
         with self.assertRaises(ValueError):
             score.record(
@@ -145,6 +154,11 @@ class ReportTest(unittest.TestCase):
         self.assertIn("auth: subscription", text)
         self.assertIn("not billed", text)
 
+    def test_the_report_says_how_many_workbench_runs_used_the_flow(self) -> None:
+        used = dict(_record("BN-1", "workbench"), workflow_artifacts=[".workflow/BN-1/sdd.json"])
+        unused = dict(_record("BN-1", "workbench"), workflow_artifacts=[])
+        self.assertIn("left workflow artifacts: 1 of 2", self._report([used, unused, _record("BN-1", "plain")]))
+
     def test_the_report_carries_commit_model_date_and_skipped_runs(self) -> None:
         text = self._report([_record("BN-1", "plain")], skipped=5)
         self.assertIn("abc1234", text)
@@ -174,7 +188,8 @@ class CommandTest(unittest.TestCase):
         ticket = _ticket()
         plain, bench = bench_run.prompt(ticket, "plain"), bench_run.prompt(ticket, "workbench")
         self.assertTrue(bench.endswith(plain))
-        self.assertIn("BN-9", bench)
+        self.assertIn("Pick up ticket BN-9", bench)
+        self.assertIn("workbench flow", bench)
         self.assertNotIn("BN-9", plain)
 
 
@@ -236,6 +251,83 @@ class PluginCopyTest(unittest.TestCase):
             self.assertTrue((dest / ".claude-plugin" / "plugin.json").is_file())
             self.assertEqual([], [p for p in dest.rglob("*") if "bench" in p.relative_to(dest).parts])
             self.assertFalse(any((dest / "lib").rglob("__pycache__")))
+
+
+class PrepareTest(unittest.TestCase):
+    """The setup a run does before any paid session, on a real git repo."""
+
+    def _prepare(self, arm: str) -> tuple[Path, str]:
+        context = bench_run.workdir("wb-bench-test-")
+        work = context.__enter__()
+        self.addCleanup(context.__exit__, None, None, None)
+        self.env = bench_run.session_env(work)
+        plugin = bench_run.copy_plugin(work / "plugin") if arm == "workbench" else None
+        ticket = json.loads((BENCH / "tickets.json").read_text(encoding="utf-8"))["tickets"][2]
+        base = bench_run.prepare(work / "repo", ticket, arm, self.env, plugin)
+        return work / "repo", base
+
+    def _git(self, repo: Path, *args: str) -> str:
+        return bench_run._git(repo, *args, env=self.env)
+
+    def test_the_workbench_arm_starts_with_its_ticket_and_config_in_the_base_commit(self) -> None:
+        repo, base = self._prepare("workbench")
+        committed = self._git(repo, "ls-tree", "-r", "--name-only", base).splitlines()
+        self.assertIn(".workflow/config.json", committed)
+        self.assertIn(".workflow/tasks/BN-3.json", committed)
+        self.assertEqual([], bench_run._changed(repo, base, self.env), "setup left changes that would be scored")
+
+    def test_the_plain_arm_has_no_workbench_setup(self) -> None:
+        repo, base = self._prepare("plain")
+        self.assertFalse((repo / ".workflow").exists())
+        self.assertEqual([], bench_run._changed(repo, base, self.env))
+
+    def test_bytecode_from_running_the_tests_is_not_a_change(self) -> None:
+        repo, base = self._prepare("plain")
+        (repo / "shop" / "__pycache__").mkdir()
+        (repo / "shop" / "__pycache__" / "format.cpython-312.pyc").write_bytes(b"")
+        self.assertEqual([], bench_run._changed(repo, base, self.env))
+
+    def test_the_owner_s_homes_never_reach_a_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            env = bench_run.session_env(work, {"WORKBENCH_HOME": "/home/me/.workbench", "PATH": "p"})
+            self.assertEqual(str(work / "home"), env["WORKBENCH_HOME"])
+            self.assertEqual(str(work / "config"), env["CLAUDE_CONFIG_DIR"])
+            self.assertEqual("", Path(env["GIT_CONFIG_GLOBAL"]).read_text(encoding="utf-8"))
+            self.assertEqual("1", env["GIT_CONFIG_NOSYSTEM"])
+            self.assertEqual("p", env["PATH"])
+
+    def test_the_owner_s_git_config_does_not_reach_the_repo(self) -> None:
+        repo, _ = self._prepare("plain")
+        self.assertEqual("", self._git(repo, "config", "--global", "--list").strip())
+
+
+class StdinTest(unittest.TestCase):
+    def test_no_process_a_run_starts_can_wait_on_the_terminal(self) -> None:
+        real = bench_run.subprocess.run
+        calls = []
+
+        def spy(argv, *args, **kwargs):
+            calls.append((argv, kwargs.get("stdin")))
+            return real(argv, *args, **kwargs)
+
+        with bench_run.workdir("wb-bench-test-") as work, mock.patch.object(bench_run.subprocess, "run", spy):
+            ticket = json.loads((BENCH / "tickets.json").read_text(encoding="utf-8"))["tickets"][2]
+            env = bench_run.session_env(work)
+            base = bench_run.prepare(work / "repo", ticket, "workbench", env, bench_run.copy_plugin(work / "plugin"))
+            bench_run._changed(work / "repo", base, env)
+        self.assertTrue(calls)
+        self.assertEqual([], [argv for argv, stdin in calls if stdin is not bench_run.subprocess.DEVNULL])
+
+
+class WorkdirTest(unittest.TestCase):
+    def test_a_dir_with_read_only_files_is_removed(self) -> None:
+        with bench_run.workdir("wb-bench-test-") as work:
+            locked = work / "objects" / "ab"
+            locked.parent.mkdir()
+            locked.write_text("x", encoding="utf-8")
+            locked.chmod(0o444)
+        self.assertFalse(work.exists())
 
 
 def _run_suite(start: Path) -> unittest.TestResult:

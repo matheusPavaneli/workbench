@@ -29,8 +29,14 @@ model:
 
 - **plain** — `claude -p` with the ticket text and an instruction to commit.
 - **workbench** — the same prompt and model, with this plugin loaded through
-  `--plugin-dir` and the ticket recorded in the run's local backlog as `BN-n`,
-  which the prompt names. Naming the key is part of the arm, not a bias.
+  `--plugin-dir`, the repo set up with `wb init --write`, the ticket recorded
+  in the run's local backlog as `BN-n`, and the prompt opening with "Pick up
+  ticket BN-n and take it through the workbench flow to a commit." That is how
+  a user who installed workbench asks for it, and it is part of the arm, not a
+  bias. A bare "Ticket BN-n." left every skill uncalled in the first smoke
+  runs, so the arm measured a plain session with a plugin loaded. Each record
+  lists what the session left under `.workflow/<KEY>/`, and the report counts
+  the workbench runs that used the flow at all.
 
 Both arms run with a fresh `CLAUDE_CONFIG_DIR`, so neither sees the
 maintainer's installed plugins, settings or `CLAUDE.md`. A fresh config has no
@@ -97,6 +103,17 @@ The report ends with **Where workbench loses**: every ticket and metric whose
 workbench median is worse than plain's, by that metric's direction. An empty
 section says so in words. That section is the reason the benchmark exists; the
 README may cite a result only if the report supports it.
+
+## Results so far
+
+[2026-09-26, commit 0d3ff79](../bench/results/2026-09-26-0d3ff79/report.md):
+Sonnet, subscription, 20 sessions (three runs of BN-1 and BN-2, two of BN-3 and
+BN-4; the spend cap skipped four), US$6.58 estimated. Every workbench run used
+the flow. Both arms passed every hidden test with no out-of-scope file and no
+rework, so quality tied; workbench lost on tokens, cost and wall time on every
+ticket, at 3.6-5.6x the cost. The tickets were too easy to separate the arms on
+quality: a benchmark that can show a gain needs tickets a plain session gets
+wrong, which is the next step.
 
 Run it on demand, when a change moves the cost of the flow — a new gate, a new
 tier bound, a skill that grew.

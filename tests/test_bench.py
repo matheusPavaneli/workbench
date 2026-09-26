@@ -238,6 +238,46 @@ class PluginCopyTest(unittest.TestCase):
             self.assertFalse(any((dest / "lib").rglob("__pycache__")))
 
 
+class PrepareTest(unittest.TestCase):
+    """The setup a run does before any paid session, on a real git repo."""
+
+    def _prepare(self, arm: str) -> tuple[Path, str]:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        work = Path(tmp.name)
+        plugin = bench_run.copy_plugin(work / "plugin") if arm == "workbench" else None
+        ticket = json.loads((BENCH / "tickets.json").read_text(encoding="utf-8"))["tickets"][2]
+        base = bench_run.prepare(work / "repo", ticket, arm, bench_run.session_env(work), plugin)
+        return work / "repo", base
+
+    def _git(self, repo: Path, *args: str) -> str:
+        return bench_run._git(repo, *args)
+
+    def test_the_workbench_arm_starts_with_its_ticket_and_config_in_the_base_commit(self) -> None:
+        repo, base = self._prepare("workbench")
+        committed = self._git(repo, "ls-tree", "-r", "--name-only", base).splitlines()
+        self.assertIn(".workflow/config.json", committed)
+        self.assertIn(".workflow/tasks/BN-3.json", committed)
+        self.assertEqual([], bench_run._changed(repo, base), "setup left changes that would be scored")
+
+    def test_the_plain_arm_has_no_workbench_setup(self) -> None:
+        repo, base = self._prepare("plain")
+        self.assertFalse((repo / ".workflow").exists())
+        self.assertEqual([], bench_run._changed(repo, base))
+
+    def test_bytecode_from_running_the_tests_is_not_a_change(self) -> None:
+        repo, base = self._prepare("plain")
+        (repo / "shop" / "__pycache__").mkdir()
+        (repo / "shop" / "__pycache__" / "format.cpython-312.pyc").write_bytes(b"")
+        self.assertEqual([], bench_run._changed(repo, base))
+
+    def test_the_owner_s_workbench_home_never_reaches_a_run(self) -> None:
+        env = bench_run.session_env(Path("/w"), {"WORKBENCH_HOME": "/home/me/.workbench", "PATH": "p"})
+        self.assertEqual(str(Path("/w") / "home"), env["WORKBENCH_HOME"])
+        self.assertEqual(str(Path("/w") / "config"), env["CLAUDE_CONFIG_DIR"])
+        self.assertEqual("p", env["PATH"])
+
+
 def _run_suite(start: Path) -> unittest.TestResult:
     """Run the tests under start against the pristine fixture, in this process."""
     saved_path = list(sys.path)

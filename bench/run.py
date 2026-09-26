@@ -147,14 +147,56 @@ def _git(repo: Path, *args: str) -> str:
     return done.stdout
 
 
-def _init_repo(repo: Path) -> str:
+def session_env(work: Path, env: dict | None = None) -> dict:
+    """The environment every step of a run sees, setup and session alike.
+
+    A fresh CLAUDE_CONFIG_DIR keeps the owner's plugins and CLAUDE.md out; a
+    fresh WORKBENCH_HOME keeps their tracker contexts, approvals and event log
+    out, so the workbench arm starts where a new user would.
+    """
+    return {
+        **(os.environ if env is None else env),
+        "CLAUDE_CONFIG_DIR": str(work / "config"),
+        "WORKBENCH_HOME": str(work / "home"),
+    }
+
+
+def _setup(argv: list[str], repo: Path, env: dict) -> None:
+    done = subprocess.run(argv, cwd=repo, env=env, capture_output=True, text=True, timeout=GIT_TIMEOUT_S)
+    if done.returncode != 0:
+        raise RuntimeError(f"setup step failed ({done.returncode}): {' '.join(argv[1:4])}\n{done.stderr.strip()}")
+
+
+def prepare(repo: Path, ticket: dict, arm: str, env: dict, plugin_dir: Path | None) -> str:
+    """Copy the fixture, set the arm up as a new user would, commit it as the base.
+
+    The workbench arm's setup -- wb init --write and the ticket in the local
+    backlog -- is part of the base commit, so none of it is scored as a change.
+    """
     shutil.copytree(FIXTURE, repo, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     _git(repo, "init", "-q")
     _git(repo, "config", "user.email", "bench@workbench.invalid")
     _git(repo, "config", "user.name", "bench")
+    if arm == "workbench":
+        if plugin_dir is None:
+            raise ValueError("the workbench arm needs a plugin directory")
+        wb = [sys.executable, str(plugin_dir / "lib" / "wb.py")]
+        _setup([*wb, "init", "--write"], repo, env)
+        _setup(
+            [*wb, "task", "new", ticket["title"], "--type", ticket["kind"], "--desc", ticket["desc"], "--key", ticket["key"]],
+            repo,
+            env,
+        )
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "base")
     return _git(repo, "rev-parse", "HEAD").strip()
+
+
+def preflight(ticket: dict) -> None:
+    """Set up the workbench arm once before any paid session, so a broken setup costs nothing."""
+    with tempfile.TemporaryDirectory(prefix="wb-bench-preflight-") as tmp:
+        work = Path(tmp)
+        prepare(work / "repo", ticket, "workbench", session_env(work), copy_plugin(work / "plugin"))
 
 
 def _changed(repo: Path, base: str) -> list[str]:
@@ -181,32 +223,9 @@ def run_one(claude: str, ticket: dict, arm: str, n: int, *, model: str, timeout_
     with tempfile.TemporaryDirectory(prefix="wb-bench-") as tmp:
         work = Path(tmp)
         repo = work / "repo"
-        base = _init_repo(repo)
-        env = {**os.environ, "CLAUDE_CONFIG_DIR": str(work / "config")}
-
-        plugin_dir = None
-        if arm == "workbench":
-            plugin_dir = copy_plugin(work / "plugin")
-            subprocess.run(
-                [
-                    sys.executable,
-                    str(plugin_dir / "lib" / "wb.py"),
-                    "task",
-                    "new",
-                    ticket["title"],
-                    "--type",
-                    ticket["kind"],
-                    "--desc",
-                    ticket["desc"],
-                    "--key",
-                    ticket["key"],
-                ],
-                cwd=repo,
-                capture_output=True,
-                text=True,
-                timeout=GIT_TIMEOUT_S,
-                check=True,
-            )
+        env = session_env(work)
+        plugin_dir = copy_plugin(work / "plugin") if arm == "workbench" else None
+        base = prepare(repo, ticket, arm, env, plugin_dir)
 
         argv = command(claude, arm, prompt(ticket, arm), model=model, plugin_dir=plugin_dir)
         error = None
@@ -273,6 +292,12 @@ def main(argv: list[str] | None = None) -> int:
     date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     out = RESULTS / f"{date}-{commit}{'-smoke' if args.smoke else ''}"
     out.mkdir(parents=True, exist_ok=True)
+
+    try:
+        preflight(tickets[0])
+    except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
+        print(f"error: the workbench arm cannot be set up; nothing was run\n{exc}", file=sys.stderr)
+        return 3
 
     budget = Budget(args.cap)
     records: list[dict] = []

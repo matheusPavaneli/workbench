@@ -470,7 +470,7 @@ def _names(items: list[str], shown: int = 3) -> str:
 
 def _light(key: str, mark: dict, root: Path, tree: str | None) -> Stage:
     """Light-path work: open until wb finish passes, and again once the code moves on from that pass."""
-    finish = f'wb finish {key} -m "<type>: <summary>"'
+    finish = f'wb finish {key} -m "<type>: <summary>" --commit'
     if mark.get("verdict") != "pass":
         return Stage("change", TODO, "light path: make the change and a test that covers it", finish)
     if tree == UNRESOLVED:

@@ -99,6 +99,20 @@ class Chore(LightPath):
         _, nxt, _ = run("next", "ABC-1")
         self.assertIn("wb pr context ABC-1", nxt)
 
+    def test_commit_stages_exactly_the_checked_files_and_commits(self) -> None:
+        run("start", "ABC-1")
+        self.write("shop/money.py", MONEY_FIXED)
+        self.write("tests/test_money.py", TEST_REFUND)
+        # Ignored, so never part of the change: --commit must not reach it.
+        self.write("shop/__pycache__/money.cpython-312.pyc", "")
+        code, out, err = run("finish", "ABC-1", "-m", "fix: print refunds with their real amount", "--commit")
+        self.assertEqual(0, code, out + err)
+        self.assertIn("committed", out)
+        self.assertEqual("fix: print refunds with their real amount", self.git("log", "-1", "--format=%s"))
+        self.assertEqual(["shop/money.py", "tests/test_money.py"],
+                         sorted(self.git("show", "--name-only", "--format=", "HEAD").split()))
+        self.assertEqual("", self.git("status", "--porcelain", "--", "shop", "tests"))
+
     def test_a_logic_change_with_no_test_change_is_refused(self) -> None:
         run("start", "ABC-1")
         self.write("shop/money.py", MONEY_FIXED)

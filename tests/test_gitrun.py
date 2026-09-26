@@ -79,6 +79,14 @@ class Allowlist(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertIn("shell character", self.refusal("fetch", token))
 
+    def test_add_takes_paths_after_a_separator_and_nothing_broader(self) -> None:
+        """wb finish --commit stages the files it checked; -A, -u or a pathspec
+        magic flag would stage what nobody checked."""
+        self.assertIsNone(gitrun.check(gitrun.Action(["add", "--", "shop/a.py", "tests/test_a.py"])))
+        for flag in ("-A", "--all", "-u", "-f", "--force"):
+            with self.subTest(flag=flag):
+                self.refusal("add", flag, "--", "x.py")
+
     def test_an_empty_command_is_refused(self) -> None:
         self.assertIn("empty", self.refusal())
 

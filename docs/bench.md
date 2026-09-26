@@ -125,6 +125,10 @@ Options: `--runs N`, `--model <id>`, `--tickets BN-1,BN-4`, `--arms plain,workbe
 
 ## Reading the result
 
+Each session's transcript is copied beside its record as
+`<key>-<arm>-<n>.transcript<i>.jsonl`, the one account of where its turns went.
+Transcripts are gitignored: they hold the whole session, tool output included.
+
 Each run writes one JSON record to `bench/results/<date>-<commit>/`, and the run
 ends with `report.md` beside them: the workbench commit, the model and the date,
 then median, min and max per ticket, metric and arm. With five runs a spread is

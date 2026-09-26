@@ -306,45 +306,55 @@ def _hidden_passes(repo: Path, key: str) -> bool:
     return done.returncode == 0
 
 
-def run_one(claude: str, ticket: dict, arm: str, n: int, *, model: str, timeout_s: int) -> dict:
+def run_one(
+    claude: str, ticket: dict, arm: str, n: int, *, model: str, timeout_s: int, keep: Path | None = None
+) -> dict:
     with workdir("wb-bench-") as work:
-        repo = work / "repo"
-        env = session_env(work)
-        plugin_dir = copy_plugin(work / "plugin") if arm in FLOW_ARMS else None
-        base = prepare(repo, ticket, arm, env, plugin_dir)
-        if arm == "run" and plugin_dir is not None:
-            return _run_arm(ticket, n, repo, base, env, plugin_dir, model=model, timeout_s=timeout_s)
-
-        argv = command(claude, arm, prompt(ticket, arm), model=model, plugin_dir=plugin_dir)
-        error = None
-        stdout = ""
-        started = time.monotonic()
         try:
-            done = subprocess.run(argv, cwd=repo, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout_s)
-            stdout = done.stdout
-            if done.returncode != 0:
-                error = f"claude exited {done.returncode}: {done.stderr.strip()[:300]}"
-        except subprocess.TimeoutExpired:
-            error = f"timed out after {timeout_s}s"
-        wall_s = time.monotonic() - started
+            return _run_in(work, claude, ticket, arm, n, model=model, timeout_s=timeout_s)
+        finally:
+            if keep is not None:
+                keep_transcripts(work, keep)
 
-        session = parse_session(stdout)
-        if not session and error is None:
-            error = "claude printed no JSON result"
-        return score.record(
-            ticket=ticket,
-            arm=arm,
-            run=n,
-            session=session,
-            changed=_changed(repo, base, env),
-            commits=int(_git(repo, "rev-list", "--count", f"{base}..HEAD", env=env).strip()),
-            hidden_passed=_hidden_passes(repo, ticket["key"]),
-            wall_s=wall_s,
-            error=error,
-            artifacts=_artifacts(repo, ticket["key"]),
-            diff=_diff(repo, base, env),
-            sources=_sources(repo, env),
-        )
+
+def _run_in(work: Path, claude: str, ticket: dict, arm: str, n: int, *, model: str, timeout_s: int) -> dict:
+    repo = work / "repo"
+    env = session_env(work)
+    plugin_dir = copy_plugin(work / "plugin") if arm in FLOW_ARMS else None
+    base = prepare(repo, ticket, arm, env, plugin_dir)
+    if arm == "run" and plugin_dir is not None:
+        return _run_arm(ticket, n, repo, base, env, plugin_dir, model=model, timeout_s=timeout_s)
+
+    argv = command(claude, arm, prompt(ticket, arm), model=model, plugin_dir=plugin_dir)
+    error = None
+    stdout = ""
+    started = time.monotonic()
+    try:
+        done = subprocess.run(argv, cwd=repo, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout_s)
+        stdout = done.stdout
+        if done.returncode != 0:
+            error = f"claude exited {done.returncode}: {done.stderr.strip()[:300]}"
+    except subprocess.TimeoutExpired:
+        error = f"timed out after {timeout_s}s"
+    wall_s = time.monotonic() - started
+
+    session = parse_session(stdout)
+    if not session and error is None:
+        error = "claude printed no JSON result"
+    return score.record(
+        ticket=ticket,
+        arm=arm,
+        run=n,
+        session=session,
+        changed=_changed(repo, base, env),
+        commits=int(_git(repo, "rev-list", "--count", f"{base}..HEAD", env=env).strip()),
+        hidden_passed=_hidden_passes(repo, ticket["key"]),
+        wall_s=wall_s,
+        error=error,
+        artifacts=_artifacts(repo, ticket["key"]),
+        diff=_diff(repo, base, env),
+        sources=_sources(repo, env),
+    )
 
 
 def run_argv(key: str, plugin_dir: Path, *, model: str, timeout_s: int) -> list[str]:
@@ -438,6 +448,23 @@ def _run_arm(ticket: dict, n: int, repo: Path, base: str, env: dict, plugin_dir:
     )
 
 
+def keep_transcripts(work: Path, prefix: Path) -> list[Path]:
+    """Copy every session transcript a run left in its config dir next to its record.
+
+    The work dir is deleted with the run, and with it the only account of where
+    a session's turns went: the first probe of the light path cost 46 turns and
+    nothing said why. Kept locally (they are gitignored): a transcript holds the
+    whole session, tool output included, which is for reading, not publishing.
+    """
+    found = sorted((work / "config" / "projects").rglob("*.jsonl")) if (work / "config").is_dir() else []
+    kept = []
+    for index, source in enumerate(found, start=1):
+        target = prefix.with_name(f"{prefix.name}.transcript{index}.jsonl")
+        shutil.copyfile(source, target)
+        kept.append(target)
+    return kept
+
+
 def load_tickets(only: list[str] | None = None) -> list[dict]:
     tickets = json.loads(TICKETS.read_text(encoding="utf-8"))["tickets"]
     if not only:
@@ -498,7 +525,8 @@ def main(argv: list[str] | None = None) -> int:
             skipped += 1
             continue
         print(f"{ticket['key']} {arm} run {n} ...", flush=True)
-        rec = run_one(claude, ticket, arm, n, model=args.model, timeout_s=args.timeout)
+        rec = run_one(claude, ticket, arm, n, model=args.model, timeout_s=args.timeout,
+                      keep=out / f"{ticket['key']}-{arm}-{n}")
         budget.add(rec["metrics"]["cost_usd"])
         records.append(rec)
         path = out / f"{ticket['key']}-{arm}-{n}.json"

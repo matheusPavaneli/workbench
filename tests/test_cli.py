@@ -328,8 +328,7 @@ class Surface_(CliBase):
         payload = json.loads(run("surface", "pr", "--json")[1])
         check = next(a for a in payload["groups"][0]["actions"] if a["action"] == "check")
         names = {argument["name"] for argument in check["arguments"]}
-        self.assertEqual({"--file", "--shape"}, names)
-        self.assertNotIn("--key", names)
+        self.assertEqual({"--file", "--shape", "--key"}, names)
 
     def test_a_switch_is_marked_as_taking_no_value(self) -> None:
         payload = json.loads(run("surface", "task", "--json")[1])

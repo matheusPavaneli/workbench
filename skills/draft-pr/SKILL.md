@@ -53,8 +53,9 @@ This skill writes the description. Opening the PR is the user's call.
    From the plan. An empty section is better deleted than left blank.
    ```
 
-5. **Check and save.** `pr check --file <path> --shape <shape>` rejects empty
-   sections, placeholders, unticked boxes and filler. Then save to
+5. **Check and save.** `pr check --file <path> --shape <shape> --key <KEY>`
+   rejects empty sections, placeholders, unticked boxes and filler, and a PR
+   whose plan still owes its handover. Then save to
    `.workflow/<KEY>/pr.md` and show it.
 
 6. **Close the ticket** if the backlog is local: `task done <KEY>`. A real

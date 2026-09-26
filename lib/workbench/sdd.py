@@ -245,13 +245,9 @@ def validate(doc: dict) -> list[str]:
             )
 
     if needs_handover(doc):
-        handover = doc.get("handover") or {}
-        for name in HANDOVER_REQUIRED:
-            if not handover.get(name):
-                problems.append(
-                    f"a {doc.get('ticket_type', 'support')} ticket needs handover.{name}: {HANDOVER_FIELDS[name]}"
-                )
-        steps = handover.get("qa_steps")
+        if not deferred(doc):
+            problems.extend(handover_problems(doc))
+        steps = (doc.get("handover") or {}).get("qa_steps")
         if steps is not None and not isinstance(steps, list):
             problems.append("handover.qa_steps must be a list of steps")
 
@@ -317,7 +313,37 @@ def needs_handover(doc: dict) -> bool:
     override = doc.get("handover_required")
     if isinstance(override, bool):
         return override
+    if deferred(doc):
+        return True
     return str(doc.get("ticket_type", "")).strip().lower() in HANDOVER_TYPES
+
+
+def deferred(doc: dict) -> bool:
+    """Incident work, whose handover is owed by the PR rather than the plan.
+
+    During an outage the hotfix must not wait on a note for QA. The note is
+    still owed -- ``wb pr check --key`` refuses without it -- but the audit
+    reports it as pending instead of failing the plan.
+    """
+    return str(doc.get("key", "")).strip().lower().startswith("incident-")
+
+
+def handover_problems(doc: dict) -> list[str]:
+    """The required handover fields this plan has not filled."""
+    handover = doc.get("handover") or {}
+    kind = doc.get("ticket_type") or ("incident" if deferred(doc) else "support")
+    return [
+        f"a {kind} ticket needs handover.{name}: {HANDOVER_FIELDS[name]}"
+        for name in HANDOVER_REQUIRED
+        if not handover.get(name)
+    ]
+
+
+def pending(doc: dict) -> list[str]:
+    """What this plan still owes but is not failed for yet."""
+    if needs_handover(doc) and deferred(doc):
+        return handover_problems(doc)
+    return []
 
 
 def gates_for(preset: str) -> list[str]:

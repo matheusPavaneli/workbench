@@ -30,6 +30,7 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     check = actions.add_parser("check", help="reject filler, empty sections and placeholders in a draft")
     check.add_argument("--file", required=True)
     check.add_argument("--shape", choices=[prose.TRIVIAL, prose.SMALL, prose.LARGE])
+    check.add_argument("--key", help="ticket key: also refuse while the plan's handover is owed")
 
 
 def run(args: argparse.Namespace) -> int:
@@ -44,6 +45,8 @@ def _check(args: argparse.Namespace) -> int:
         raise UsageError(f"no such file: {args.file}", fix=["write the draft to a file first"])
 
     problems = prose.check(path.read_text(encoding="utf-8"), expected_shape=args.shape)
+    if args.key:
+        problems += _handover_owed(artifacts.validate_key(args.key))
     if not problems:
         print("ok")
         return 0
@@ -52,6 +55,21 @@ def _check(args: argparse.Namespace) -> int:
     for problem in problems:
         print(f"  - {problem}", file=sys.stderr)
     return 2
+
+
+def _handover_owed(key: str) -> list[str]:
+    """The handover a plan owes before its PR, however the audit treated it.
+
+    An incident's audit reports a missing handover as pending so the hotfix is
+    not held up by it; this is where that debt is collected.
+    """
+    doc = _optional(key, "sdd.json", lambda plan: plan)
+    if not isinstance(doc, dict) or not sdd_lib.needs_handover(doc):
+        return []
+    problems = sdd_lib.handover_problems(doc)
+    if not problems and not (artifacts.ticket_dir(key) / "handover.md").is_file():
+        problems.append(f"handover.md is not written: wb sdd handover {key}")
+    return problems
 
 
 def _context(args: argparse.Namespace) -> int:

@@ -271,6 +271,40 @@ class Handover(unittest.TestCase):
         self.assertNotIn("a.py", text)
         self.assertNotIn("pytest", text)
 
+    def test_an_incident_handover_is_pending_not_a_problem(self) -> None:
+        doc = self._doc(key="incident-checkout-500s", ticket_type="incident")
+        self.assertEqual([], sdd.validate(doc))
+        owed = sdd.pending(doc)
+        self.assertTrue(any("symptom_plain" in p for p in owed), owed)
+        self.assertTrue(any("qa_steps" in p for p in owed), owed)
+
+    def test_a_bug_handover_is_still_a_problem_and_never_pending(self) -> None:
+        doc = self._doc()
+        self.assertTrue(any("symptom_plain" in p for p in sdd.validate(doc)))
+        self.assertEqual([], sdd.pending(doc))
+
+    def test_an_incident_key_owes_a_handover_without_a_ticket_type(self) -> None:
+        doc = self._doc(key="incident-checkout-500s")
+        doc.pop("ticket_type")
+        self.assertTrue(sdd.needs_handover(doc))
+        self.assertTrue(sdd.pending(doc))
+
+    def test_an_incident_qa_steps_string_is_still_a_problem(self) -> None:
+        doc = self._doc(key="incident-x", handover={"symptom_plain": "x", "qa_steps": "do the thing"})
+        self.assertTrue(any("list of steps" in p for p in sdd.validate(doc)))
+
+    def test_an_incident_forced_off_owes_nothing(self) -> None:
+        doc = self._doc(key="incident-x", handover_required=False)
+        self.assertEqual([], sdd.pending(doc))
+        self.assertEqual([], sdd.validate(doc))
+
+    def test_a_filled_incident_handover_is_not_pending(self) -> None:
+        doc = self._doc(
+            key="incident-x",
+            handover={"symptom_plain": "Checkout failed.", "qa_steps": ["Pay", "The order goes through"]},
+        )
+        self.assertEqual([], sdd.pending(doc))
+
 
 if __name__ == "__main__":
     unittest.main()

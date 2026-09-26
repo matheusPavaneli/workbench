@@ -23,7 +23,9 @@ built on a guess extends the incident.
 2. **Separate stopping the bleeding from fixing the cause.** They are two
    changes. Decide explicitly which one you are doing now. A rollback, a flag
    flip or a config change often beats a code fix as the immediate step — say so
-   if it does.
+   if it does. A mitigation that is not code needs no `sdd.json`: record it as a
+   timeline entry in `incident.md` — what was done, when, by whom, and the
+   effect. `route incident-<slug>` lists it as the `mitigate` step.
 
 3. **Trace it, do not guess it.** Follow the symptom to the code path with the
    strongest search available: `${CLAUDE_PLUGIN_ROOT}/shared/code-search.md`.
@@ -42,7 +44,9 @@ built on a guess extends the incident.
    during and after, not just "revert the commit".
 
 6. **Audit it anyway.** `sdd audit incident-<slug>`. Urgency is when a wrong
-   citation is most likely and most expensive.
+   citation is most likely and most expensive. A missing handover is reported
+   as pending, not failed: it is owed before the PR, not before the hotfix, and
+   `pr check --key` refuses until it is written.
 
 7. **The regression test ships with the fix**, not after. A hotfix without one
    is how the same incident happens twice. If it genuinely cannot be written

@@ -187,6 +187,7 @@ wb pr context   branch, commits, plan summary, verification verdict
 wb pr check   reject filler, empty sections and placeholders in a draft
   --file <value>   [required]
   --shape <value>   [one of: trivial, small, large]
+  --key <value>
 ```
 
 This is the schema MCP publishes for every tool in every session. Here it costs

@@ -12,7 +12,8 @@ import shlex
 import sys
 from pathlib import Path
 
-from .. import artifacts, audit as audit_lib, gitctx, profile as profile_lib, scope as scope_lib, verify as verify_lib
+from .. import artifacts, audit as audit_lib, gitctx, profile as profile_lib, scope as scope_lib, sdd as sdd_lib
+from .. import verify as verify_lib
 from .. import events, status as status_lib
 from ..errors import EXIT_AUDIT, UsageError, WbError
 
@@ -77,7 +78,9 @@ def _check(args: argparse.Namespace) -> int:
         # Two plans editing one file is worth knowing before either lands.
         print(f"  overlap   {path}  (also planned by {', '.join(claimed[path])})")
 
-    if not unplanned:
+    oversize = _oversize(key, doc, root, sorted(planned), staged=args.staged)
+
+    if not unplanned and not oversize:
         carried = f", {len(elsewhere)} carried by another ticket" if elsewhere else ""
         print(
             f"\nin plan: {len(changed & planned)} of {len(planned)} planned file(s) changed, "
@@ -86,6 +89,17 @@ def _check(args: argparse.Namespace) -> int:
         return 0
 
     sys.stdout.flush()  # keep the file list above the failure that explains it
+    if oversize:
+        print(f"\nDEVIATION  {oversize}", file=sys.stderr)
+        print(
+            "\nThe light tier was granted on an estimate the diff has outgrown. Re-plan at\n"
+            "standard: correct files[].lines, add steps and product to sdd.json,\n"
+            "then re-run: wb sdd audit " + key,
+            file=sys.stderr,
+        )
+    if not unplanned:
+        return EXIT_AUDIT
+
     print(f"\nDEVIATION  {len(unplanned)} file(s) changed that the plan does not list:", file=sys.stderr)
     for path in unplanned:
         print(f"  {path}", file=sys.stderr)
@@ -100,6 +114,29 @@ def _check(args: argparse.Namespace) -> int:
         file=sys.stderr,
     )
     return EXIT_AUDIT
+
+
+def _oversize(key: str, doc: dict, root: Path, planned: list[str], *, staged: bool) -> str:
+    """Why a light plan's real diff is over the light bound, or "".
+
+    Only the planned paths are measured, against the commit the audit ran on:
+    a file another ticket accounts for, or a companion that follows a planned
+    file through, is not this plan's size. A diff that cannot be measured --
+    a binary file, a failed git call -- counts as over, so the bound never
+    fails open.
+    """
+    bound = sdd_lib.light_max_lines(root)
+    if sdd_lib.tier(doc, bound)[0] != sdd_lib.LIGHT:
+        return ""
+    baseline = str(artifacts.read_json(key, "audit.json").get("baseline") or "") or "HEAD"
+    measured = gitctx.lines_changed(root, baseline, planned, staged=staged)
+    if measured is None:
+        return f"light plan, but its diff against {baseline[:8]} cannot be measured (binary or unreadable)"
+    if measured > bound:
+        estimate, _ = sdd_lib.estimated_lines(doc)
+        return f"light plan measured {measured} lines changed (estimated ~{estimate}, light is up to {bound})"
+    print(f"  size      {measured} line(s) changed, light is up to {bound}")
+    return ""
 
 
 def _verify(args: argparse.Namespace) -> int:

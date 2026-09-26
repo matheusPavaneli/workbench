@@ -225,8 +225,8 @@ minded doing carefully. So the short route is named and computed rather than
 improvised:
 
 ```
-$ wb route ABC-123 --files src/util.py
-ABC-123  light route  (1 file(s), no critical zone)
+$ wb route ABC-123 --files src/util.py tests/test_util.py --lines 30
+ABC-123  light route  (~30 lines in 2 file(s), no critical zone)
   1. triage     triage-task        wb task get ABC-123
   2. plan       plan-change        wb sdd audit ABC-123
   3. implement  implement-change   wb impl check ABC-123
@@ -238,7 +238,8 @@ waived by the light tier: steps, product
 the floor is not waived: citations, the file list, verify and rollback still apply
 ```
 
-Touch a critical zone, exceed two files, or pick up a bug ticket and the same
+Touch a critical zone, estimate more than the light bound (or no size at all),
+or pick up a bug ticket and the same
 command returns the full route, with the reason: a handover for work that owes
 QA one, and a frame only for feature work. Every route reviews the diff right
 before the commit. It is a router, not an
@@ -248,10 +249,13 @@ one more to say "do less" would be the joke telling itself.
 
 A seven-section plan for a one-line change costs more than the change, and a
 gate that does not pay for itself is one people route around. `sdd audit`
-computes a **tier** from the plan's own file list: at most two files, no
-critical zone and no bug/support ticket waives `steps` and `product`. Citations,
-the file list, `verify` and `rollback` are required at every tier, and the tier
-is computed rather than declared, so a plan cannot ask for a lower bar.
+computes a **tier** from the plan's own file list: an estimated 100 lines
+changed or fewer (`files[].lines`; the bound is `light_max_lines`), no critical
+zone and no bug/support ticket waives `steps` and `product`. Citations, the file
+list, `verify` and `rollback` are required at every tier, and the tier is
+computed rather than declared, so a plan cannot ask for a lower bar. The
+estimate is checked too: `wb impl check` measures the real diff, and a light
+plan that outgrew its bound is a deviation until it is re-planned at standard.
 
 `write-handover` exists because a support ticket has an audience that is not
 engineering. A QA lead has to validate the fix without reading the diff, and the

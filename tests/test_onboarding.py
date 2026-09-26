@@ -194,9 +194,28 @@ class Route(CliBase):
         (directory / "triage.json").write_text(json.dumps({"type": kind}), encoding="utf-8")
 
     def test_a_small_change_gets_the_short_route(self) -> None:
-        _, out, _ = run("route", "ABC-1", "--files", "src/util.py")
+        _, out, _ = run("route", "ABC-1", "--files", "src/util.py", "--lines", "10")
         self.assertIn("light route", out)
+        self.assertIn("~10 lines in 1 file(s)", out)
         self.assertNotIn("frame-product", out)
+
+    def test_three_small_files_get_the_short_route(self) -> None:
+        """WB-44: the size is lines, not paths."""
+        _, out, _ = run("route", "ABC-1", "--files", "a.py", "b.py", "c.py", "--lines", "40")
+        self.assertIn("light route", out)
+
+    def test_no_estimate_gets_the_full_one(self) -> None:
+        _, out, _ = run("route", "ABC-1", "--files", "src/util.py")
+        self.assertIn("standard route", out)
+        self.assertIn("no line estimate", out)
+
+    def test_a_large_change_gets_the_full_one(self) -> None:
+        _, out, _ = run("route", "ABC-1", "--files", "src/util.py", "--lines", "400")
+        self.assertIn("standard route", out)
+
+    def test_json_keeps_its_key_set(self) -> None:
+        _, out, _ = run("route", "ABC-1", "--files", "src/util.py", "--lines", "10", "--json")
+        self.assertEqual({"schema", "key", "tier", "reason", "steps"}, set(json.loads(out)))
 
     def test_a_critical_zone_gets_the_full_one(self) -> None:
         _, out, _ = run("route", "ABC-1", "--files", "src/billing/charge.py")
@@ -220,7 +239,7 @@ class Route(CliBase):
         self.assertIn("standard route", out)
 
     def test_the_floor_is_never_described_as_waived(self) -> None:
-        _, out, _ = run("route", "ABC-1", "--files", "src/util.py")
+        _, out, _ = run("route", "ABC-1", "--files", "src/util.py", "--lines", "10")
         self.assertIn("the floor is not waived", out)
         self.assertIn("citations", out)
 

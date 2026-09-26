@@ -11,6 +11,7 @@ Ten skills, one CLI, two hooks, 931 tests, no third-party dependencies.
 wb init --write                        # config, preset, flow and .gitignore, from what the repo already shows
 wb doctor                              # everything that has to be true, with the fix for anything that is not
 wb task new "the thing to do" --type bug
+wb start WB-1                           # read it, branch for it, print the route and the next command
 wb next                                # the one command to run now
 wb status                              # everything in flight
 ```
@@ -396,6 +397,7 @@ question about the code cite as `` `path:line` — `the line` ``, and
 ```
 wb init    [--write]           propose (or write) this repo's config
 wb doctor  everything that has to be true, in one pass
+wb start  KEY [--refresh]      read the ticket, branch for it, route it: one command to pick up work
 wb route   [KEY]               the steps this change actually needs
 wb next    [KEY]               the single command to run now
 wb status  [KEY] | --stats     where work stands, and what to run next

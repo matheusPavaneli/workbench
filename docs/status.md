@@ -35,6 +35,24 @@ Two rules decide what gets reported as `next`:
 - **A corrupt artifact reads as absent.** Status is what a stuck session runs
   first; it must never be the thing that fails.
 
+## `wb start`
+
+Picking up a ticket was three commands for one intent: `wb task get`,
+`wb flow start` and `wb route`. `wb start <KEY>` runs them in order and ends
+where `wb next` would:
+
+1. reads the ticket into `.workflow/<KEY>/triage.json`, printing its text, unless
+   it was read already (`--refresh` reads it again)
+2. puts the checkout on the ticket's branch: stays if it is already there,
+   switches to it if it exists, otherwise creates it from `origin/<source>` —
+   or, with no origin remote, from the local source branch
+3. prints the route's tier and steps, then the one next command
+
+A second run changes nothing and prints where the ticket stands. A branch it
+cannot create — uncommitted tracked changes, git writes switched off — stops
+it with the exact commands to run and `wb start <KEY>` again; the ticket read
+so far is kept.
+
 ## `wb next`
 
 `wb status` answers "where does this stand", which is eight stages because a

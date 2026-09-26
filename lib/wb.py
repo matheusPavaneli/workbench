@@ -40,6 +40,7 @@ from workbench.cli import repo as repo_cli  # noqa: E402
 from workbench.cli import review as review_cli  # noqa: E402
 from workbench.cli import route as route_cli  # noqa: E402
 from workbench.cli import sdd as sdd_cli  # noqa: E402
+from workbench.cli import start as start_cli  # noqa: E402
 from workbench.cli import status as status_cli  # noqa: E402
 from workbench.cli import surface as surface_cli  # noqa: E402
 from workbench.cli import task as task_cli  # noqa: E402
@@ -49,6 +50,7 @@ GROUPS = {
     "init": init_cli,
     "ctx": ctx_cli,
     "doctor": doctor_cli,
+    "start": start_cli,
     "status": status_cli,
     "next": next_cli,
     "route": route_cli,

@@ -25,8 +25,12 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
    records it in the local backlog and everything downstream works unchanged.
    Only local contexts accept it; `wb` says so if the repo has a real tracker.
 
-2. **Read it** — `task get <KEY>`. Writes `.workflow/<KEY>/triage.json` and
-   prints it. Depth defaults to 1: the task, plus one line per linked item.
+2. **Pick it up** — `start <KEY>`. Reads the ticket into
+   `.workflow/<KEY>/triage.json` and prints its text, puts the checkout on the
+   ticket's branch, and ends with the route and the one next command. Rerun it
+   any time: it is a no-op that says where the ticket stands. To read without
+   branching, or deeper, use `task get <KEY>` — depth 1 by default: the task,
+   plus one line per linked item.
    - Use `--depth 0` when the ticket is self-contained and links do not matter.
    - Use `--depth 2` only when a blocker or a parent decides the approach. It
      fetches bodies for blocking and hierarchy links, never for `relates`.

@@ -92,6 +92,7 @@ drops another.
 | `light_max_lines` | by hand | the most estimated lines changed a plan may have and stay on the light tier; 100 when absent |
 | `hooks` | by hand | `false` turns the plugin's hooks off; `"strict"` makes the stop hook block |
 | `field_map` | by hand | custom tracker fields this repo wants read, by destination |
+| `generated` | by hand | globs of generated code (`["src/gen/**"]`) that follow a planned change through the scope guard unlisted; none when absent |
 
 ```json
 {

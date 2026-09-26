@@ -123,6 +123,18 @@ class Scope(HookCase):
         self.record("ABC-2", _plan("ABC-2", files=("src/other.py",)))
         self.assertIsNone(self.edit("src/other.py"))
 
+    def test_a_companion_of_a_planned_file_may_be_edited(self) -> None:
+        """WB-45: the same tie impl check accepts, one edit earlier."""
+        self.record("ABC-1", _plan(files=("src/checkout.py", "src/other.py")))
+        self.assertIsNone(self.edit("tests/test_other.py"))
+
+    def test_a_companion_in_a_critical_zone_is_still_refused(self) -> None:
+        self.denied(self.edit("tests/test_checkout.py"))
+
+    def test_a_lockfile_without_its_manifest_is_refused(self) -> None:
+        self.record("ABC-1", _plan(files=("src/checkout.py", "src/other.py")))
+        self.assertIn("package-lock.json", self.denied(self.edit("package-lock.json")))
+
     def test_a_plan_edited_after_its_audit_covers_no_edit(self) -> None:
         plan = _plan(files=("src/checkout.py", "src/other.py"))
         (self.root / ".workflow" / "ABC-1" / "sdd.json").write_text(json.dumps(plan), encoding="utf-8")

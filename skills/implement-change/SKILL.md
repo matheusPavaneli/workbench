@@ -33,9 +33,11 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
    `impl verify` fails, naming it, on any `target` the branch never changed.
 
 5. **Check the scope.** `impl check <KEY>` after each step or two. It lists
-   planned files as changed or pending, `other` for a file another audited plan
-   claims, and `overlap` where two plans claim one file. It fails only on a file
-   no audited plan accounts for. With the plugin's hooks on, an edit to such a
+   planned files as changed or pending, `companion` for a test, declaration,
+   lockfile or generated file tied to a planned one, `other` for a file another
+   audited plan claims, and `overlap` where two plans claim one file. It fails
+   only on a file nothing accounts for. A lockfile without its manifest planned
+   is not a companion. With the plugin's hooks on, an edit to such a
    file is refused before it lands; the answer is the same either way.
 
 6. **Verify.** `impl verify <KEY>` runs the plan's `verify` commands and writes

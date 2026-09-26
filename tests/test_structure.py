@@ -207,6 +207,24 @@ class ExecutionSurface(unittest.TestCase):
                     offences.append(f"{path.relative_to(ROOT)}:{node.lineno} runs without a timeout")
         self.assertEqual([], offences, "\n" + "\n".join(offences))
 
+    def test_no_subprocess_inherits_the_caller_s_stdin(self) -> None:
+        """git shortlog --all in a repo with no commits reads the log from stdin;
+        from a terminal that never ends, and the call waits out its timeout (WB-51)."""
+        offences = []
+        for path in _modules():
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                if not (isinstance(func, ast.Attribute) and getattr(func.value, "id", "") == "subprocess"):
+                    continue
+                if func.attr != "run":
+                    continue
+                if not any(keyword.arg in ("stdin", "input") for keyword in node.keywords):
+                    offences.append(f"{path.relative_to(ROOT)}:{node.lineno} runs without stdin")
+        self.assertEqual([], offences, "\n" + "\n".join(offences))
+
 
 if __name__ == "__main__":
     unittest.main()

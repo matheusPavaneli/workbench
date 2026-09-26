@@ -385,6 +385,7 @@ def _execute(command: str, root: Path, env: dict | None = None) -> Result:
             cwd=str(root),
             capture_output=True,
             text=True,
+            stdin=subprocess.DEVNULL,
             timeout=TIMEOUT_SECONDS,
             check=False,
             env=environment,

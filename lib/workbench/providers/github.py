@@ -281,7 +281,7 @@ def _gh_token() -> str:
         )
     try:
         completed = subprocess.run(
-            ["gh", "auth", "token"], capture_output=True, text=True, timeout=15, check=False
+            ["gh", "auth", "token"], capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=15, check=False
         )
     except (OSError, subprocess.SubprocessError) as exc:
         raise AuthError(f"could not read a token from gh: {exc}", fix=["run: gh auth login"]) from exc

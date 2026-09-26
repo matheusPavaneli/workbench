@@ -1,0 +1,16 @@
+{
+  "key": "WB-46",
+  "title": "wb sdd amend: add a file to an audited plan without redoing it",
+  "type": "feature",
+  "status": "done",
+  "desc": "When implementation needs a file the plan missed, the only way forward today is to hand-edit sdd.json, copy the zones from wb repo zones, and rerun the audit. The loop costs more than the file, and a hand edit is also where a zones block or a why goes stale.\n\namend is the narrow door: it adds a path to a plan that already passed, and it leaves a record that the plan grew mid-flight.\n\nACCEPTANCE:\n- wb sdd amend <KEY> <path>... --why \"<reason>\" appends {path, why} to files, recomputes zones, keeps the baseline, and reruns the audit\n- --why is required; an existing path is required unless --new marks it as a file to create\n- the new tier is printed; if the amendment raises the plan to standard or into a critical zone, the audit fails like any other plan missing those sections (exit 7), never silently waived\n- audit.json is refreshed only on pass; on fail the plan is left amended and not standing\n- each amendment is recorded in the plan (path, why, when) and in the event log; draft-pr and review-diff show the list, so a reviewer sees the plan widened after its audit\n- plans without amendments validate exactly as before; schema bumped only if the file shape needs it\n- the pre-tool-use hook's refusal message names wb sdd amend as the way through\n- tests: happy path, missing --why, missing path without --new, tier raised to standard fails audit, amended plan claims its new file in scope.claims",
+  "created": "2026-09-26T04:36:58Z",
+  "updated": "2026-09-26T05:17:26Z",
+  "comments": [],
+  "linked": [
+    {
+      "key": "WB-45",
+      "type": "relates"
+    }
+  ]
+}

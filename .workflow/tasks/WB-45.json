@@ -1,0 +1,16 @@
+{
+  "key": "WB-45",
+  "title": "Let the files that follow a planned change through without listing them",
+  "type": "feature",
+  "status": "done",
+  "desc": "impl check and the pre-tool-use hook treat every changed path the plan does not list as scope creep. Tests, type declarations, lockfiles and generated code change mechanically when a planned file changes; listing them is ceremony, and forgetting one stops the session mid-implementation over a file nobody would call unplanned work.\n\nA companion is released only by its tie to a planned file. That tie is what keeps this from becoming a hole through the guard.\n\nACCEPTANCE:\n- one function decides companions, and impl check and the edit hook both call it, so they never disagree\n- a test file for a planned source is a companion: same stem under the repo's test markers (test_x.py, x_test.go, x.test.ts, x.spec.ts, __tests__/x.*)\n- a .d.ts beside a planned .ts or .js is a companion\n- a lockfile is a companion only when its manifest is planned (package.json, pyproject.toml, go.mod, Cargo.toml, ...); a lockfile changed without its manifest stays a DEVIATION, because unplanned dependency drift is exactly what the guard is for\n- generated code is a companion when it matches a generated glob in config; no glob, no release\n- a path in a critical zone is never a companion, whatever it matches\n- impl check prints them as `companion <path>  (test of <planned>)` and counts them apart from ok and other\n- tests for every rule, each with its negative case",
+  "created": "2026-09-26T04:36:57Z",
+  "updated": "2026-09-26T05:05:30Z",
+  "comments": [],
+  "linked": [
+    {
+      "key": "WB-44",
+      "type": "relates"
+    }
+  ]
+}

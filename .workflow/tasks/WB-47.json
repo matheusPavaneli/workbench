@@ -1,0 +1,11 @@
+{
+  "key": "WB-47",
+  "title": "Linear provider",
+  "type": "feature",
+  "status": "done",
+  "desc": "Linear is the tracker many small product teams use instead of Jira, and workbench cannot read it. A team on Linear today has to copy each ticket into the local backlog by hand before triage-task can see it.\n\nACCEPTANCE:\n- providers/linear.py subclasses Provider per docs/providers.md and is registered; keys are TEAM-123\n- GraphQL API at api.linear.app; auth from a personal API key in the context, read from an env var, never logged or cached\n- title, description, state, type from labels, comments newest-first and capped, history, and relations: blocks and blocked by map to the canonical set, related to relates, parent and sub-issues to hierarchy; anything else to other and _unmapped\n- every request has a timeout and a bounded payload; pagination capped like the other providers; a rate-limit response surfaces as a clear error, not a retry storm\n- cache revalidation uses updatedAt so an unchanged issue is not refetched\n- fixtures under tests/fixtures/linear/ and the parity test runs it like the others\n- wb init and wb doctor know the provider; docs/providers.md gains a section on what Linear has no equivalent for",
+  "created": "2026-09-26T04:37:00Z",
+  "updated": "2026-09-26T05:28:13Z",
+  "comments": [],
+  "linked": []
+}

@@ -12,7 +12,7 @@ import json
 import sys
 from pathlib import Path
 
-from .. import artifacts, audit as audit_lib, contract, gitctx, profile as profile_lib, sdd as sdd_lib
+from .. import artifacts, audit as audit_lib, contract, events, gitctx, profile as profile_lib, sdd as sdd_lib
 from ..errors import EXIT_AUDIT, UsageError, WbError
 
 ACTIONS = ["audit", "get", "render", "handover", "gates"]
@@ -82,6 +82,7 @@ def _audit(args: argparse.Namespace) -> int:
 
     baseline = _baseline(key, root, rebaseline=args.rebaseline)
     report = audit_lib.run(doc, root, baseline)
+    events.note_verdicts(finding.verdict for finding in report.findings)
     artifacts.write_json(key, "audit.json", report.to_dict())
 
     if args.json:

@@ -11,7 +11,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from .. import cite as cite_lib, gitctx
+from .. import cite as cite_lib, events, gitctx
 from ..errors import EXIT_AUDIT, UsageError
 
 ACTIONS = ["check"]
@@ -51,6 +51,7 @@ def _check(args: argparse.Namespace) -> int:
         raise UsageError(f"{args.file} is larger than {MAX_BYTES} bytes")
 
     results = cite_lib.check(path.read_text(encoding="utf-8", errors="replace"), root, worktree=args.worktree)
+    events.note_verdicts(result.verdict for result in results)
     against = "the working tree" if args.worktree else "HEAD"
     if not results:
         print(f"no citations found in {args.file}")

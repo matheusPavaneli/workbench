@@ -184,5 +184,72 @@ class Everywhere(EventsBase):
         self.assertEqual(1, len(events.read()), "the local log was still written")
 
 
+class Verdicts(EventsBase):
+    def test_noted_counts_ride_on_the_event_and_only_that_one(self) -> None:
+        events.note_verdicts(["ok", "mismatch", "ok", "moved"])
+        events.record("sdd", "audit", "ABC-1", 7, 30)
+        events.record("sdd", "audit", "ABC-1", 0, 30)
+        first, second = events.read()
+        self.assertEqual({"mismatch": 1, "moved": 1, "ok": 2}, first["verdicts"])
+        self.assertNotIn("verdicts", second)
+
+    def test_counts_noted_by_an_untracked_command_are_dropped(self) -> None:
+        events.note_verdicts(["mismatch"])
+        events.record("status", "", None, 0, 3)
+        events.record("sdd", "audit", "ABC-1", 0, 30)
+        self.assertNotIn("verdicts", events.read()[0])
+
+    def test_cite_check_is_tracked(self) -> None:
+        events.record("cite", "check", None, 7, 5)
+        self.assertEqual("cite", events.read()[0]["group"])
+
+
+class CitationSummary(unittest.TestCase):
+    def _event(self, verdicts=None, group="sdd", action="audit") -> dict:
+        entry = {"group": group, "action": action, "exit": 0, "ms": 10}
+        if verdicts is not None:
+            entry["verdicts"] = verdicts
+        return entry
+
+    def test_invented_and_drifted_are_counted_apart(self) -> None:
+        summary = events.summarise([
+            self._event({"ok": 5, "mismatch": 2, "moved": 3}),
+            self._event({"missing_file": 1, "out_of_range": 4}, group="cite", action="check"),
+        ])
+        citations = summary["citations"]
+        self.assertEqual(2, citations["runs"])
+        self.assertEqual(15, citations["checked"])
+        self.assertEqual(3, citations["invented"])
+        self.assertEqual(7, citations["drifted"])
+
+    def test_old_lines_and_malformed_counts_are_read_without_error(self) -> None:
+        """Lines written before counts existed carry none; a hand-edited log is not trusted."""
+        summary = events.summarise([
+            self._event(),
+            self._event(["mismatch"]),
+            self._event({"mismatch": "two", "moved": True, "missing_file": -1, "ok": 1}),
+        ])
+        citations = summary["citations"]
+        self.assertEqual(1, citations["runs"])
+        self.assertEqual({"ok": 1}, citations["by_verdict"])
+        self.assertEqual(0, citations["invented"])
+        self.assertEqual(3, summary["commands"]["sdd audit"]["runs"])
+
+    def test_render_names_both_totals_apart(self) -> None:
+        text = events.render(events.summarise([self._event({"mismatch": 2, "moved": 5, "ok": 1})]))
+        self.assertIn("8 checked in 1 run(s)", text)
+        self.assertRegex(text, r"invented\s+2\s+\(mismatch, missing_file\)")
+        self.assertRegex(text, r"drifted\s+5\s+\(moved, out_of_range\)")
+
+    def test_render_skips_the_section_when_nothing_recorded_counts(self) -> None:
+        self.assertNotIn("citations:", events.render(events.summarise([self._event()])))
+
+    def test_the_groups_use_the_audit_s_own_verdict_names(self) -> None:
+        from workbench import audit
+
+        self.assertEqual((audit.MISMATCH, audit.MISSING_FILE), events.INVENTED)
+        self.assertEqual((audit.MOVED, audit.OUT_OF_RANGE), events.DRIFTED)
+
+
 if __name__ == "__main__":
     unittest.main()

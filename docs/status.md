@@ -79,8 +79,9 @@ the log.
 The log is held to three rules:
 
 - **Outcomes, never arguments.** Group, action, exit code, duration, and a key
-  if one was given. No arguments and no output: those are where a secret or a
-  customer name would end up.
+  if one was given. `sdd audit` and `cite check` add how many citations landed
+  on each verdict -- names and counts, never a path or a quote. No arguments
+  and no output: those are where a secret or a customer name would end up.
 - **Local and capped.** It lives under the ignored `.workflow/`, is trimmed by
   rewriting at `MAX_EVENTS`, and goes nowhere. `WORKBENCH_NO_EVENTS=1` disables it.
 - **Kept twice.** The same line also appends to `~/.workbench/events.jsonl` with
@@ -93,6 +94,14 @@ The log is held to three rules:
 
 Pure inspection commands are not tracked: logging every `status` would drown
 the signal in the command run to look at the signal.
+
+An audit's exit code cannot tell two failures apart. A citation whose line
+moved (`moved`, `out_of_range`) was true and has drifted -- the bookkeeping
+cost of implementing a plan. One whose quote is not there (`mismatch`,
+`missing_file`) was never true -- the rate at which a session invents evidence.
+The history reports them on separate lines as `drifted` and `invented`, and
+`--json` carries every verdict under `history.citations.by_verdict`. Lines
+written before counts were recorded carry none and are skipped.
 
 ## doctor
 

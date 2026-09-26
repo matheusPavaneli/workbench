@@ -108,6 +108,9 @@ class Report:
     plan: str = ""
     findings: list[Finding] = field(default_factory=list)
     structure: list[str] = field(default_factory=list)
+    # Owed, but not by this audit: an incident's handover is enforced at the
+    # PR, so an outage's hotfix does not wait on it. Never affects ``passed``.
+    pending: list[str] = field(default_factory=list)
     missing_paths: list[str] = field(default_factory=list)
     # Every search an absence claim made the audit run, as run. Recorded for
     # passing claims too: "no match" is only worth what the search covered.
@@ -139,6 +142,7 @@ class Report:
             "citations_failed": len(self.failures),
             "findings": [f.to_dict() for f in self.findings if f.verdict not in self.passing],
             "structure": self.structure,
+            "pending": self.pending,
             "missing_paths": self.missing_paths,
             "searches": self.searches,
         }
@@ -166,6 +170,7 @@ def run(doc: dict, root: Path, baseline: str | None = None) -> Report:
     report.under_way = bool(baseline)
     report.tier, report.tier_reason = sdd.tier(doc)
     report.structure = sdd.validate(doc)
+    report.pending = sdd.pending(doc)
 
     for index, item in enumerate(doc.get("evidence") or []):
         if isinstance(item, dict) and item.get("kind") == sdd.ABSENCE:

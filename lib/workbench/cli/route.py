@@ -40,6 +40,11 @@ FULL = [
     ("pr", "draft-pr", "wb pr context {key}"),
 ]
 
+# Stopping the bleeding before fixing the cause. A rollback, a flag flip or a
+# config change is recorded in the incident's timeline, not in a plan, so this
+# step needs no sdd.json.
+MITIGATE = ("mitigate", "trace-incident", "wb cite check .workflow/{key}/incident.md")
+
 # What a change of one or two files, in no critical zone, on a ticket nobody
 # has to explain to QA, actually needs.
 SHORT = {"triage", "plan", "implement", "verify", "commit"}
@@ -66,6 +71,10 @@ def run(args: argparse.Namespace) -> int:
     # A handover is owed by the ticket type, never by the size of the diff.
     if kind.lower() in sdd_lib.HANDOVER_TYPES or key.startswith("incident-"):
         steps = [step for step in FULL if step in steps or step[0] == "handover"]
+
+    if key.startswith("incident-"):
+        at = next(index for index, step in enumerate(steps) if step[0] == "plan")
+        steps.insert(at, MITIGATE)
 
     if args.json:
         print(contract.emit(

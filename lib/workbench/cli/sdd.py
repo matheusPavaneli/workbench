@@ -103,6 +103,11 @@ def _audit(args: argparse.Namespace) -> int:
                   f"re-anchor with: wb sdd audit {key} --rebaseline")
         if report.tier == sdd_lib.LIGHT:
             print(f"      waived: {', '.join(sdd_lib.LIGHT_WAIVES)}; citations, files, verify and rollback still apply")
+        for item in report.pending:
+            print(f"      pending   {item}")
+        if report.pending:
+            print(f"      owed before the PR: wb pr check --key {key} refuses until it is filled "
+                  f"and wb sdd handover {key} has written handover.md")
         return 0
 
     print(f"FAIL  {len(report.failures)}/{checked} citation(s) unverified  [{tier}]", file=sys.stderr)

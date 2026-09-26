@@ -11,6 +11,27 @@ command's own output, and one that removes it. A `--json` payload that loses or
 renames a key raises its `schema` number in the same release, and
 `contract.VERSIONS` is asserted against the real output so it cannot drift.
 
+## Unreleased
+
+### Changed
+
+- **An incident's handover is owed by the PR, not by the plan.** An
+  `incident-*` plan failed its audit until the note for QA was written, so an
+  outage's hotfix waited on documentation. The audit now reports the missing
+  fields as `pending` -- printed after the pass, and recorded in `audit.json`
+  -- and `wb pr check --key <KEY>` refuses the PR until the handover is filled
+  and `wb sdd handover` has written `handover.md`. Any plan that owes a
+  handover gets that check once the key is passed; `incident-*` keys now owe
+  one in the audit too, as they already did in `wb route` and `wb status`.
+  Citations, files, verify and rollback still fail an incident's audit. A
+  hotfix pushed without a PR is not gated.
+
+### Added
+
+- **`wb route incident-<slug>` names a `mitigate` step before the plan.** A
+  rollback, flag flip or config change is recorded in the timeline of
+  `incident.md` and checked with `wb cite check`; it needs no `sdd.json`.
+
 ## 0.10.0
 
 ### Fixed

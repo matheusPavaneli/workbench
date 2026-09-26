@@ -270,6 +270,96 @@ class AnIncident(Scenario):
         _, out, _ = run("route", self.KEY, "--files", "src/coupon.py")
         self.assertIn("write-handover", out)
 
+    def _doc(self, **overrides) -> dict:
+        doc = {
+            "schema": sdd_lib.SCHEMA_VERSION,
+            "key": self.KEY,
+            "preset": "startup",
+            "persona": "incident-responder",
+            "ticket_type": "incident",
+            "objective": "Stop discounting with expired coupons.",
+            "evidence": [
+                {"file": "src/coupon.py", "line": 2, "quote": "    if coupon.expired:", "claim": "expiry is checked"},
+            ],
+            "files": [{"path": "src/coupon.py", "change": "edit", "why": "return the full total"}],
+            "steps": [{"do": "return the total unchanged when the coupon has expired"}],
+            "tests": [{"kind": "regression", "target": "tests/test_coupon.py", "asserts": "an expired coupon leaves the total unchanged"}],
+            "verify": ["python -m unittest discover -s tests -q"],
+            "rollback": "revert the commit",
+            "product": {"metric": "checkout errors", "who_asked": "on-call"},
+        }
+        doc.update(overrides)
+        return doc
+
+    def _pr(self) -> Path:
+        path = self.root / "pr.md"
+        path.write_text(
+            "## Why\n\nExpired coupons discounted the total at checkout.\n\n"
+            "## What changed\n\nThe expiry branch returns the full total.\n",
+            encoding="utf-8",
+        )
+        return path
+
+    def test_an_incident_audit_passes_with_the_handover_pending(self) -> None:
+        self.config()
+        self.plan(self.KEY, self._doc())
+        code, out, err = run("sdd", "audit", self.KEY)
+        self.assertEqual(0, code, err)
+        self.assertIn("pending", out)
+        self.assertIn("symptom_plain", out)
+        recorded = json.loads((self.root / ".workflow" / self.KEY / "audit.json").read_text(encoding="utf-8"))
+        self.assertEqual("pass", recorded["verdict"])
+        self.assertTrue(any("qa_steps" in item for item in recorded["pending"]), recorded)
+
+    def test_the_floor_still_fails_an_incident_audit(self) -> None:
+        self.config()
+        wrong = [{"file": "src/coupon.py", "line": 2, "quote": "    if coupon.is_expired():", "claim": "x"}]
+        for overrides in ({"verify": []}, {"rollback": ""}, {"evidence": wrong}, {"files": []}):
+            with self.subTest(overrides=overrides):
+                self.plan(self.KEY, self._doc(**overrides))
+                (self.root / ".workflow" / self.KEY / "audit.json").unlink(missing_ok=True)
+                self.assertEqual(EXIT_AUDIT, run("sdd", "audit", self.KEY)[0])
+
+    def test_pr_check_refuses_an_incident_until_its_handover_is_written(self) -> None:
+        self.config()
+        self.plan(self.KEY, self._doc())
+        pr = self._pr()
+        self.assertEqual(0, run("pr", "check", "--file", str(pr))[0])
+
+        code, _, err = run("pr", "check", "--file", str(pr), "--key", self.KEY)
+        self.assertEqual(2, code)
+        self.assertIn("symptom_plain", err)
+
+        self.plan(self.KEY, self._doc(handover={
+            "symptom_plain": "expired coupons still take money off the total",
+            "qa_steps": ["apply an expired coupon", "the total does not change"],
+        }))
+        code, _, err = run("pr", "check", "--file", str(pr), "--key", self.KEY)
+        self.assertEqual(2, code)
+        self.assertIn("wb sdd handover", err)
+
+        self.assertEqual(0, run("sdd", "handover", self.KEY)[0])
+        code, _, err = run("pr", "check", "--file", str(pr), "--key", self.KEY)
+        self.assertEqual(0, code, err)
+
+    def test_the_route_names_a_mitigation_before_the_plan(self) -> None:
+        self.config()
+        self.triage(self.KEY, type="incident")
+        for with_plan in (False, True):
+            with self.subTest(with_plan=with_plan):
+                if with_plan:
+                    self.plan(self.KEY, self._doc())
+                _, out, _ = run("route", self.KEY, "--files", "src/coupon.py")
+                self.assertIn("mitigate", out)
+                self.assertIn(f"wb cite check .workflow/{self.KEY}/incident.md", out)
+                self.assertLess(out.index("mitigate"), out.index("plan-change"))
+
+    def test_a_ticket_route_has_no_mitigation_step(self) -> None:
+        self.config()
+        self.triage("ABC-9", type="bug")
+        _, out, _ = run("route", "ABC-9", "--files", "src/coupon.py")
+        self.assertNotIn("mitigate", out)
+
     def test_next_resolves_an_incident_from_the_branch(self) -> None:
         self.config()
         self.triage(self.KEY, type="incident")

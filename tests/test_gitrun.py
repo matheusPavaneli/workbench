@@ -373,6 +373,13 @@ class ThroughTheCli(CliBase):
     """The default has to stay "print it". That is the contract every existing
     skill was written against, and --execute is an addition to it, not a change."""
 
+    def setUp(self) -> None:
+        super().setUp()
+        # A clone has an origin; the scratch directory does not (WB-40 refuses that).
+        patcher = mock.patch("workbench.gitctx.has_origin", return_value=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_flow_start_prints_and_runs_nothing_by_default(self) -> None:
         with mock.patch("subprocess.run") as runner:
             code, out, _ = run("flow", "start", "ABC-1", "--title", "a thing")

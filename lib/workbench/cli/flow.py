@@ -15,7 +15,7 @@ import json
 from pathlib import Path
 
 from .. import artifacts, contexts, contract, flow as flow_lib, gitctx, gitrun
-from ..errors import UsageError
+from ..errors import ConfigError, UsageError
 
 ACTIONS = ["show", "start", "carry", "set"]
 
@@ -84,6 +84,7 @@ def _start(args: argparse.Namespace) -> int:
 
     base = flow.target(args.target).branch if args.target else flow.source.branch
     name = flow_lib.branch_name(flow, key, args.title, args.kind)
+    _require_origin(root, base)
 
     if gitctx.branch_exists(root, name):
         print(f"branch {name} already exists")
@@ -92,6 +93,18 @@ def _start(args: argparse.Namespace) -> int:
     print(f"branch  {name}")
     print(f"base    {base}")
     return _emit(flow_lib.start_actions(name, base), root, flow, key, execute=args.execute)
+
+
+def _require_origin(root: Path, base: str) -> None:
+    """Every base is ``origin/<branch>``. With no origin, the printed commands
+    cannot run and ``--execute`` fails on its first step -- refuse before
+    either, with the step that makes them work."""
+    if gitctx.has_origin(root):
+        return
+    raise ConfigError(
+        "this checkout has no origin remote; flow commands branch from origin/<base>",
+        fix=["git remote add origin <url>", f"git push -u origin {base}"],
+    )
 
 
 def _carry(args: argparse.Namespace) -> int:
@@ -106,6 +119,7 @@ def _carry(args: argparse.Namespace) -> int:
             fix=["carry onto a validation branch; the source gets a PR, not a cherry-pick"],
         )
 
+    _require_origin(root, flow.source.branch)
     source_branch = _source_branch(root, flow, key)
 
     # Fetch before measuring, not alongside it. The range is "what the source

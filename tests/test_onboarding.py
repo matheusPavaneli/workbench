@@ -8,6 +8,7 @@ compute rather than negotiating a lower one.
 """
 
 import json
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -17,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 
 from test_cli import CliBase, run  # noqa: E402
 
-from workbench.errors import EXIT_USAGE  # noqa: E402
+from workbench.errors import EXIT_CONFIG, EXIT_USAGE  # noqa: E402
 
 
 class Init(CliBase):
@@ -147,6 +148,35 @@ class Init(CliBase):
         with mock.patch("workbench.gitctx.origin", return_value=None):
             _, out, _ = run("init")
         self.assertNotIn("key_prefix", out)
+
+
+class NoRemote(CliBase):
+    """WB-40: init and flow start assumed an origin remote nobody had added."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        for argv in (["init", "-q", "-b", "main", "."], ["config", "user.email", "t@example.com"],
+                     ["config", "user.name", "T"], ["commit", "-q", "--allow-empty", "-m", "base"]):
+            subprocess.run(["git", *argv], cwd=str(self.root), capture_output=True, check=False)
+
+    def test_flow_start_refuses_instead_of_printing_what_cannot_run(self) -> None:
+        code, out, err = run("flow", "start", "ABC-1", "--title", "fix it")
+        self.assertEqual(EXIT_CONFIG, code, out + err)
+        self.assertNotIn("git fetch", out + err)
+        self.assertIn("git remote add origin", err)
+
+    def test_init_says_where_the_source_came_from(self) -> None:
+        _, out, _ = run("init")
+        self.assertIn("read off the local branch", out)
+        self.assertNotIn("read off the remote branches", out)
+
+    def test_doctor_warns_until_a_remote_exists(self) -> None:
+        _, out, err = run("doctor", "--offline")
+        self.assertIn("no origin remote", out + err)
+        subprocess.run(["git", "remote", "add", "origin", str(self.root)], cwd=str(self.root),
+                       capture_output=True, check=False)
+        _, out, err = run("doctor", "--offline")
+        self.assertNotIn("no origin remote", out + err)
 
 
 class Route(CliBase):

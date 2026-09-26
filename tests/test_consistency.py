@@ -211,6 +211,13 @@ class WhichRef(ConsistencyBase):
     """Starting a branch and measuring a carry range are the same question about
     freshness: which ref is the truth. A local branch is never the answer."""
 
+    def setUp(self) -> None:
+        super().setUp()
+        # A clone has an origin; the scratch directory does not (WB-40 refuses that).
+        patcher = mock.patch("workbench.gitctx.has_origin", return_value=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_the_start_base_and_the_carry_base_are_both_remote(self) -> None:
         with mock.patch("workbench.gitctx.branch_exists", return_value=True):
             base = flow_lib.carry_base(self.root, "develop")

@@ -116,6 +116,35 @@ Auth prefers a configured `pat_env`/`pat_keychain` and falls back to
 a fallback and not the default so a context that names its credential keeps
 working on a machine with no `gh`.
 
+## Linear (GraphQL)
+
+Linear is the tracker many small product teams use instead of Jira. The whole
+API is one endpoint: `POST https://api.linear.app/graphql`.
+
+| Concern | Detail |
+|---|---|
+| Auth | A personal API key from Linear's security settings, named by `pat_env` (e.g. `LINEAR_API_KEY`) or `pat_keychain`. It is sent as the `Authorization` header as-is. `Bearer` is only for OAuth tokens. Like every credential, it is resolved through `secrets.resolve` and registered with `redact`, and it is never written to a context, cache or log. |
+| Keys | `TEAM-123`, which `issue(id:)` accepts directly. A malformed key is refused before any request. `project` is optional and holds a team key: when set, `task list` only shows that team's issues. |
+| Operations | Each call sends an `operationName` (`Issue`, `IssueComments`, `IssueHistory`, `IssueDescriptions`, `IssueUpdated`, `AssignedIssues`, `Viewer`). That name is how `wb ctx record` tells the payloads apart, since the path never changes. Keys are passed as variables and never spliced into the query text. |
+| Relations | Linear stores a relation once, on the issue that created it. `relations` is this issue's side and `inverseRelations` is the other issue's, so the list a relation arrives in gives its direction. `blocks` maps to `blocks` / `blocked_by`, `duplicate` to `duplicates` / `duplicated_by`, and `related` to `relates`. `similar` is Linear's AI suggestion rather than a decision, so it lands in `other` and `_unmapped`, as does any type Linear adds later. |
+| Hierarchy | `parent` and `children` (sub-issues) become `parent` / `child` links. |
+| Comments | Paged at 50 with at most 4 pages. The connection's order is not documented as chronological, so comments are sorted by `createdAt`, newest first, and then capped. |
+| Batch | Linked descriptions are fetched in one request, with one alias per issue. If a link points to an issue the key cannot see, that alias comes back as an error next to the others' data, and the rest are kept. |
+| Cache | `issue { updatedAt }` is a real field-limited read, so a cached ticket is revalidated instead of refetched. |
+| Rate limits | Linear reports a limit as a GraphQL error with code `RATELIMITED`, either in a 200 body or with HTTP 400. Both become one `ProviderError` that says so. The shared transport only retries 429/5xx, so no requests are spent against a limit that resets hourly. |
+
+What Linear has no equivalent for:
+
+| Linear has no | What the provider does |
+|---|---|
+| issue type | the label set is the only signal (`Bug`, `Feature`, `Improvement`, …); unrecognised labels land in `_unmapped` |
+| a status category you can compare to a fixed list | `state.name` is shown as written; `task list` filters on `state.type` (`completed`, `canceled`), which is fixed |
+| a comment total | the total is what the capped pages returned, as on GitHub |
+
+The fixtures in `tests/fixtures/linear/` follow Linear's published schema.
+They are not a recording of a live workspace. `wb ctx record` works for this
+provider, so you can add one.
+
 ## Recording your own tenant
 
 The fixtures in `tests/fixtures/` follow the vendors' published contracts —

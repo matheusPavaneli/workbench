@@ -462,6 +462,54 @@ class Doctor(CliBase):
         self.assertNotIn("tracker", out + err)
 
 
+class LinearContext(CliBase):
+    """WB-47: the CLI knows the provider end to end, not only the registry."""
+
+    def test_ctx_add_needs_a_credential(self) -> None:
+        code, _, err = run("ctx", "add", "lin", "--provider", "linear")
+        self.assertEqual(EXIT_USAGE, code)
+        self.assertIn("--pat-env", err)
+
+    def test_ctx_add_writes_the_default_api_root(self) -> None:
+        self.assertEqual(0, run("ctx", "add", "lin", "--provider", "linear", "--pat-env", "LINEAR_API_KEY")[0])
+        data = json.loads((self.root / "home" / "contexts" / "lin.json").read_text(encoding="utf-8"))
+        self.assertEqual(("linear", "https://api.linear.app"), (data["provider"], data["base_url"]))
+
+    def test_init_accepts_linear(self) -> None:
+        code, out, _ = run("init", "--provider", "linear")
+        self.assertEqual(0, code)
+        self.assertIn('"provider": "linear"', out)
+
+    def test_doctor_names_the_api_key_when_it_is_missing(self) -> None:
+        run("ctx", "add", "lin", "--provider", "linear", "--pat-env", "WB_TEST_LINEAR_KEY")
+        path = self.root / ".workflow" / "config.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"context": "lin"}), encoding="utf-8")
+        with mock.patch.dict(os.environ):
+            os.environ.pop("WB_TEST_LINEAR_KEY", None)
+            code, out, err = run("doctor", "--offline")
+        self.assertEqual(EXIT_CONFIG, code)
+        self.assertIn("LINEAR_API_KEY", out + err)
+
+    def test_record_labels_a_graphql_call_by_its_operation(self) -> None:
+        from workbench.cli import ctx as ctx_cli
+
+        class Transport:
+            def post(self, path, body):
+                return {"data": {"ok": True}}
+
+            def get(self, path):
+                return {}
+
+        captured: list = []
+        transport = Transport()
+        ctx_cli._capture(transport, captured)
+        transport.post("/graphql", {"operationName": "IssueComments", "query": "q"})
+        self.assertEqual("/graphql#IssueComments", captured[0][0])
+        out = self.root / "fixtures"
+        self.assertEqual(["comments"], ctx_cli._write_fixtures(captured, "linear", out))
+
+
 class ReviewGates(CliBase):
     def test_a_clean_tree_passes(self) -> None:
         with mock.patch("workbench.gitctx.changed_files", return_value=[]), \

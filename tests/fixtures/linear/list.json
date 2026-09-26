@@ -1,0 +1,12 @@
+{
+  "data": {
+    "viewer": {
+      "assignedIssues": {
+        "nodes": [
+          { "identifier": "ENG-42", "title": "Coupon applied after the charge is created", "updatedAt": "2026-08-10T09:15:00.000Z", "state": { "name": "In Progress" } },
+          { "identifier": "ENG-51", "title": "Invoice PDF misses the VAT line", "updatedAt": "2026-08-09T15:00:00.000Z", "state": { "name": "Todo" } }
+        ]
+      }
+    }
+  }
+}

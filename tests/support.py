@@ -18,6 +18,7 @@ from workbench.contexts import Context
 from workbench.providers.azure import AzureProvider
 from workbench.providers.github import GithubProvider
 from workbench.providers.jira import JiraProvider
+from workbench.providers.linear import LinearProvider
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -82,6 +83,19 @@ def github_context(**overrides) -> Context:
         "base_url": "https://api.github.com",
         "project": "acme/widgets",
         "auth": {},
+        "preset": "startup",
+    }
+    data.update(overrides)
+    return Context(**data)
+
+
+def linear_context(**overrides) -> Context:
+    data = {
+        "name": "test-linear",
+        "provider": "linear",
+        "base_url": "https://api.linear.app",
+        "project": "",
+        "auth": {"pat_env": "T"},
         "preset": "startup",
     }
     data.update(overrides)
@@ -221,3 +235,45 @@ class FakeGithub(GithubProvider, _Recorder):
         if "/issues/" in path:
             return self._fixture("issue")
         raise AssertionError(f"unexpected GET {path}")
+
+
+class FakeLinear(LinearProvider, _Recorder):
+    """One GraphQL endpoint: the operation name picks the fixture."""
+
+    OPERATIONS = {
+        "Issue": "issue",
+        "IssueComments": "comments",
+        "IssueHistory": "history",
+        "AssignedIssues": "list",
+        "IssueDescriptions": "descriptions",
+    }
+
+    def __init__(self, context: Context | None = None, *, local: bool = False, **fixtures) -> None:
+        LinearProvider.__init__(self, context or linear_context())
+        _Recorder.__init__(self)
+        self._auth = "lin_api_test"
+        self.fixtures = fixtures
+        self.local = local
+        self.bodies: list[dict] = []
+
+    def _fixture(self, name: str):
+        loaded = self.fixtures.get(name)
+        return loaded if loaded is not None else load("linear", name, prefer_local=self.local)
+
+    def post(self, path: str, body: object, **query) -> object:
+        assert path == "/graphql", path
+        assert isinstance(body, dict)
+        operation = str(body.get("operationName"))
+        self.record(operation)
+        self.bodies.append(body)
+        if operation == "Viewer":
+            return {"data": {"viewer": {"name": "Ana Ruiz"}, "organization": {"urlKey": "acme"}}}
+        if operation == "IssueUpdated":
+            issue = self._fixture("issue")["data"]["issue"]
+            return {"data": {"issue": {"updatedAt": issue["updatedAt"]}}}
+        if operation not in self.OPERATIONS:
+            raise AssertionError(f"unexpected operation {operation}")
+        return self._fixture(self.OPERATIONS[operation])
+
+    def get(self, path: str, **query) -> object:
+        raise AssertionError(f"Linear has no REST GET, got {path}")

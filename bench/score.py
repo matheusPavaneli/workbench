@@ -77,6 +77,7 @@ def record(
     hidden_passed: bool,
     wall_s: float,
     error: str | None = None,
+    artifacts: list[str] | None = None,
 ) -> dict:
     """The JSON record written for one run."""
     if arm not in ARMS:
@@ -98,6 +99,11 @@ def record(
         "changed": sorted(set(changed)),
         "commits": commits,
         "session_id": session.get("session_id"),
+        "num_turns": session.get("num_turns"),
+        # What the session left under .workflow/<KEY>/: the evidence that the
+        # workbench arm actually ran the flow, and was not a plain run with a
+        # plugin nobody called.
+        "workflow_artifacts": sorted(artifacts or []),
         "error": error,
     }
 
@@ -164,6 +170,8 @@ def report(records: list[dict], *, commit: str, model: str, date: str, skipped: 
     summary = summarize(records)
     spent = sum(rec["metrics"]["cost_usd"] or 0 for rec in records)
     errors = sum(1 for rec in records if rec.get("error"))
+    bench_runs = [rec for rec in records if rec["arm"] == "workbench"]
+    used_flow = sum(1 for rec in bench_runs if rec.get("workflow_artifacts"))
     lines = [
         "# Benchmark report",
         "",
@@ -171,6 +179,7 @@ def report(records: list[dict], *, commit: str, model: str, date: str, skipped: 
         f"- model: `{model}`",
         f"- date: {date}",
         f"- runs recorded: {len(records)}, with an error: {errors}, skipped by the spend cap: {skipped}",
+        f"- workbench runs that left workflow artifacts: {used_flow} of {len(bench_runs)}",
         f"- auth: {auth}",
         f"- spent: US${spent:.2f}"
         + (" (Claude Code's estimate; drawn from the subscription's usage limit, not billed)" if auth == "subscription" else ""),

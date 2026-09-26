@@ -246,6 +246,13 @@ def _changed(repo: Path, base: str, env: dict | None = None) -> list[str]:
     return sorted({path for path in tracked + untracked if path})
 
 
+def _artifacts(repo: Path, key: str) -> list[str]:
+    folder = repo / ".workflow" / key
+    if not folder.is_dir():
+        return []
+    return sorted(path.relative_to(repo).as_posix() for path in folder.rglob("*") if path.is_file())
+
+
 def _hidden_passes(repo: Path, key: str) -> bool:
     tests = HIDDEN / key
     env = {**os.environ, "PYTHONPATH": str(repo)}
@@ -293,6 +300,7 @@ def run_one(claude: str, ticket: dict, arm: str, n: int, *, model: str, timeout_
             hidden_passed=_hidden_passes(repo, ticket["key"]),
             wall_s=wall_s,
             error=error,
+            artifacts=_artifacts(repo, ticket["key"]),
         )
 
 

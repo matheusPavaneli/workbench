@@ -85,6 +85,14 @@ class TokensTest(unittest.TestCase):
         self.assertIsNone(rec["metrics"]["tokens"])
         self.assertIsNone(rec["metrics"]["cost_usd"])
 
+    def test_the_record_keeps_turns_and_workflow_artifacts(self) -> None:
+        rec = score.record(
+            ticket=_ticket(), arm="workbench", run=1, session={"num_turns": 7}, changed=[], commits=1,
+            hidden_passed=True, wall_s=1.0, artifacts=[".workflow/BN-9/sdd.json", ".workflow/BN-9/triage.json"],
+        )
+        self.assertEqual(7, rec["num_turns"])
+        self.assertEqual([".workflow/BN-9/sdd.json", ".workflow/BN-9/triage.json"], rec["workflow_artifacts"])
+
     def test_an_unknown_arm_is_refused(self) -> None:
         with self.assertRaises(ValueError):
             score.record(
@@ -145,6 +153,11 @@ class ReportTest(unittest.TestCase):
         )
         self.assertIn("auth: subscription", text)
         self.assertIn("not billed", text)
+
+    def test_the_report_says_how_many_workbench_runs_used_the_flow(self) -> None:
+        used = dict(_record("BN-1", "workbench"), workflow_artifacts=[".workflow/BN-1/sdd.json"])
+        unused = dict(_record("BN-1", "workbench"), workflow_artifacts=[])
+        self.assertIn("left workflow artifacts: 1 of 2", self._report([used, unused, _record("BN-1", "plain")]))
 
     def test_the_report_carries_commit_model_date_and_skipped_runs(self) -> None:
         text = self._report([_record("BN-1", "plain")], skipped=5)

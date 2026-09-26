@@ -2,10 +2,10 @@
   "key": "WB-33",
   "title": "status --stats separates citation drift from invented citations",
   "type": "feature",
-  "status": "open",
+  "status": "done",
   "desc": "sdd audit exited 7 in 7 of 33 runs in this repo's event log. The log cannot tell a moved line number (bookkeeping cost) from a mismatch or missing_file (a claim that was never true) -- the second is the hallucination rate and the number worth watching.\n\nACCEPTANCE:\n- the event record for sdd audit (and cite check once it exists) carries counts per verdict\n- wb status --stats reports mismatch/missing_file separately from moved/out_of_range over the log's history\n- old log lines without the counts are read without error\n- tests",
   "created": "2026-09-25T19:32:53Z",
-  "updated": "2026-09-25T19:32:53Z",
+  "updated": "2026-09-26T02:01:14Z",
   "comments": [],
   "linked": []
 }

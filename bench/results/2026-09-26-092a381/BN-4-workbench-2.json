@@ -1,0 +1,37 @@
+{
+  "ticket": "BN-4",
+  "arm": "workbench",
+  "run": 2,
+  "metrics": {
+    "hidden_pass": 1,
+    "out_of_scope": 0,
+    "rework": 0,
+    "tokens": 1582112,
+    "cost_usd": 0.5306391999999999,
+    "wall_s": 125.4,
+    "tests_missing": 0,
+    "invalid_refs": 0,
+    "unexpected_changes": 0
+  },
+  "out_of_scope_files": [],
+  "invalid_ref_list": [],
+  "changed": [
+    "shop/users.py",
+    "tests/test_users.py"
+  ],
+  "commits": 0,
+  "session_id": "e56a5350-2087-4868-a0e0-972646b6c892",
+  "num_turns": 40,
+  "workflow_artifacts": [
+    ".workflow/BN-4/audit.json",
+    ".workflow/BN-4/commit.txt",
+    ".workflow/BN-4/commit_draft.txt",
+    ".workflow/BN-4/evidence.json",
+    ".workflow/BN-4/evidence.md",
+    ".workflow/BN-4/git.log.json",
+    ".workflow/BN-4/sdd.json",
+    ".workflow/BN-4/sdd.md",
+    ".workflow/BN-4/triage.json"
+  ],
+  "error": null
+}

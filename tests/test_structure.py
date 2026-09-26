@@ -156,9 +156,9 @@ class ExecutionSurface(unittest.TestCase):
     WRITERS = {"gitrun.py", "verify.py"}
 
     # Everything else that shells out reads: git plumbing, the OS keychain, and
-    # `gh auth token`. Each is here by decision, and adding a name to this set
-    # is the decision -- which is the point of asserting it.
-    READERS = {"gitctx.py", "profile.py", "secrets.py", "github.py"}
+    # `gh auth token` / glab's stored token. Each is here by decision, and adding
+    # a name to this set is the decision -- which is the point of asserting it.
+    READERS = {"gitctx.py", "profile.py", "secrets.py", "github.py", "gitlab.py"}
 
     def test_only_the_execution_modules_run_a_subprocess(self) -> None:
         allowed = {*self.WRITERS, *self.READERS}

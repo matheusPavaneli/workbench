@@ -7,6 +7,7 @@ from ..errors import unknown_choice
 from .azure import AzureProvider
 from .base import Identity, Provider
 from .github import GithubProvider
+from .gitlab import GitlabProvider
 from .jira import JiraProvider
 from .linear import LinearProvider
 from .local import LocalProvider
@@ -15,6 +16,7 @@ _REGISTRY: dict[str, type[Provider]] = {
     JiraProvider.name: JiraProvider,
     AzureProvider.name: AzureProvider,
     GithubProvider.name: GithubProvider,
+    GitlabProvider.name: GitlabProvider,
     LinearProvider.name: LinearProvider,
     LocalProvider.name: LocalProvider,
 }

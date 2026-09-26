@@ -116,6 +116,31 @@ Auth prefers a configured `pat_env`/`pat_keychain` and falls back to
 a fallback and not the default so a context that names its credential keeps
 working on a machine with no `gh`.
 
+## GitLab Issues (REST v4)
+
+This provider works with gitlab.com and with self-managed instances. `base_url`
+is the instance root (`https://gitlab.com` by default), and the API is read
+from `<base_url>/api/v4`.
+
+| Concern | Detail |
+|---|---|
+| Keys | The issue's **IID**, a plain number such as `42` (`#42` is also accepted). IIDs are unique within a project, and the project is fixed, so one number maps to exactly one issue. The global issue id would be unique too, but it appears in no URL, reference or UI, and a key the user cannot read off the screen is a key they will get wrong. |
+| Project | `group/subgroup/project`, taken from the context's `project` or from the checkout's remote. The remote is only used when its host matches `base_url`'s host; otherwise the error says which `base_url` to set. The path is URL-encoded as the project id, so nested groups work. |
+| Auth | A `pat_env`/`pat_keychain` token is used if the context has one. Otherwise the provider falls back to glab's stored token for the host (`glab config get token --host <host>`), the same way GitHub falls back to `gh`. The token is sent as `Bearer`, registered with `redact`, and never written anywhere. |
+| Links | `GET …/issues/:iid/links` returns typed links: `blocks` maps to `blocks`, `is_blocked_by` to `blocked_by`, and `relates_to` to `relates`. A linked issue in another project keeps its full reference (`acme/billing#8`) as its key. Any other link type lands in `other` and `_unmapped`. |
+| Hierarchy | On Premium, the issue payload carries its `epic`, which becomes the `parent` (key `&<iid>`). |
+| Notes | Requested with `sort=desc`, then sorted again locally; 100 per page, 3 pages at most. **System notes** ("changed the description", "added ~bug label") are left out of the comments and used as the issue's history, which costs no extra request. |
+| Type | `issue_type: incident` becomes `incident`. Everything else comes from labels, including scoped ones (`type::bug`). Unrecognised labels land in `_unmapped`. |
+| Cache | There is no field-limited read, so revalidation reads the whole issue. It still skips the links request that a refetch would cost. |
+
+What GitLab lacks here:
+
+| GitLab REST has no | What the provider does |
+|---|---|
+| child tasks in the issue payload | tasks are work items and are only exposed through GraphQL; only the epic is mapped to hierarchy |
+| a batch issue read | linked descriptions cost one request per same-project IID, capped at the linked limit |
+| a comment total in the body | the total is what the capped pages returned |
+
 ## Linear (GraphQL)
 
 Linear is the tracker many small product teams use instead of Jira. The whole

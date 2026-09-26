@@ -115,11 +115,14 @@ def _credential(check, resolution) -> None:
     if context.provider == "local":
         check("credential", OK, "not needed: the local provider makes no requests")
         return
-    if context.provider == "github" and not (context.auth.get("pat_env") or context.auth.get("pat_keychain")):
-        found = shutil.which("gh") is not None
+    borrowed = {"github": ("gh", "GITHUB_TOKEN"), "gitlab": ("glab", "GITLAB_TOKEN")}.get(context.provider)
+    if borrowed and not (context.auth.get("pat_env") or context.auth.get("pat_keychain")):
+        tool, variable = borrowed
+        found = shutil.which(tool) is not None
         check("credential", OK if found else FAIL,
-              "gh auth token" if found else "no token configured and gh is not on PATH",
-              [] if found else ["gh auth login", "or: wb ctx add <name> --provider github --pat-env GITHUB_TOKEN"])
+              f"{tool}'s stored token" if found else f"no token configured and {tool} is not on PATH",
+              [] if found else [f"{tool} auth login",
+                                f"or: wb ctx add <name> --provider {context.provider} --pat-env {variable}"])
         return
     try:
         secrets.resolve(context.auth, context.name)

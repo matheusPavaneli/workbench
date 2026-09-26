@@ -17,6 +17,7 @@ from pathlib import Path
 from workbench.contexts import Context
 from workbench.providers.azure import AzureProvider
 from workbench.providers.github import GithubProvider
+from workbench.providers.gitlab import GitlabProvider
 from workbench.providers.jira import JiraProvider
 from workbench.providers.linear import LinearProvider
 
@@ -82,6 +83,19 @@ def github_context(**overrides) -> Context:
         "provider": "github",
         "base_url": "https://api.github.com",
         "project": "acme/widgets",
+        "auth": {},
+        "preset": "startup",
+    }
+    data.update(overrides)
+    return Context(**data)
+
+
+def gitlab_context(**overrides) -> Context:
+    data = {
+        "name": "test-gitlab",
+        "provider": "gitlab",
+        "base_url": "https://gitlab.com",
+        "project": "acme/platform/widgets",
         "auth": {},
         "preset": "startup",
     }
@@ -277,3 +291,33 @@ class FakeLinear(LinearProvider, _Recorder):
 
     def get(self, path: str, **query) -> object:
         raise AssertionError(f"Linear has no REST GET, got {path}")
+
+
+class FakeGitlab(GitlabProvider, _Recorder):
+    """REST v4 paths under the project id; the mapping under test is the real one."""
+
+    def __init__(self, context: Context | None = None, *, local: bool = False, **fixtures) -> None:
+        GitlabProvider.__init__(self, context or gitlab_context())
+        _Recorder.__init__(self)
+        self._auth = "Bearer test"
+        self.fixtures = fixtures
+        self.local = local
+
+    def _fixture(self, name: str):
+        loaded = self.fixtures.get(name)
+        return loaded if loaded is not None else load("gitlab", name, prefer_local=self.local)
+
+    def get(self, path: str, **query) -> object:
+        self.record(path)
+        if path == "/user":
+            return {"username": "ana"}
+        if path.endswith("/notes"):
+            # One page only; a second must come back empty or paging never ends.
+            return self._fixture("notes") if int(query.get("page", 1)) == 1 else []
+        if path.endswith("/links"):
+            return self._fixture("links")
+        if path.endswith("/issues"):
+            return self._fixture("list")
+        if "/issues/" in path:
+            return self._fixture("issue")
+        raise AssertionError(f"unexpected GET {path}")

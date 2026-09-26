@@ -1,7 +1,7 @@
 # workbench
 
 Ticket-to-PR development workflow skills for Claude Code, with pluggable issue
-trackers (Jira Cloud, Azure DevOps, GitHub Issues, Linear, or a backlog in the repo).
+trackers (Jira Cloud, Azure DevOps, GitHub Issues, GitLab Issues, Linear, or a backlog in the repo).
 
 Ten skills, one CLI, two hooks, 931 tests, no third-party dependencies.
 

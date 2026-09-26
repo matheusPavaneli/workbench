@@ -1,0 +1,4 @@
+[
+  { "iid": 42, "title": "Coupon applied after the charge is created", "state": "opened", "updated_at": "2026-08-10T09:15:00.000Z" },
+  { "iid": 51, "title": "Invoice PDF misses the VAT line", "state": "opened", "updated_at": "2026-08-09T15:00:00.000Z" }
+]

@@ -27,8 +27,8 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     add = actions.add_parser("add", help="define a context")
     add.add_argument("name")
     add.add_argument("--provider", required=True, choices=providers.names())
-    add.add_argument("--base-url", help="Jira site root, or https://dev.azure.com/<org>; not used by github/linear/local")
-    add.add_argument("--project", help="Jira project key, Azure project name, GitHub owner/repo, or Linear team key (optional)")
+    add.add_argument("--base-url", help="Jira site root, https://dev.azure.com/<org>, or a self-managed GitLab root; not used by github/linear/local")
+    add.add_argument("--project", help="Jira project key, Azure project name, GitHub owner/repo, GitLab group/project, or Linear team key")
     add.add_argument("--pat-env", help="name of the environment variable holding the token")
     add.add_argument("--pat-keychain", help="OS keychain account name (macOS/Linux only)")
     add.add_argument("--email", help="Jira account email; Jira authenticates as email:api_token")
@@ -100,7 +100,7 @@ def _add(args: argparse.Namespace) -> int:
             fix=[f"required for {args.provider}: {', '.join('--' + f.replace('_', '-') for f in required)}"],
         )
 
-    # A local backlog has no credential, and github can borrow gh's. Everything
+    # A local backlog has no credential; github and gitlab can borrow gh's or glab's. Everything
     # else must say where its token lives before it is written down.
     if args.provider == "local":
         if args.pat_env or args.pat_keychain:
@@ -108,9 +108,10 @@ def _add(args: argparse.Namespace) -> int:
                 "a local context has no credential to resolve",
                 fix=["drop --pat-env / --pat-keychain; the local provider makes no requests"],
             )
-    elif args.provider == "github":
+    elif args.provider in ("github", "gitlab"):
         if args.pat_env and args.pat_keychain:
-            raise UsageError("give at most one of --pat-env / --pat-keychain", fix=["or neither, to use gh's token"])
+            cli_tool = "gh" if args.provider == "github" else "glab"
+            raise UsageError("give at most one of --pat-env / --pat-keychain", fix=[f"or neither, to use {cli_tool}'s token"])
     elif bool(args.pat_env) == bool(args.pat_keychain):
         raise UsageError(
             "give exactly one of --pat-env / --pat-keychain",
@@ -154,6 +155,8 @@ def _add(args: argparse.Namespace) -> int:
         print(f"next: set {args.pat_env} in the environment, then run: wb ctx test")
     elif args.provider == "github":
         print("next: gh auth login (its token is used when the context names none), then: wb ctx test")
+    elif args.provider == "gitlab":
+        print("next: glab auth login (its token is used when the context names none), then: wb ctx test")
     elif args.provider == "local":
         print('next: wb ctx use ' + args.name + ' && wb task new "the first thing to do"')
     return 0
@@ -254,7 +257,20 @@ _LINEAR_SHAPES = (
     ("#Issue", "issue"),
     ("#Viewer", "probe"),
 )
-_SHAPES = {"jira": _JIRA_SHAPES, "azure": _AZURE_SHAPES, "github": _GITHUB_SHAPES, "linear": _LINEAR_SHAPES}
+_GITLAB_SHAPES = (
+    ("/notes", "notes"),
+    ("/links", "links"),
+    ("/issues/", "issue"),
+    ("/issues", "list"),
+    ("/user", "probe"),
+)
+_SHAPES = {
+    "jira": _JIRA_SHAPES,
+    "azure": _AZURE_SHAPES,
+    "github": _GITHUB_SHAPES,
+    "gitlab": _GITLAB_SHAPES,
+    "linear": _LINEAR_SHAPES,
+}
 
 
 def _record(args: argparse.Namespace) -> int:

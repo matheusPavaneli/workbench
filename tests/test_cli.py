@@ -510,6 +510,41 @@ class LinearContext(CliBase):
         self.assertEqual(["comments"], ctx_cli._write_fixtures(captured, "linear", out))
 
 
+class GitlabContext(CliBase):
+    """WB-48: GitLab is known to ctx, init and doctor, not only the registry."""
+
+    def test_ctx_add_works_without_a_token(self) -> None:
+        code, out, _ = run("ctx", "add", "gl", "--provider", "gitlab", "--project", "acme/widgets")
+        self.assertEqual(0, code)
+        self.assertIn("glab auth login", out)
+        data = json.loads((self.root / "home" / "contexts" / "gl.json").read_text(encoding="utf-8"))
+        self.assertEqual(("gitlab", "https://gitlab.com"), (data["provider"], data["base_url"]))
+
+    def test_ctx_add_refuses_two_credentials(self) -> None:
+        code, _, err = run("ctx", "add", "gl", "--provider", "gitlab", "--pat-env", "A", "--pat-keychain", "B")
+        self.assertEqual(EXIT_USAGE, code)
+        self.assertIn("glab", err)
+
+    def test_init_proposes_gitlab_for_a_gitlab_remote(self) -> None:
+        from workbench import gitctx
+
+        with mock.patch.object(gitctx, "origin", return_value=gitctx.parse_remote("git@gitlab.com:acme/widgets.git")):
+            _, out, _ = run("init")
+        self.assertIn('"provider": "gitlab"', out)
+
+    def test_doctor_accepts_glab_when_no_token_is_configured(self) -> None:
+        run("ctx", "add", "gl", "--provider", "gitlab", "--project", "acme/widgets")
+        path = self.root / ".workflow" / "config.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"context": "gl"}), encoding="utf-8")
+        with mock.patch("shutil.which", return_value="/bin/glab"):
+            _, out, err = run("doctor", "--offline")
+        self.assertIn("glab's stored token", out + err)
+        with mock.patch("shutil.which", return_value=None):
+            _, out, err = run("doctor", "--offline")
+        self.assertIn("--provider gitlab --pat-env GITLAB_TOKEN", out + err)
+
+
 class ReviewGates(CliBase):
     def test_a_clean_tree_passes(self) -> None:
         with mock.patch("workbench.gitctx.changed_files", return_value=[]), \

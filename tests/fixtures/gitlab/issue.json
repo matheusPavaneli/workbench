@@ -1,0 +1,17 @@
+{
+  "id": 190284,
+  "iid": 42,
+  "project_id": 3911,
+  "title": "Coupon applied after the charge is created",
+  "description": "Applying a coupon after `createCharge` means an expired coupon still charges the card.\n\nSteps:\n1. Add an expired coupon\n2. Pay",
+  "state": "opened",
+  "issue_type": "issue",
+  "labels": ["type::bug", "billing"],
+  "assignee": { "id": 7, "username": "ana", "name": "Ana Ruiz" },
+  "author": { "id": 9, "username": "bo", "name": "Bo Lin" },
+  "web_url": "https://gitlab.com/acme/platform/widgets/-/issues/42",
+  "updated_at": "2026-08-10T09:15:00.000Z",
+  "created_at": "2026-08-01T10:00:00.000Z",
+  "references": { "short": "#42", "relative": "#42", "full": "acme/platform/widgets#42" },
+  "epic": { "id": 55, "iid": 3, "title": "Checkout correctness", "group_id": 12 }
+}

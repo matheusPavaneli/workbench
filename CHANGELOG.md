@@ -11,7 +11,7 @@ command's own output, and one that removes it. A `--json` payload that loses or
 renames a key raises its `schema` number in the same release, and
 `contract.VERSIONS` is asserted against the real output so it cannot drift.
 
-## Unreleased
+## 0.10.0
 
 ### Fixed
 
@@ -20,7 +20,9 @@ renames a key raises its `schema` number in the same release, and
   with or without its tests. Each target must now be among the branch's
   changes, committed or not; one that is not fails the run with exit 7, is
   named on stderr, recorded as `tests_missing` in `evidence.json`, and shown by
-  `wb status` under verify.
+  `wb status` under verify. **Upgrade cost:** a plan in flight that names a
+  test file its branch never touched now fails verify until the test is
+  written or the plan corrected.
 
 - **`wb impl verify` no longer asks again on every ticket for the same
   command.** Approvals were verbatim, and a verify list usually names its own

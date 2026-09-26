@@ -1,0 +1,33 @@
+{
+  "ticket": "BN-7",
+  "arm": "workbench",
+  "run": 1,
+  "metrics": {
+    "hidden_pass": 1,
+    "out_of_scope": 0,
+    "rework": 0,
+    "tokens": 1266718,
+    "cost_usd": 0.4352764,
+    "wall_s": 184.4,
+    "tests_missing": 0,
+    "invalid_refs": 0,
+    "unexpected_changes": 0
+  },
+  "out_of_scope_files": [],
+  "invalid_ref_list": [],
+  "changed": [
+    "shop/loyalty.py",
+    "tests/test_loyalty.py"
+  ],
+  "commits": 0,
+  "session_id": "1d882754-c13e-49a5-9ab4-5366ebf7ea4f",
+  "num_turns": 34,
+  "workflow_artifacts": [
+    ".workflow/BN-7/audit.json",
+    ".workflow/BN-7/git.log.json",
+    ".workflow/BN-7/sdd.json",
+    ".workflow/BN-7/sdd.md",
+    ".workflow/BN-7/triage.json"
+  ],
+  "error": null
+}

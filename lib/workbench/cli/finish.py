@@ -40,7 +40,7 @@ def run(args: argparse.Namespace) -> int:
         )
 
     status = status_lib.read(key, root)
-    base = flow_lib.carry_base(root, flow_lib.resolve(root).source.branch)
+    base = light.base(key, root, flow_lib.carry_base(root, flow_lib.resolve(root).source.branch))
     result = light.check(key, root, args.message, base, status.kind)
 
     if result.outgrew:

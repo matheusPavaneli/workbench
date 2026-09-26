@@ -99,6 +99,23 @@ class Runs(Driven):
         self.assertEqual(0, code, out + err)
         self.assertEqual(2, len(self.record()["sessions"]))
 
+    def edits_only(self) -> agent.Session:
+        self.write("shop/money.py", MONEY_FIXED + f"# pass {len(self.prompts)}" + chr(10))
+        return agent.Session(0, report={"num_turns": 4})
+
+    def test_a_session_that_changes_code_is_progress_even_at_the_same_stage(self) -> None:
+        with self.agent_does(self.edits_only, self.edits_only):
+            code, _, err = run("run", "ABC-1", "--until", "commit", "--max-sessions", "2")
+        self.assertNotEqual(0, code)
+        self.assertNotIn("no progress", err)
+        self.assertIn("not at its goal after 2 session(s)", err)
+
+    def test_each_session_is_told_how_to_call_wb(self) -> None:
+        with self.agent_does(self.works):
+            run("run", "ABC-1", "--until", "commit")
+        self.assertIn("wb.py", self.prompts[0])
+        self.assertIn("not on PATH", self.prompts[0])
+
     def test_a_session_that_moves_nothing_stops_the_run(self) -> None:
         with self.agent_does(self.idles, self.idles):
             code, _, err = run("run", "ABC-1", "--until", "commit")

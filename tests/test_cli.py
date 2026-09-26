@@ -473,6 +473,18 @@ class ImplVerifyApproval(CliBase):
         for entry in self.entries:
             self.assertIn(shlex.quote(entry), err)
 
+    def test_the_approval_stop_is_recorded_as_held(self) -> None:
+        """WB-43: the history counted this stop as a failed verification."""
+        from workbench import events
+
+        with mock.patch.dict(os.environ), mock.patch("workbench.verify._execute"):
+            os.environ.pop("WORKBENCH_NO_EVENTS", None)
+            code, _, _ = run("impl", "verify", "ABC-1")
+        self.assertEqual(EXIT_AUDIT, code)
+        entry = events.read()[-1]
+        self.assertEqual(("impl", "verify", EXIT_AUDIT), (entry["group"], entry["action"], entry["exit"]))
+        self.assertIs(True, entry.get("held"))
+
     def test_approving_every_entry_runs_and_binds_the_evidence(self) -> None:
         result = verify_lib.Result(command="x", exit_code=0, duration_ms=1, output="")
         with mock.patch("workbench.verify._execute", return_value=result), \

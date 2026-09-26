@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 from .. import artifacts, audit as audit_lib, gitctx, profile as profile_lib, scope as scope_lib, verify as verify_lib
-from .. import status as status_lib
+from .. import events, status as status_lib
 from ..errors import EXIT_AUDIT, UsageError, WbError
 
 ACTIONS = ["check", "verify"]
@@ -137,6 +137,9 @@ def _verify(args: argparse.Namespace) -> int:
             f"To approve and run: wb impl verify {key} {call}",
             file=sys.stderr,
         )
+        # A gate waiting on a person, not a failed verification: the history
+        # must not read it as a fragile step.
+        events.note_held()
         return EXIT_AUDIT
 
     for command in commands:

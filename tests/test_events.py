@@ -97,6 +97,21 @@ class NeverLoadBearing(EventsBase):
         self.assertLessEqual(len(events.read()), events.MAX_EVENTS)
 
 
+class Held(EventsBase):
+    def test_a_held_event_is_recorded_with_its_exit_code(self) -> None:
+        events.note_held()
+        events.record("impl", "verify", "ABC-1", 7, 50)
+        entry = events.read()[0]
+        self.assertEqual(7, entry["exit"])
+        self.assertIs(True, entry["held"])
+
+    def test_the_flag_does_not_leak_onto_the_next_event(self) -> None:
+        events.note_held()
+        events.record("status", "", None, 0, 1)  # untracked, still takes the flag
+        events.record("impl", "verify", "ABC-1", 7, 50)
+        self.assertNotIn("held", events.read()[0])
+
+
 class Summary(unittest.TestCase):
     def _log(self, *pairs):
         return [{"group": g, "action": a, "exit": e, "ms": 10} for g, a, e in pairs]
@@ -115,6 +130,42 @@ class Summary(unittest.TestCase):
     def test_a_command_that_only_ever_failed_is_not_a_retry(self) -> None:
         summary = events.summarise(self._log(("impl", "verify", 1)))
         self.assertEqual("", summary["most_retried"])
+
+    def test_a_held_run_is_not_a_failure(self) -> None:
+        """WB-43: in this repo's log, 10 of 13 verify "failures" ran nothing --
+        they stopped for approval, then passed once approved."""
+        log = [
+            {"group": "impl", "action": "verify", "exit": 7, "ms": 63, "held": True},
+            {"group": "impl", "action": "verify", "exit": 0, "ms": 49016},
+        ]
+        summary = events.summarise(log)
+        row = summary["commands"]["impl verify"]
+        self.assertEqual((2, 0, 1), (row["runs"], row["failed"], row["held"]))
+        self.assertEqual("", summary["most_retried"])
+        rendered = events.render(summary)
+        self.assertIn("1 held", rendered)
+        self.assertNotIn("failed", rendered)
+        self.assertNotIn("fragile", rendered)
+
+    def test_held_and_failed_are_reported_side_by_side(self) -> None:
+        log = [
+            {"group": "impl", "action": "verify", "exit": 7, "ms": 60, "held": True},
+            {"group": "impl", "action": "verify", "exit": 7, "ms": 60000},
+            {"group": "impl", "action": "verify", "exit": 0, "ms": 60000},
+        ]
+        summary = events.summarise(log)
+        self.assertEqual("impl verify", summary["most_retried"])
+        self.assertIn("1 failed, 1 held", events.render(summary))
+
+    def test_a_line_without_the_flag_reads_as_before(self) -> None:
+        """Lines written by earlier releases carry no flag and keep their count."""
+        summary = events.summarise(self._log(("impl", "verify", 7)))
+        self.assertEqual(1, summary["commands"]["impl verify"]["failed"])
+        self.assertEqual(0, summary["commands"]["impl verify"]["held"])
+
+    def test_only_a_literal_true_holds(self) -> None:
+        log = [{"group": "impl", "action": "verify", "exit": 7, "ms": 1, "held": "yes"}]
+        self.assertEqual(1, events.summarise(log)["commands"]["impl verify"]["failed"])
 
     def test_an_empty_history_renders_without_failing(self) -> None:
         self.assertEqual("no history yet", events.render(events.summarise([])))

@@ -155,7 +155,10 @@ def _propose(root: Path, args: argparse.Namespace, existing: dict) -> tuple[dict
         }
         if flow.detected:
             targets = ", ".join(t.branch for t in flow.validation) or "none"
-            notes.append(f"flow      source {flow.source.branch}, validation {targets} -- read off the remote branches")
+            where = "read off the remote branches" if gitctx.has_origin(root) else (
+                "read off the local branch; there is no remote yet"
+            )
+            notes.append(f"flow      source {flow.source.branch}, validation {targets} -- {where}")
 
     if provider != "local":
         notes.append("")

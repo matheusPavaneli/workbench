@@ -119,6 +119,16 @@ def origin(cwd: Path) -> Remote | None:
     return parse_remote(url) if url else None
 
 
+def has_origin(cwd: Path) -> bool:
+    """Whether an ``origin`` remote exists, whatever its URL.
+
+    ``origin()`` parses the URL, so a remote on a local path reads as no remote
+    there; every flow command branches from and fetches ``origin``, which only
+    needs it to exist.
+    """
+    return _git(["remote", "get-url", "origin"], cwd) is not None
+
+
 def branch(cwd: Path) -> str | None:
     return _git(["rev-parse", "--abbrev-ref", "HEAD"], cwd)
 

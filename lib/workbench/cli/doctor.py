@@ -173,6 +173,10 @@ def _flow(check, root: Path) -> None:
     described = f"{flow.strategy}, source {flow.source.branch}"
     if flow.validation:
         described += f", validation {', '.join(t.branch for t in flow.validation)}"
+    if not gitctx.has_origin(root):
+        check("flow", WARN, f"{described} -- no origin remote; flow start and carry need one",
+              ["git remote add origin <url>", f"git push -u origin {flow.source.branch}"])
+        return
     if flow.detected:
         check("flow", WARN, f"{described} -- detected, not recorded",
               [f"record it: wb flow set --source {flow.source.branch}"])

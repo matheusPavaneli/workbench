@@ -73,23 +73,7 @@ def register(subparsers: argparse._SubParsersAction) -> None:
 def run(args: argparse.Namespace) -> int:
     root = gitctx.checkout()
     key = _key(args)
-
-    doc = _plan(key, root)
-    paths = list(args.files or []) or [str(item.get("path", "")) for item in (doc or {}).get("files") or []]
-    kind = _kind(key, root)
-
-    tier, reason = _tier(doc, paths, args.lines, kind, sdd_lib.light_max_lines(root))
-    steps = [step for step in FULL if tier == sdd_lib.STANDARD or step[0] in SHORT]
-    if not _framed(key, kind, root):
-        steps = [step for step in steps if step[0] != "frame"]
-
-    # A handover is owed by the ticket type, never by the size of the diff.
-    if kind.lower() in sdd_lib.HANDOVER_TYPES or key.startswith("incident-"):
-        steps = [step for step in FULL if step in steps or step[0] == "handover"]
-
-    if key.startswith("incident-"):
-        at = next(index for index, step in enumerate(steps) if step[0] == "plan")
-        steps.insert(at, MITIGATE)
+    tier, reason, steps = compute(key, root, args.files, args.lines)
 
     if args.json:
         print(contract.emit(
@@ -115,6 +99,29 @@ def run(args: argparse.Namespace) -> int:
         print(f"\nwaived by the light tier: {', '.join(sdd_lib.LIGHT_WAIVES)}")
         print("the floor is not waived: citations, the file list, verify and rollback still apply")
     return 0
+
+
+def compute(
+    key: str, root: Path, files: list[str] | None = None, lines: int | None = None
+) -> tuple[str, str, list[tuple[str, str, str]]]:
+    """(tier, reason, steps) for a ticket: what ``wb route`` prints and ``wb start`` summarises."""
+    doc = _plan(key, root)
+    paths = list(files or []) or [str(item.get("path", "")) for item in (doc or {}).get("files") or []]
+    kind = _kind(key, root)
+
+    tier, reason = _tier(doc, paths, lines, kind, sdd_lib.light_max_lines(root))
+    steps = [step for step in FULL if tier == sdd_lib.STANDARD or step[0] in SHORT]
+    if not _framed(key, kind, root):
+        steps = [step for step in steps if step[0] != "frame"]
+
+    # A handover is owed by the ticket type, never by the size of the diff.
+    if kind.lower() in sdd_lib.HANDOVER_TYPES or key.startswith("incident-"):
+        steps = [step for step in FULL if step in steps or step[0] == "handover"]
+
+    if key.startswith("incident-"):
+        at = next(index for index, step in enumerate(steps) if step[0] == "plan")
+        steps.insert(at, MITIGATE)
+    return tier, reason, steps
 
 
 def _key(args: argparse.Namespace) -> str:

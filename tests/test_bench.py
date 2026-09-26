@@ -188,7 +188,8 @@ class CommandTest(unittest.TestCase):
         ticket = _ticket()
         plain, bench = bench_run.prompt(ticket, "plain"), bench_run.prompt(ticket, "workbench")
         self.assertTrue(bench.endswith(plain))
-        self.assertIn("BN-9", bench)
+        self.assertIn("Pick up ticket BN-9", bench)
+        self.assertIn("workbench flow", bench)
         self.assertNotIn("BN-9", plain)
 
 

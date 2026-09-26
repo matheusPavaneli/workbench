@@ -86,7 +86,10 @@ def prompt(ticket: dict, arm: str) -> str:
         "Work in this repository until the ticket is done, then commit your change with git."
     )
     if arm == "workbench":
-        return f"Ticket {ticket['key']}.\n\n{body}"
+        # Asked the way a user who installed workbench asks. A bare "Ticket
+        # BN-3." left the skills uncalled in the first smoke runs: the plugin
+        # loaded, the flow never ran, and the arm measured a plain session.
+        return f"Pick up ticket {ticket['key']} and take it through the workbench flow to a commit.\n\n{body}"
     return body
 
 

@@ -29,8 +29,14 @@ model:
 
 - **plain** — `claude -p` with the ticket text and an instruction to commit.
 - **workbench** — the same prompt and model, with this plugin loaded through
-  `--plugin-dir` and the ticket recorded in the run's local backlog as `BN-n`,
-  which the prompt names. Naming the key is part of the arm, not a bias.
+  `--plugin-dir`, the repo set up with `wb init --write`, the ticket recorded
+  in the run's local backlog as `BN-n`, and the prompt opening with "Pick up
+  ticket BN-n and take it through the workbench flow to a commit." That is how
+  a user who installed workbench asks for it, and it is part of the arm, not a
+  bias. A bare "Ticket BN-n." left every skill uncalled in the first smoke
+  runs, so the arm measured a plain session with a plugin loaded. Each record
+  lists what the session left under `.workflow/<KEY>/`, and the report counts
+  the workbench runs that used the flow at all.
 
 Both arms run with a fresh `CLAUDE_CONFIG_DIR`, so neither sees the
 maintainer's installed plugins, settings or `CLAUDE.md`. A fresh config has no

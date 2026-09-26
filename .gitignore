@@ -12,3 +12,7 @@ __pycache__/
 # committing one is a decision to make deliberately, after reading it, and the
 # suite works either way -- it picks them up locally and skips without them.
 tests/fixtures/*/local/
+
+# Session transcripts the benchmark keeps for reading; the whole session, tool
+# output included, is not for publishing.
+bench/results/**/*.transcript*.jsonl

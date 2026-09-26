@@ -1,0 +1,27 @@
+{
+  "ticket": "BN-6",
+  "arm": "plain",
+  "run": 1,
+  "metrics": {
+    "hidden_pass": 1,
+    "out_of_scope": 0,
+    "rework": 0,
+    "tokens": 499994,
+    "cost_usd": 0.174458,
+    "wall_s": 53.5,
+    "tests_missing": 0,
+    "invalid_refs": 0,
+    "unexpected_changes": 0
+  },
+  "out_of_scope_files": [],
+  "invalid_ref_list": [],
+  "changed": [
+    "shop/stock.py",
+    "tests/test_stock.py"
+  ],
+  "commits": 1,
+  "session_id": "d019fcc7-8cbf-4c0d-85bd-bdfd725e7f26",
+  "num_turns": 14,
+  "workflow_artifacts": [],
+  "error": null
+}

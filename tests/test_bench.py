@@ -606,6 +606,24 @@ class StdinTest(unittest.TestCase):
         self.assertEqual([], [argv for argv, stdin in calls if stdin is not bench_run.subprocess.DEVNULL])
 
 
+class TranscriptTest(unittest.TestCase):
+    def test_every_session_transcript_is_kept_beside_the_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            work, out = Path(tmp) / "work", Path(tmp) / "out"
+            project = work / "config" / "projects" / "C--tmp-repo"
+            project.mkdir(parents=True)
+            (project / "a.jsonl").write_text('{"turn": 1}', encoding="utf-8")
+            (project / "b.jsonl").write_text('{"turn": 2}', encoding="utf-8")
+            out.mkdir()
+            kept = bench_run.keep_transcripts(work, out / "BN-7-run-1")
+            self.assertEqual(["BN-7-run-1.transcript1.jsonl", "BN-7-run-1.transcript2.jsonl"], [p.name for p in kept])
+            self.assertEqual('{"turn": 2}', kept[1].read_text(encoding="utf-8"))
+
+    def test_a_run_with_no_config_dir_keeps_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual([], bench_run.keep_transcripts(Path(tmp), Path(tmp) / "x"))
+
+
 class WorkdirTest(unittest.TestCase):
     def test_a_dir_with_read_only_files_is_removed(self) -> None:
         with bench_run.workdir("wb-bench-test-") as work:

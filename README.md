@@ -3,7 +3,7 @@
 Ticket-to-PR development workflow skills for Claude Code, with pluggable issue
 trackers (Jira Cloud, Azure DevOps, GitHub Issues, GitLab Issues, Linear, or a backlog in the repo).
 
-Ten skills, one CLI, two hooks, 1202 tests, no third-party dependencies.
+Ten skills, one CLI, two hooks, 1206 tests, no third-party dependencies.
 
 ## Quickstart
 
@@ -261,7 +261,10 @@ arm, so a direction rather than a verdict):
 | one-character bug | fixed, no test (2/2) | fixed, with a test | 1.7x tokens, 1.5x wall |
 | one-file chore | fixed, no test (2/2) | fixed, with a test | 2.1x tokens, 1.8x wall |
 | ticket naming a renamed function | **fixed a dead copy; hidden tests fail (2/2)** | fixed the live check, with a test | 2.8x tokens, 2.9x wall |
-| bug in user data | fixed, no test (2/2) | fixed, with a test, planned (critical zone) | 6.7x tokens, 5.8x wall |
+| bug in user data | fixed, no test (2/2) | fixed, with a test, planned (critical zone) | 5.3x tokens, 5.2x wall* |
+
+\* Re-measured after 1.2.0 ([ed58420](bench/results/2026-09-27-ed58420/report.md)), which plans a
+critical-zone ticket from the start instead of after a finished fix (6.7x before).
 
 Small work now costs about twice a plain session; work in a critical zone still
 costs the full plan. [What workbench caught](docs/caught.md) walks through each

@@ -194,5 +194,12 @@ cheaper arm is the one that shipped the wrong fix) or on BN-4, which leaves the
 light path by design because it touches user data, and then pays for the full
 plan. The first run put the same kind of work at 3.6-10x.
 
+[2026-09-27, commit ed58420](../bench/results/2026-09-27-ed58420/report.md): BN-4
+again, after WB-58. `wb start` now reads `display_name` in the ticket, finds it
+defined in `shop/users.py` (user-data zone) and plans first, so no session
+finishes a fix and then re-plans it. BN-4 went from 6.7x to 5.3x plain's tokens
+and 5.8x to 5.2x its wall time. What remains is the standard route itself,
+the bar a critical zone is held to by design. Two runs per arm, no leak, no error.
+
 Run it on demand, when a change moves the cost of the flow — a new gate, a new
 tier bound, a skill that grew.

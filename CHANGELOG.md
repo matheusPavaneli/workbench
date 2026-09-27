@@ -11,6 +11,32 @@ command's own output, and one that removes it. A `--json` payload that loses or
 renames a key raises its `schema` number in the same release, and
 `contract.VERSIONS` is asserted against the real output so it cannot drift.
 
+## 1.2.0
+
+Work in a critical zone is planned from the start, not after a finished fix,
+and the billing zone stops matching every path that contains "plan".
+
+### Changed
+
+- **`wb start` plans first when the ticket names code in a critical zone.** It
+  reads the identifiers the ticket spells (in backticks, snake_case or
+  CamelCase, at most six), finds where each is defined, and keeps the ticket
+  off the light path when that file is in a critical zone. It prints
+  `light   no: the ticket names <name>, defined in <file>, which is in the
+  <zone> zone: plan it first`. On the benchmark's BN-4 this took the cost from
+  6.7x to 5.3x a plain session. **Upgrade cost:** such a ticket starts on the
+  standard route. `"light_path": false` is unchanged.
+- **A ticket `wb finish` moves to the standard route keeps its change.** The
+  message and `plan-change` say to plan around the change on disk, never to
+  revert it. **Upgrade cost:** none.
+
+### Fixed
+
+- **The billing zone counts `plan` only as a pricing plan** (`plans/`,
+  `plan_limits.py`, `subscription_plan.ts`), no longer `plan-change`,
+  `planner` or `explanation`. `pricing` is added. **Upgrade cost:** a plan
+  audited with the old zones reports a zone mismatch at its next audit.
+
 ## 1.1.0
 
 Small work stops paying for the whole flow, and the benchmark can now show

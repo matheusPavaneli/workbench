@@ -179,6 +179,28 @@ def _force_remove(function, path, _excinfo) -> None:
     function(path)
 
 
+def work_root(env: dict | None = None, home: Path | None = None) -> Path:
+    """Where run dirs are made: never under the owner's home.
+
+    The agent CLI reads every ``.claude/CLAUDE.md`` in the directories above the
+    repo as project instructions. The system temp dir sits under the home on
+    Windows (under AppData), so every session of the
+    31a7699 run loaded the owner's ``~/.claude/CLAUDE.md`` as the repo's own.
+    ``WB_BENCH_TMP`` overrides; otherwise a temp dir outside the home is used
+    as is, and one inside it moves to ``<drive>/wb-bench-tmp``.
+    """
+    environment = os.environ if env is None else env
+    if environment.get("WB_BENCH_TMP"):
+        root = Path(environment["WB_BENCH_TMP"])
+    else:
+        home = (home or Path.home()).resolve()
+        system = Path(tempfile.gettempdir()).resolve()
+        inside = system == home or home in system.parents
+        root = Path(home.anchor) / "wb-bench-tmp" if inside else system
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
 @contextlib.contextmanager
 def workdir(prefix: str, attempts: int = 10, pause_s: float = 0.5) -> Iterator[Path]:
     """A temp dir removed with retries.
@@ -187,7 +209,7 @@ def workdir(prefix: str, attempts: int = 10, pause_s: float = 0.5) -> Iterator[P
     for a moment after the last process exits (WinError 32). A leftover temp
     dir is reported, never allowed to end a run that has already paid.
     """
-    path = Path(tempfile.mkdtemp(prefix=prefix))
+    path = Path(tempfile.mkdtemp(prefix=prefix, dir=work_root()))
     try:
         yield path
     finally:

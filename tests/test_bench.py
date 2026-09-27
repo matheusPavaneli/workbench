@@ -652,7 +652,8 @@ class WorkRootTest(unittest.TestCase):
     """The 31a7699 run: a temp dir under the home made ~/.claude/CLAUDE.md the repo's instructions."""
 
     def test_a_temp_dir_under_the_home_moves_out_of_it(self) -> None:
-        home = Path(tempfile.gettempdir()).resolve().parent
+        # The temp dir as the home: "under the home" on every OS, and never the root.
+        home = Path(tempfile.gettempdir()).resolve()
         with mock.patch.object(Path, "mkdir"):
             root = bench_run.work_root({}, home=home)
         self.assertNotIn(home, [root, *root.parents])

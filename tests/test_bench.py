@@ -670,6 +670,35 @@ class WorkRootTest(unittest.TestCase):
             self.assertTrue((Path(tmp) / "x").is_dir())
 
 
+class DemoTest(unittest.TestCase):
+    """WB-57: the README's recording is real output, 30-60 s, of the four verbs."""
+
+    CAST = BENCH.parent / "docs" / "demo.cast"
+
+    def test_the_recording_is_an_asciicast_of_the_four_verbs_in_30_to_60_seconds(self) -> None:
+        lines = self.CAST.read_text(encoding="utf-8").splitlines()
+        header = json.loads(lines[0])
+        self.assertEqual(2, header["version"])
+        events = [json.loads(line) for line in lines[1:]]
+        self.assertTrue(all(kind == "o" for _, kind, _ in events))
+        self.assertTrue(30 <= events[-1][0] <= 60, events[-1][0])
+        shown = "".join(text for _, _, text in events)
+        for verb in ("wb start BN-6", "wb next", "wb finish BN-6", "wb approve"):
+            with self.subTest(verb=verb):
+                self.assertIn(verb, shown)
+        self.assertIn("regression test(s) proven", shown, "the finish output is the real one")
+
+    def test_every_record_caught_md_links_exists(self) -> None:
+        import re
+
+        text = (BENCH.parent / "docs" / "caught.md").read_text(encoding="utf-8")
+        linked = re.findall(r"\]\((\.\./bench/results/[^)]+)\)", text)
+        self.assertGreater(len(linked), 4)
+        for target in linked:
+            with self.subTest(target=target):
+                self.assertTrue((BENCH.parent / "docs" / target).resolve().exists(), target)
+
+
 class WorkdirTest(unittest.TestCase):
     def test_a_dir_with_read_only_files_is_removed(self) -> None:
         with bench_run.workdir("wb-bench-test-") as work:

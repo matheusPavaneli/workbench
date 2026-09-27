@@ -206,7 +206,19 @@ def check(key: str, root: Path, message: str, base: str, kind: str) -> Finish:
             pairs.append((target, command_for))
         else:
             result.regression = verify.run_regression(pairs, root, base, tests)
-            weak = [outcome.target for outcome in result.regression if not outcome.ok]
+            # Two different failures, told apart: a test that cannot run on its
+            # own (an import path the suite supplies and one file does not) was
+            # reported as a test that does not catch the bug (WB-59).
+            broken = [outcome for outcome in result.regression if not outcome.with_fix.ok]
+            weak = [outcome.target for outcome in result.regression if outcome.with_fix.ok and not outcome.ok]
+            for outcome in broken:
+                last = (outcome.with_fix.output.strip().splitlines() or [""])[-1]
+                result.blocked.append(f"{outcome.command} fails with the fix in place: {last}")
+            if broken:
+                result.fix.append(
+                    "run that test file on its own until it passes; an import path the suite supplies "
+                    "can go in the environment wb finish runs in (PYTHONPATH=...)"
+                )
             if weak:
                 result.blocked.append(
                     f"{', '.join(weak)} passes without the fix too, so it does not prove the bug is fixed"

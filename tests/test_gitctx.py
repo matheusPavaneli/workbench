@@ -193,6 +193,22 @@ class WorkingTree(unittest.TestCase):
         self.assertIsNotNone(gitctx.branch(self.root))
 
 
+class LinesChangedLineEndings(unittest.TestCase):
+    def test_a_crlf_rewrite_counts_only_the_lines_that_changed(self) -> None:
+        """WB-59: a 2-line fix rewritten with CRLF measured 66 lines, and wb finish
+        sent the ticket to the standard route as outgrown."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _git(["init", "-q", "."], root)
+            _git(["config", "core.autocrlf", "false"], root)
+            (root / "f.py").write_bytes(b"a = 1" + bytes([10]) + b"b = 2" + bytes([10]) + b"c = 3" + bytes([10]))
+            _git(["add", "-A"], root)
+            _git(["-c", "user.email=t@example.com", "-c", "user.name=T", "commit", "-qm", "init"], root)
+            crlf = bytes([13, 10])
+            (root / "f.py").write_bytes(b"a = 1" + crlf + b"b = 20" + crlf + b"c = 3" + crlf)
+            self.assertEqual(2, gitctx.lines_changed(root, "HEAD", ["f.py"]))
+
+
 class DefaultBranchUnborn(unittest.TestCase):
     def test_a_repo_with_no_commits_names_the_branch_head_is_on(self) -> None:
         """The bench found it: `wb init` before the first commit recorded "main"

@@ -70,7 +70,10 @@ alone was not enough: every session of the `092a381` run loaded the owner's
 `~/.claude/CLAUDE.md` through the home directory. Nor was the home, on Windows: the
 6a916f1 run still loaded it. Every session now also runs with
 `--setting-sources project,local`, which leaves the user source (the owner's
-settings and memory) out. A fresh config has no
+settings and memory) out. That was not it either: the 31a7699 transcripts show the file
+loaded as *project* instructions, found by walking up from the run's repo,
+which sat in the system temp dir under the home. Run dirs are now made outside
+the home (`<drive>/wb-bench-tmp` on Windows, or `WB_BENCH_TMP`). A fresh config has no
 stored login either, so the credential comes from the environment: either
 `CLAUDE_CODE_OAUTH_TOKEN` (made once with `claude setup-token`, drawing on the
 subscription's usage limit) or `ANTHROPIC_API_KEY` (billed). When both are set

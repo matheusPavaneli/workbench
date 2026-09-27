@@ -648,6 +648,27 @@ class TranscriptTest(unittest.TestCase):
             self.assertEqual([], bench_run.keep_transcripts(Path(tmp), Path(tmp) / "x"))
 
 
+class WorkRootTest(unittest.TestCase):
+    """The 31a7699 run: a temp dir under the home made ~/.claude/CLAUDE.md the repo's instructions."""
+
+    def test_a_temp_dir_under_the_home_moves_out_of_it(self) -> None:
+        home = Path(tempfile.gettempdir()).resolve().parent
+        with mock.patch.object(Path, "mkdir"):
+            root = bench_run.work_root({}, home=home)
+        self.assertNotIn(home, [root, *root.parents])
+        self.assertEqual("wb-bench-tmp", root.name)
+
+    def test_a_temp_dir_outside_the_home_is_kept(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            elsewhere = Path(tmp).resolve() / "someone-else"
+            self.assertEqual(Path(tempfile.gettempdir()).resolve(), bench_run.work_root({}, home=elsewhere))
+
+    def test_wb_bench_tmp_overrides(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(Path(tmp) / "x", bench_run.work_root({"WB_BENCH_TMP": str(Path(tmp) / "x")}))
+            self.assertTrue((Path(tmp) / "x").is_dir())
+
+
 class WorkdirTest(unittest.TestCase):
     def test_a_dir_with_read_only_files_is_removed(self) -> None:
         with bench_run.workdir("wb-bench-test-") as work:

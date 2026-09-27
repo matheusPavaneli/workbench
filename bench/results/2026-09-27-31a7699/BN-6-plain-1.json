@@ -1,0 +1,28 @@
+{
+  "ticket": "BN-6",
+  "arm": "plain",
+  "run": 1,
+  "metrics": {
+    "hidden_pass": 0,
+    "out_of_scope": 1,
+    "rework": 0,
+    "tokens": 172181,
+    "cost_usd": 0.08265439999999999,
+    "wall_s": 16.1,
+    "tests_missing": 1,
+    "invalid_refs": 0,
+    "unexpected_changes": 1
+  },
+  "out_of_scope_files": [
+    "shop/legacy.py"
+  ],
+  "invalid_ref_list": [],
+  "changed": [
+    "shop/legacy.py"
+  ],
+  "commits": 1,
+  "session_id": "a39c78d2-74ef-4a75-8fd4-1effde093d57",
+  "num_turns": 5,
+  "workflow_artifacts": [],
+  "error": null
+}

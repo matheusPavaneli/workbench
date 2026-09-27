@@ -1,0 +1,35 @@
+{
+  "ticket": "BN-6",
+  "arm": "workbench",
+  "run": 2,
+  "metrics": {
+    "hidden_pass": 0,
+    "out_of_scope": 2,
+    "rework": 0,
+    "tokens": 576291,
+    "cost_usd": 0.21115140000000002,
+    "wall_s": 55.7,
+    "tests_missing": 0,
+    "invalid_refs": 0,
+    "unexpected_changes": 1
+  },
+  "out_of_scope_files": [
+    "shop/legacy.py",
+    "tests/test_legacy.py"
+  ],
+  "invalid_ref_list": [],
+  "changed": [
+    "shop/legacy.py",
+    "tests/test_legacy.py"
+  ],
+  "commits": 1,
+  "session_id": "9dfe9b3f-35dd-4c8e-bbb7-95f1cb724252",
+  "num_turns": 17,
+  "workflow_artifacts": [
+    ".workflow/BN-6/commit.txt",
+    ".workflow/BN-6/git.log.json",
+    ".workflow/BN-6/light.json",
+    ".workflow/BN-6/triage.json"
+  ],
+  "error": null
+}

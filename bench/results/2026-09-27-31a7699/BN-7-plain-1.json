@@ -1,0 +1,26 @@
+{
+  "ticket": "BN-7",
+  "arm": "plain",
+  "run": 1,
+  "metrics": {
+    "hidden_pass": 1,
+    "out_of_scope": 0,
+    "rework": 0,
+    "tokens": 206886,
+    "cost_usd": 0.09148600000000001,
+    "wall_s": 16.7,
+    "tests_missing": 1,
+    "invalid_refs": 0,
+    "unexpected_changes": 0
+  },
+  "out_of_scope_files": [],
+  "invalid_ref_list": [],
+  "changed": [
+    "shop/loyalty.py"
+  ],
+  "commits": 1,
+  "session_id": "91fdef6f-f8e4-4ef8-ac63-69b3df95ac7b",
+  "num_turns": 6,
+  "workflow_artifacts": [],
+  "error": null
+}

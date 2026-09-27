@@ -1,0 +1,32 @@
+{
+  "ticket": "BN-3",
+  "arm": "workbench",
+  "run": 2,
+  "metrics": {
+    "hidden_pass": 1,
+    "out_of_scope": 0,
+    "rework": 0,
+    "tokens": 415287,
+    "cost_usd": 0.162993,
+    "wall_s": 59.2,
+    "tests_missing": 0,
+    "invalid_refs": 0,
+    "unexpected_changes": 0
+  },
+  "out_of_scope_files": [],
+  "invalid_ref_list": [],
+  "changed": [
+    "shop/format.py",
+    "tests/test_format.py"
+  ],
+  "commits": 1,
+  "session_id": "c27a9ad8-2384-444d-9601-64a6a7ed7484",
+  "num_turns": 13,
+  "workflow_artifacts": [
+    ".workflow/BN-3/commit.txt",
+    ".workflow/BN-3/git.log.json",
+    ".workflow/BN-3/light.json",
+    ".workflow/BN-3/triage.json"
+  ],
+  "error": null
+}

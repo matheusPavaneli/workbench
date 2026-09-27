@@ -156,6 +156,13 @@ class Adapter(unittest.TestCase):
         self.assertEqual("m", argv[argv.index("--model") + 1])
         self.assertEqual("/p", argv[argv.index("--plugin-dir") + 1])
 
+    def test_setting_sources_pass_through_only_when_set(self) -> None:
+        with mock.patch("shutil.which", return_value="/bin/claude"):
+            argv = agent.ClaudeCode(setting_sources="project,local").argv("go")
+            plain = agent.ClaudeCode().argv("go")
+        self.assertEqual("project,local", argv[argv.index("--setting-sources") + 1])
+        self.assertNotIn("--setting-sources", plain)
+
     def test_the_defaults_leave_the_model_and_plugin_to_claude(self) -> None:
         with mock.patch("shutil.which", return_value="/bin/claude"):
             argv = agent.ClaudeCode().argv("go")

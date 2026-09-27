@@ -21,6 +21,10 @@ Defined here, before any run, so the numbers cannot choose the metrics.
 | `invalid_refs` | imports in the changed `.py` files that name a repo module, or a name in one, that does not exist in the run's final tree | lower |
 | `unexpected_changes` | changed lines in logic files outside the functions the ticket's `expected_functions` names; a removed block counts as one line, and a logic file the ticket did not need counts every changed line | lower |
 
+A run that ended in an error (a usage limit, a crash, a timeout) is left out
+of every metric and counted in the report's header: a session cut off before
+it started scores 0 tokens and a failed hidden suite, which is not the arm.
+
 A field the session did not report is recorded as absent and left out of that
 metric's summary. It is never read as zero: a missing token count that turned
 into a zero would make the arm that lost it look cheap. The same holds for the
@@ -63,7 +67,10 @@ Every arm runs with a fresh home (`HOME` and `USERPROFILE`) and a fresh
 `CLAUDE_CONFIG_DIR`, so none sees the
 maintainer's installed plugins, settings or `CLAUDE.md`. The config dir
 alone was not enough: every session of the `092a381` run loaded the owner's
-`~/.claude/CLAUDE.md` through the home directory. A fresh config has no
+`~/.claude/CLAUDE.md` through the home directory. Nor was the home, on Windows: the
+6a916f1 run still loaded it. Every session now also runs with
+`--setting-sources project,local`, which leaves the user source (the owner's
+settings and memory) out. A fresh config has no
 stored login either, so the credential comes from the environment: either
 `CLAUDE_CODE_OAUTH_TOKEN` (made once with `claude setup-token`, drawing on the
 subscription's usage limit) or `ANTHROPIC_API_KEY` (billed). When both are set

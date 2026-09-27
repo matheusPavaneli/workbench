@@ -60,6 +60,9 @@ def register(subparsers: argparse._SubParsersAction) -> None:
         "--permission-mode", default="", help="passed to claude; run.permission_mode in the repo config, else acceptEdits"
     )
     parser.add_argument("--plugin-dir", default="", help="load workbench from this directory in each session")
+    parser.add_argument(
+        "--setting-sources", default="", help="which of the agent's setting sources to load (user, project, local)"
+    )
 
 
 def enabled(root: Path) -> bool:
@@ -84,6 +87,7 @@ def run(args: argparse.Namespace) -> int:
         model=args.model,
         permission_mode=args.permission_mode or _config(root).get("permission_mode") or "acceptEdits",
         plugin_dir=args.plugin_dir,
+        setting_sources=args.setting_sources,
     )
     missing = adapter.missing()
     if missing:

@@ -41,6 +41,9 @@ DEFAULT_CAP_USD = 50.0
 DEFAULT_TIMEOUT_S = 1800
 SMOKE_TICKET = "BN-3"
 
+# Settings and memory a session may load: the repo's, never the owner's.
+SETTING_SOURCES = "project,local"
+
 # The arms whose repo is set up as a workbench user's: `wb init --write` and the
 # ticket in the local backlog.
 FLOW_ARMS = ("workbench", "run")
@@ -114,6 +117,10 @@ def command(claude: str, arm: str, text: str, *, model: str, plugin_dir: Path | 
         model,
         "--permission-mode",
         "bypassPermissions",
+        # The user source is the owner's: their settings and their
+        # ~/.claude/CLAUDE.md, which a fresh home did not keep out on Windows.
+        "--setting-sources",
+        SETTING_SOURCES,
     ]
     if arm == "workbench":
         if plugin_dir is None:
@@ -371,6 +378,7 @@ def run_argv(key: str, plugin_dir: Path, *, model: str, timeout_s: int) -> list[
     return [
         sys.executable, str(plugin_dir / "lib" / "wb.py"), "run", key, "--until", "commit",
         "--plugin-dir", str(plugin_dir), "--model", model, "--permission-mode", "bypassPermissions",
+        "--setting-sources", SETTING_SOURCES,
         "--timeout", str(timeout_s),
     ]
 

@@ -1,0 +1,26 @@
+{
+  "ticket": "BN-3",
+  "arm": "plain",
+  "run": 1,
+  "metrics": {
+    "hidden_pass": 1,
+    "out_of_scope": 0,
+    "rework": 0,
+    "tokens": 208547,
+    "cost_usd": 0.09714980000000001,
+    "wall_s": 21.2,
+    "tests_missing": 1,
+    "invalid_refs": 0,
+    "unexpected_changes": 0
+  },
+  "out_of_scope_files": [],
+  "invalid_ref_list": [],
+  "changed": [
+    "shop/format.py"
+  ],
+  "commits": 1,
+  "session_id": "8c63b095-3d87-4736-a649-28eb8a4f32bd",
+  "num_turns": 6,
+  "workflow_artifacts": [],
+  "error": null
+}

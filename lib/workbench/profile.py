@@ -29,7 +29,12 @@ MONEY_PATTERN = re.compile(r"stripe|paddle|lemonsqueezy|billing|subscription|che
 # Areas where the bar rises regardless of preset: rigour is not uniform inside
 # a repo. Matched against the path of every file a plan proposes to touch.
 CRITICAL_ZONES = {
-    "billing": re.compile(r"billing|payment|invoice|subscription|checkout|stripe|paddle|quota|plan", re.I),
+    # "plan" is a pricing plan only as a path token of its own (plans/,
+    # plan_limits.py, subscription_plan.ts). Anywhere in a path it also caught
+    # plan-change, planner and explanation, and held them to the billing bar.
+    "billing": re.compile(
+        r"billing|payment|invoice|subscription|checkout|stripe|paddle|quota|pricing|(^|[/_.-])plans?([/_.]|$)", re.I
+    ),
     "auth": re.compile(r"auth|login|session|password|token|oauth|permission|role|acl", re.I),
     # "user", "account", "pii" and "personal" name user data wherever they
     # appear. "profile" does not: it is just as often a performance profile or,

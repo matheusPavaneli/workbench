@@ -157,6 +157,16 @@ class CriticalZones(unittest.TestCase):
         self.assertIn("auth", hits)
         self.assertNotIn("src/ui/button.tsx", [p for paths in hits.values() for p in paths])
 
+    def test_a_pricing_plan_is_billing_and_a_plan_of_work_is_not(self) -> None:
+        """WB-60: skills/plan-change/SKILL.md read as billing."""
+        for path in ("src/plans/pro.py", "src/plan_limits.py", "app/subscription_plan.ts", "lib/plan.ts",
+                     "src/pricing/table.py"):
+            with self.subTest(path=path):
+                self.assertIn("billing", profile.critical_zones([path]))
+        for path in ("skills/plan-change/SKILL.md", "src/planner.py", "docs/explanation.md", "tests/test_planning.py"):
+            with self.subTest(path=path):
+                self.assertNotIn("billing", profile.critical_zones([path]))
+
     def test_migrations_are_flagged(self) -> None:
         self.assertIn("migration", profile.critical_zones(["db/migrations/0004_add_plan.sql"]))
 

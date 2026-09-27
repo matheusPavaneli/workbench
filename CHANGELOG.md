@@ -11,6 +11,94 @@ command's own output, and one that removes it. A `--json` payload that loses or
 renames a key raises its `schema` number in the same release, and
 `contract.VERSIONS` is asserted against the real output so it cannot drift.
 
+## 1.1.0
+
+Small work stops paying for the whole flow, and the benchmark can now show
+what the flow catches, not only what it costs. Four verbs cover picking up,
+closing, approving and driving a ticket. On the first clean benchmark run
+(`bench/results/2026-09-27-9abd3c9`), small tickets cost 1.5-2.9x a plain
+session, down from 3.6-10x, and workbench passed 8 of 8 hidden tests to
+plain's 6 of 8.
+
+### Added
+
+- **`wb start KEY`** picks a ticket up in one command. It reads the ticket
+  into `triage.json` and prints its text, puts the checkout on the ticket's
+  branch, and prints the route and the one next command. It creates the branch
+  from `origin/<source>`, or from the local source branch when there is no
+  origin remote. A second run changes nothing and says where the ticket
+  stands; `--refresh` reads the ticket again. **Upgrade cost:** none.
+  `wb task get`, `wb flow start` and `wb route` are unchanged.
+- **The light path.** `wb start` puts small work (chores, bugs, tasks) on it:
+  no plan up front and no other skill. **`wb finish KEY -m MESSAGE`** then
+  checks the real change, cheapest first:
+  1. the commit message, against the repo's convention
+  2. size and critical zones: outgrowing the path moves the ticket to the
+     standard route, and the change stays
+  3. a logic change with no test change is refused
+  4. the repo's suite, by the command the detected runner implies
+  5. on a bug, each changed test must fail on the base and pass here
+
+  With **`--commit`** it stages exactly the checked files and commits them.
+  It speaks only when something blocks. Feature, support and incident work
+  keep the standard route, and so does anything already planned.
+  **Upgrade cost:** none. `"light_path": false` in `.workflow/config.json`
+  restores the previous route for every ticket, including one already on the
+  path.
+- **`wb approve [KEY] [TOKEN]`** shows the one decision a ticket waits on:
+  - files outside the audited plan (approving amends the plan and re-audits it)
+  - verify entries not yet approved (approving records them; nothing runs)
+  - a drafted PR on a branch never pushed (approving runs the first push)
+
+  The token binds exactly what was shown; if the decision changed since, it
+  approves nothing. **Upgrade cost:** none. `wb impl verify --approve`,
+  `wb sdd amend` and `wb git push --execute` still work.
+- **`wb run KEY [--until commit|pr]`** drives a ticket through headless agent
+  sessions and stops at every decision `wb approve` serves (exit **8**). A
+  timeout or crash leaves the branch and `.workflow/KEY/` as they were, and a
+  rerun resumes. Each session's turns, usage and cost go to
+  `.workflow/KEY/run.json`. Off unless `"run": {"enabled": true}` or
+  `WB_RUN=1`. **Upgrade cost:** none. Exit code 8 is new, and only `wb run`
+  uses it.
+- **The benchmark can show a catch.**
+  - Metrics: `tests_missing`, `invalid_refs` and `unexpected_changes`.
+  - Tickets BN-5 to BN-7, each tempting one error.
+  - The report gains a caught-errors section and an opt-in third arm, `run`.
+  - Each session's transcript is kept.
+  - `docs/caught.md` walks through each catch from its run records, and
+    `docs/demo.cast` records the verbs on one ticket.
+
+  **Upgrade cost:** none. Nothing in `bench/` ships in the plugin.
+
+### Changed
+
+- **`triage-task` picks tickets up with `wb start`** and, on the light path,
+  tells the session to change, test, `wb finish --commit`, and use no other
+  skill. **Upgrade cost:** none.
+- **`wb status` and `wb next` name `wb approve KEY`** when the stage they
+  report waits on a person: files outside the plan (which named
+  `wb impl check` before), and verify entries awaiting approval (which named
+  `wb impl verify` before). **Upgrade cost:** a script that matched the old
+  `command` string sees the new one. The `--json` keys are unchanged.
+- **A ticket on the light path shows the stages `triage`, `change`, `commit`
+  and `pr`** in `wb status`, and `wb route` reports the tier `light path`.
+  **Upgrade cost:** a script reading `--json` sees a new stage name and a new
+  tier value for such tickets.
+- **`wb` may now run `git add`**, but only for `wb finish --commit`, only with
+  paths after `--`, and never with a flag. **Upgrade cost:** none.
+
+### Fixed
+
+- **No subprocess waits on the caller's terminal.** In a repo with no commits,
+  `git shortlog --all` read its input from stdin, so `wb init` waited 20 s per
+  call from a terminal. Every subprocess now gets an empty stdin (WB-51).
+- **A repo with no commits no longer records `main` as its source branch**
+  when HEAD is on another branch. `default_branch` now names the branch HEAD
+  is on, where it used to guess `main`.
+- **`wb finish` and `wb impl check` measure a file rewritten with CRLF by the
+  lines that changed, not all of them** (WB-59). A test that cannot run on its
+  own is now reported as that, not as one that misses the bug.
+
 ## 1.0.0
 
 The public surface is now stable. Everything this file already calls public

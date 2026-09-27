@@ -31,6 +31,7 @@ is model-authored text.
 from __future__ import annotations
 
 import json
+import re
 import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -64,8 +65,14 @@ def enabled(root: Path) -> bool:
     return profile.repo_config(root).get(CONFIG_KEY) is not False
 
 
-def eligible(key: str, kind: str, root: Path) -> tuple[bool, str]:
-    """Whether a ticket may start on the light path, and why (not)."""
+def eligible(key: str, kind: str, root: Path, text: str = "") -> tuple[bool, str]:
+    """Whether a ticket may start on the light path, and why (not).
+
+    ``text`` is the ticket's own words. A function it names that is defined in
+    a critical zone sends it to the standard route before any change is made:
+    found out at wb finish instead, the zone cost a finished fix and a second
+    pass (WB-58).
+    """
     if not enabled(root):
         return False, f'"{CONFIG_KEY}": false in .workflow/config.json'
     if key.startswith(("incident-", "idea-")):
@@ -75,7 +82,42 @@ def eligible(key: str, kind: str, root: Path) -> tuple[bool, str]:
         return False, f"{lowered} work owes a product frame"
     if lowered in AUDIENCE:
         return False, f"{lowered} work has a reader outside engineering"
+    zoned = zone_named(text, root) if text else None
+    if zoned:
+        name, path, zone = zoned
+        return False, f"the ticket names {name}, defined in {path}, which is in the {zone} zone: plan it first"
     return True, "no plan up front; wb finish holds the change to the floor"
+
+
+# Names worth looking up: in backticks, snake_case or CamelCase. A plain word
+# ("total", "name") would match half the repo and predict nothing.
+_NAMED = re.compile(
+    r"`([A-Za-z_][A-Za-z0-9_]*)(?:\(\))?`|\b([a-z][a-z0-9]*_[a-z0-9_]+)\b|\b([A-Z][a-z0-9]+[A-Z][A-Za-z0-9]*)\b"
+)
+MAX_NAMES = 6
+DEFINERS = ("def {name}(", "class {name}", "function {name}(")
+
+
+def names(text: str) -> list[str]:
+    """Identifiers the ticket names, first mention first, at most MAX_NAMES."""
+    found: list[str] = []
+    for match in _NAMED.finditer(text):
+        name = next(group for group in match.groups() if group)
+        if name not in found:
+            found.append(name)
+    return found[:MAX_NAMES]
+
+
+def zone_named(text: str, root: Path) -> tuple[str, str, str] | None:
+    """(name, file, zone) for the first name the ticket gives that is defined in a critical zone."""
+    for name in names(text):
+        for definer in DEFINERS:
+            files = gitctx.grep_files(root, "HEAD", definer.format(name=name), []) or []
+            zones = profile.critical_zones(files)
+            if zones:
+                zone = sorted(zones)[0]
+                return name, zones[zone][0], zone
+    return None
 
 
 def marker(key: str, root: Path) -> dict | None:

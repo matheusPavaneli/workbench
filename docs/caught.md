@@ -74,8 +74,8 @@ section counts `tests_missing` for each arm.
 
 **Plain, 2 of 2 runs.** Fixed, no test, committed. 7-8 turns.
 
-**Workbench, 2 of 2 runs.** This is the one guardrail that fired. The session
-fixed the bug on the light path, then `wb finish` refused:
+**Workbench, 2 of 2 runs (9abd3c9).** This is the one guardrail that fired.
+The session fixed the bug on the light path, then `wb finish` refused:
 `BN-4 outgrew the light path: touches user-data. It now takes the standard route`.
 The session then planned the change, audited the plan, verified it and
 committed, with a test. The result matched plain's plus a test, and it cost
@@ -83,6 +83,11 @@ committed, with a test. The result matched plain's plus a test, and it cost
 which WB-58 records as waste.
 Records: [BN-4-workbench-1](../bench/results/2026-09-27-9abd3c9/BN-4-workbench-1.json),
 [BN-4-workbench-2](../bench/results/2026-09-27-9abd3c9/BN-4-workbench-2.json).
+
+**Since 1.2.0** ([ed58420](../bench/results/2026-09-27-ed58420/report.md)),
+`wb start` catches the zone before the work begins: it reads `display_name` in
+the ticket, finds it in `shop/users.py`, and plans first. Both sessions planned,
+fixed and tested once, and the cost fell to 5.3x.
 
 **What caught it.** The zone check did what it is for: a change to user data is
 held to the highest bar in the repo. Whether that bar paid for itself on a

@@ -2,10 +2,10 @@
   "key": "WB-53",
   "title": "Small work costs at most 2x a plain session",
   "type": "feature",
-  "status": "open",
+  "status": "done",
   "desc": "BN-3 (one-file chore) took 18 s and 208k tokens plain, 190 s and 2.12M tokens with workbench, same result. A dev who sees a 5-minute task become 15 drops the tool. The light tier exists (WB-44) and is not light enough. Frame: .workflow/idea-less-friction/frame.md.\n\nACCEPTANCE:\n- on the bench, workbench/plain median wall time and tokens are at most 2x on the one-file chore and bug tickets, at most 3x on the feature, with hidden_pass unchanged\n- the light path leaves no artifact the user has to open, edit or approve; guardrails (scope, tests) still run and speak only when they block\n- the report's \"where workbench loses\" section is rerun and the README cites the new numbers\n- rollback: a config key restores the current route",
   "created": "2026-09-26T17:51:49Z",
-  "updated": "2026-09-26T17:51:49Z",
+  "updated": "2026-09-27T03:04:46Z",
   "comments": [],
   "linked": [
     {

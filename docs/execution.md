@@ -236,7 +236,7 @@ time are appended to `.workflow/KEY/run.json`. At most `--max-sessions`
 The agent sits behind one interface (`workbench.agent`): run a session on a
 prompt in a checkout, within a time limit, and report how it ended. Claude
 Code (`claude -p --output-format json`) is the only implementation; `--model`,
-`--permission-mode` and `--plugin-dir` pass through to it. It is off by
+`--permission-mode`, `--plugin-dir` and `--setting-sources` pass through to it. It is off by
 default: `"run": {"enabled": true}` in `.workflow/config.json`, or `WB_RUN=1`
 for one call. An autopilot over an expensive flow spends faster, and a headless
 session is where a stop nobody sees would hide.

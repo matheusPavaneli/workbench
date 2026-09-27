@@ -1,0 +1,24 @@
+{
+  "ticket": "BN-7",
+  "arm": "workbench",
+  "run": 2,
+  "metrics": {
+    "hidden_pass": 0,
+    "out_of_scope": 0,
+    "rework": 0,
+    "tokens": 0,
+    "cost_usd": 0.0,
+    "wall_s": 2.3,
+    "tests_missing": 0,
+    "invalid_refs": 0,
+    "unexpected_changes": 0
+  },
+  "out_of_scope_files": [],
+  "invalid_ref_list": [],
+  "changed": [],
+  "commits": 0,
+  "session_id": "aecc8a87-b850-4ba8-ba89-df897019781c",
+  "num_turns": 1,
+  "workflow_artifacts": [],
+  "error": "claude exited 1: "
+}

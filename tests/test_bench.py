@@ -433,6 +433,27 @@ class RunArmTest(unittest.TestCase):
         self.assertEqual([("BN-3", "tests_missing", 1, 1, 0, 1)], score.caught(records, "run"))
 
 
+class ErroredRunTest(unittest.TestCase):
+    """The 6a916f1 run: a usage limit cut two sessions off, and one read as a caught error."""
+
+    def test_a_run_that_ended_in_an_error_counts_for_nothing(self) -> None:
+        cut = dict(_record("BN-7", "workbench", hidden_pass=0, tokens=0), error="claude exited 1: ")
+        records = [_record("BN-7", "plain"), _record("BN-7", "workbench", tokens=3000), cut]
+        self.assertEqual(1, score.summarize(records)["BN-7"]["tokens"]["workbench"]["n"])
+        self.assertEqual([], score.caught(records))
+        self.assertIn("with an error (left out of every metric): 1", score.report(records, commit="c", model="m", date="d", skipped=0))
+
+
+class SettingSourcesTest(unittest.TestCase):
+    def test_no_arm_loads_the_owner_s_settings_or_memory(self) -> None:
+        for arm in ("plain", "workbench"):
+            with self.subTest(arm=arm):
+                argv = bench_run.command("claude", arm, "go", model="m", plugin_dir=Path("/p"))
+                self.assertEqual("project,local", argv[argv.index("--setting-sources") + 1])
+        argv = bench_run.run_argv("BN-3", Path("/p"), model="m", timeout_s=60)
+        self.assertEqual("project,local", argv[argv.index("--setting-sources") + 1])
+
+
 class CommandTest(unittest.TestCase):
     def test_the_plain_arm_loads_no_plugin(self) -> None:
         argv = bench_run.command("claude", "plain", "do it", model="claude-sonnet-5", plugin_dir=None)

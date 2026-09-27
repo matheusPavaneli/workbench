@@ -68,6 +68,7 @@ class ClaudeCode:
     model: str = ""
     permission_mode: str = "acceptEdits"
     plugin_dir: str = ""
+    setting_sources: str = ""
     name: str = "claude-code"
 
     def missing(self) -> str | None:
@@ -80,6 +81,8 @@ class ClaudeCode:
             argv += ["--model", self.model]
         if self.plugin_dir:
             argv += ["--plugin-dir", self.plugin_dir]
+        if self.setting_sources:
+            argv += ["--setting-sources", self.setting_sources]
         return argv
 
     def session(self, prompt: str, root: Path, timeout_s: int) -> Session:

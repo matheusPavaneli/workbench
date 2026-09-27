@@ -346,9 +346,14 @@ def median(values: list[float]) -> float:
 
 
 def summarize(records: list[dict]) -> dict:
-    """summary[ticket][metric][arm] = {median, min, max, n}; absent values left out."""
+    """summary[ticket][metric][arm] = {median, min, max, n}; absent values left out.
+
+    A run that ended in an error is left out whole: a session cut off by a usage
+    limit scores 0 tokens and a failed hidden suite, which is the limit's number,
+    not the arm's.
+    """
     values: dict = {}
-    for rec in records:
+    for rec in _scored(records):
         for metric, value in rec["metrics"].items():
             if value is None:
                 continue
@@ -382,6 +387,11 @@ def losses(summary: dict, arm: str = "workbench") -> list[tuple[str, str, float,
     return found
 
 
+def _scored(records: list[dict]) -> list[dict]:
+    """The runs that count: every one that did not end in an error."""
+    return [rec for rec in records if not rec.get("error")]
+
+
 def _made_error(metric: str, value: float) -> bool:
     return value < 1 if metric == "hidden_pass" else value > 0
 
@@ -393,7 +403,7 @@ def caught(records: list[dict], arm: str = "workbench") -> list[tuple[str, str, 
     An absent value is left out of n.
     """
     counts: dict[tuple[str, str], dict[str, list[int]]] = {}
-    for rec in records:
+    for rec in _scored(records):
         for metric in ERROR_METRICS:
             value = rec["metrics"].get(metric)
             if value is None:
@@ -436,7 +446,8 @@ def report(records: list[dict], *, commit: str, model: str, date: str, skipped: 
         f"- workbench commit: `{commit}`",
         f"- model: `{model}`",
         f"- date: {date}",
-        f"- runs recorded: {len(records)}, with an error: {errors}, skipped by the spend cap: {skipped}",
+        f"- runs recorded: {len(records)}, with an error (left out of every metric): {errors},"
+        f" skipped by the spend cap: {skipped}",
         f"- arms: {', '.join(present)}",
         f"- workbench and run sessions that left workflow artifacts: {used_flow} of {len(bench_runs)}",
         f"- auth: {auth}",

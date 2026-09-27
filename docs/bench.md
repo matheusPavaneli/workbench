@@ -171,5 +171,28 @@ ticket, at 3.6-5.6x the cost. The tickets were too easy to separate the arms on
 quality: a benchmark that can show a gain needs tickets a plain session gets
 wrong, which is the next step.
 
+[2026-09-27, commit 9abd3c9](../bench/results/2026-09-27-9abd3c9/report.md): the
+first clean run after four fixes to the harness itself (a flow source that never
+existed, the owner's instructions reaching sessions three ways, errored runs
+scored as results; the runs in between are committed and marked not citable).
+Sonnet, subscription, BN-3, BN-4, BN-6 and BN-7, two runs per arm, 16
+sessions, no error, US$3.00 estimated.
+
+| Ticket | Route | Quality, plain vs workbench | Tokens | Wall | Cost |
+|---|---|---|---|---|---|
+| BN-7 one-character bug | light | plain wrote no test 2/2, workbench 0/2 | 1.69x | 1.52x | 1.51x |
+| BN-3 one-file chore | light | plain wrote no test 2/2, workbench 0/2 | 2.10x | 1.80x | 1.77x |
+| BN-6 renamed function | light | **plain fixed the dead copy and failed the hidden tests 2/2**; workbench fixed the live check 2/2 | 2.82x | 2.90x | 2.33x |
+| BN-4 bug in `shop/users.py` | standard (user-data zone) | plain wrote no test 2/2, workbench 0/2 | 6.72x | 5.81x | 5.31x |
+
+Ratios are workbench median over plain median. Workbench passed every hidden
+test (8 of 8), plain 6 of 8. Two runs per arm is a direction, not a verdict.
+
+Against WB-53's target (at most 2x on one-file chores and bugs): met on BN-7,
+met on BN-3's wall time and cost but not its tokens, not met on BN-6 (where the
+cheaper arm is the one that shipped the wrong fix) or on BN-4, which leaves the
+light path by design because it touches user data, and then pays for the full
+plan. The first run put the same kind of work at 3.6-10x.
+
 Run it on demand, when a change moves the cost of the flow — a new gate, a new
 tier bound, a skill that grew.

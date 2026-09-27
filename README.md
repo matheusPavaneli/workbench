@@ -248,6 +248,24 @@ eleventh skill: ten descriptions are already this plugin's always-on cost, and
 one more to say "do less" would be the joke telling itself.
 
 
+### What it costs, and what it catches
+
+Measured, not argued: `bench/` runs each ticket through a plain session and a
+workbench session on the same model and scores both
+([docs/bench.md](docs/bench.md)). The first clean run
+([2026-09-27, 9abd3c9](bench/results/2026-09-27-9abd3c9/report.md), two runs per
+arm, so a direction rather than a verdict):
+
+| Ticket | Plain | Workbench | Cost, workbench / plain |
+|---|---|---|---|
+| one-character bug | fixed, no test (2/2) | fixed, with a test | 1.7x tokens, 1.5x wall |
+| one-file chore | fixed, no test (2/2) | fixed, with a test | 2.1x tokens, 1.8x wall |
+| ticket naming a renamed function | **fixed a dead copy; hidden tests fail (2/2)** | fixed the live check, with a test | 2.8x tokens, 2.9x wall |
+| bug in user data | fixed, no test (2/2) | fixed, with a test, planned (critical zone) | 6.7x tokens, 5.8x wall |
+
+Small work now costs about twice a plain session; work in a critical zone still
+costs the full plan.
+
 ### The light path
 
 The first benchmark run put a one-file chore at 18 s plain and 190 s through the

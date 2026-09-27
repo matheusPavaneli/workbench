@@ -2,10 +2,10 @@
   "key": "WB-58",
   "title": "Critical-zone and misleading tickets still cost 3-7x a plain session",
   "type": "chore",
-  "status": "open",
+  "status": "done",
   "desc": "The clean bench run (bench/results/2026-09-27-9abd3c9) met WB-53's 2x target on BN-7 and on BN-3's wall time and cost, not elsewhere. BN-4 (bug in shop/users.py, user-data zone) cost 6.7x tokens: wb finish only learns the change is in a critical zone after it is made, sends it to the standard route, and the session discarded its working fix to re-plan it. BN-6 cost 2.8x, spent tracing the live code path that plain skipped.\n\nACCEPTANCE:\n- a ticket whose change lands in a critical zone keeps the change it already made when it moves to the standard route, and the plan starts from that diff instead of from scratch\n- wb start says up front when the ticket's likely files are in a critical zone, so the session plans first instead of finishing twice\n- the bench's BN-4 ratio is measured again and the README table updated",
   "created": "2026-09-27T03:04:45Z",
-  "updated": "2026-09-27T03:04:45Z",
+  "updated": "2026-09-27T03:48:20Z",
   "comments": [],
   "linked": [
     {

@@ -1,0 +1,16 @@
+{
+  "key": "WB-60",
+  "title": "The billing zone matches any path containing plan",
+  "type": "bug",
+  "status": "open",
+  "desc": "profile.CRITICAL_ZONES['billing'] is billing|payment|invoice|subscription|checkout|stripe|paddle|quota|plan, matched anywhere in a path. skills/plan-change/SKILL.md, planner.py or explanation.md read as billing and are held to the critical bar; wb finish sent WB-58 to the standard route for it.\n\nACCEPTANCE:\n- plan matches a pricing plan (plans/, plan_limits, subscription_plan) and not plan-change, planner or explanation\n- a test pins both sides; plans already audited with the old zones re-audit cleanly or say why",
+  "created": "2026-09-27T03:48:12Z",
+  "updated": "2026-09-27T03:48:12Z",
+  "comments": [],
+  "linked": [
+    {
+      "key": "WB-58",
+      "type": "relates"
+    }
+  ]
+}

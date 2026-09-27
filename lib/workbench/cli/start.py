@@ -59,7 +59,7 @@ def run(args: argparse.Namespace) -> int:
         print("triage  already read (--refresh to read it again)")
     print(f"branch  {where}")
 
-    _choose_path(key, kind, root)
+    _choose_path(key, kind, root, f"{title}\n{triage.get('desc') or ''}")
     tier, reason, steps = route_cli.compute(key, root)
     print(f"route   {tier}: {', '.join(name for name, _, _ in steps)}  ({reason})")
     if light.marker(key, root) is not None:
@@ -73,7 +73,7 @@ def run(args: argparse.Namespace) -> int:
     return 0
 
 
-def _choose_path(key: str, kind: str, root: Path) -> None:
+def _choose_path(key: str, kind: str, root: Path, text: str = "") -> None:
     """Put eligible work on the light path, once, before anything is planned.
 
     A ticket that already has a plan keeps it: the path is chosen at the start,
@@ -86,9 +86,11 @@ def _choose_path(key: str, kind: str, root: Path) -> None:
         if not light.enabled(root):
             light.unmark(key, root)
         return
-    allowed, _ = light.eligible(key, kind, root)
+    allowed, reason = light.eligible(key, kind, root, text)
     if allowed:
         light.mark(key, root)
+    elif "zone" in reason:
+        print(f"light   no: {reason}")
 
 
 def _triage(key: str, root: Path, *, refresh: bool) -> tuple[dict, bool]:

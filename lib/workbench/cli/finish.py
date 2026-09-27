@@ -50,9 +50,10 @@ def run(args: argparse.Namespace) -> int:
     if result.outgrew:
         light.unmark(key, root)
         raise WbError(
-            f"{key} outgrew the light path: {result.outgrew}. It now takes the standard route; the change stays",
+            f"{key} outgrew the light path: {result.outgrew}. It now takes the standard route. "
+            "Keep the change on disk and do not revert it: the plan cites the code at HEAD, so plan around it",
             code=EXIT_AUDIT,
-            fix=[f"plan it: (plan-change) then wb sdd audit {key}"],
+            fix=[f"plan it: (plan-change) then wb sdd audit {key}, then wb impl verify {key} on the change already made"],
         )
     if not result.ok:
         raise WbError(f"{key}: " + "; ".join(result.blocked), code=EXIT_AUDIT, fix=result.fix)

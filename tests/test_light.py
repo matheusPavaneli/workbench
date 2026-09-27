@@ -153,6 +153,7 @@ class Chore(LightPath):
         self.assertEqual(EXIT_AUDIT, code)
         self.assertIn("outgrew the light path", err)
         self.assertIn("plan-change", err)
+        self.assertIn("do not revert it", err)
         self.assertIsNone(light.marker("ABC-1", self.root))
         _, nxt, _ = run("next", "ABC-1")
         self.assertIn("plan", nxt)
@@ -236,6 +237,34 @@ class Bug(LightPath):
         code, out, err = self.finish()
         self.assertEqual(0, code, out + err)
         self.assertIn("1 regression test(s) proven", out)
+
+
+class ZoneNamed(LightPath):
+    """WB-58: a ticket naming a function in a critical zone plans first, instead of finishing twice."""
+
+    KIND = "bug"
+
+    def test_a_named_function_in_a_critical_zone_starts_on_the_standard_route(self) -> None:
+        self.write("shop/billing/__init__.py", "")
+        self.write("shop/billing/charge.py", "def charge_card(total):" + chr(10) + "    return total" + chr(10))
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", "chore: billing")
+        code, out, err = run("task", "new", "Cards are charged twice", "--type", "bug",
+                             "--desc", "charge_card runs twice on a retry.", "--key", "ABC-2")
+        self.assertEqual(0, code, out + err)
+        code, out, err = run("start", "ABC-2")
+        self.assertEqual(0, code, out + err)
+        self.assertIsNone(light.marker("ABC-2", self.root))
+        self.assertIn("names charge_card, defined in shop/billing/charge.py, which is in the billing zone", out)
+        self.assertIn("standard", out)
+
+    def test_a_named_function_outside_every_zone_keeps_the_light_path(self) -> None:
+        run("start", "ABC-1")
+        self.assertIsNotNone(light.marker("ABC-1", self.root), "format_money lives in shop/money.py, no zone")
+
+    def test_names_are_the_identifiers_a_ticket_spells_not_its_plain_words(self) -> None:
+        text = "display_name keeps stray whitespace; `in_stock` and ChargeError, the total and the name."
+        self.assertEqual(["display_name", "in_stock", "ChargeError"], light.names(text))
 
 
 class Feature(LightPath):

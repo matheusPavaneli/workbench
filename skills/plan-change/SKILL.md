@@ -26,6 +26,9 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
 3. **Pick a persona** from `references/personas.md`. It shapes what counts as
    done, not the format.
 
+   A change already on disk (a light-path ticket `finish` moved here) stays:
+   plan around it, never revert it to plan from scratch.
+
 4. **Confirm everything in the code.** Assume nothing. Every claim about this
    codebase needs a `file:line` and the text of that line, because the audit in
    step 7 reopens each one. A claim you cannot cite is a question, not a fact —

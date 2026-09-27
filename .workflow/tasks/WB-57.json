@@ -2,10 +2,10 @@
   "key": "WB-57",
   "title": "Show real errors workbench caught, and a 30-60 s demo",
   "type": "chore",
-  "status": "open",
+  "status": "done",
   "desc": "Build later: only once the WB-52 bench records at least one catch plain missed. Examples must come from bench records or real tickets, never staged.\n\nACCEPTANCE:\n- docs page with each example: the ticket, what plain did, what workbench flagged, link to the run record\n- a 30-60 s recording of wb start, wb next, wb approve on one fixture ticket, linked from the README",
   "created": "2026-09-26T17:51:51Z",
-  "updated": "2026-09-26T17:51:51Z",
+  "updated": "2026-09-27T03:12:57Z",
   "comments": [],
   "linked": [
     {

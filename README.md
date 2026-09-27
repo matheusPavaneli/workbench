@@ -264,7 +264,10 @@ arm, so a direction rather than a verdict):
 | bug in user data | fixed, no test (2/2) | fixed, with a test, planned (critical zone) | 6.7x tokens, 5.8x wall |
 
 Small work now costs about twice a plain session; work in a critical zone still
-costs the full plan.
+costs the full plan. [What workbench caught](docs/caught.md) walks through each
+case, and a 33-second recording of `wb start`, `wb next`, `wb finish` and
+`wb approve` on one of these tickets is in [docs/demo.cast](docs/demo.cast)
+(`asciinema play docs/demo.cast`; recorded by `bench/demo.py` from real output).
 
 ### The light path
 
@@ -475,7 +478,8 @@ Exit codes: 2 usage, 3 config, 4 auth, 5 provider, 6 not found, 7 audit failed, 
 - [CHANGELOG.md](CHANGELOG.md) — what changed, and the deprecation policy
 - [status.md](docs/status.md) — the pipeline, the command history, rigour tiers, settled gates
 - [flow.md](docs/flow.md) — source and validation branches, cherry-pick carrying, branch naming
-- [bench.md](docs/bench.md) — the benchmark: metrics, the two arms, running it, reading the report
+- [bench.md](docs/bench.md) — the benchmark: metrics, the arms, running it, reading the report
+- [caught.md](docs/caught.md) — what workbench caught in the benchmark, case by case, with the run records
 
 These are for maintainers. Agents do not read them: the behaviour they describe
 is enforced in code, and loading them into a session would pay twice for the

@@ -213,6 +213,22 @@ class Bug(LightPath):
         self.assertEqual(EXIT_AUDIT, code)
         self.assertIn("passes without the fix", err)
 
+    def test_a_test_that_cannot_run_alone_is_not_called_weak(self) -> None:
+        """WB-59: the file failed to import on its own, and finish said it passed without the fix."""
+        from workbench import verify
+
+        run("start", "ABC-1")
+        self.write("shop/money.py", MONEY_FIXED)
+        self.write("tests/test_money.py", TEST_REFUND)
+        broken = verify.Result(command="python -m unittest tests/test_money.py", exit_code=1, duration_ms=1,
+                               output="ModuleNotFoundError: No module named 'shop'", truncated=False)
+        outcome = verify.Regression("tests/test_money.py", broken.command, broken, broken)
+        with mock.patch("workbench.verify.run_regression", return_value=[outcome]):
+            code, _, err = self.finish()
+        self.assertEqual(EXIT_AUDIT, code)
+        self.assertIn("fails with the fix in place: ModuleNotFoundError", err)
+        self.assertNotIn("passes without the fix", err)
+
     def test_a_bug_s_regression_test_is_proven(self) -> None:
         run("start", "ABC-1")
         self.write("shop/money.py", MONEY_FIXED)

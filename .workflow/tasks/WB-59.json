@@ -1,0 +1,16 @@
+{
+  "key": "WB-59",
+  "title": "wb finish counts every line of a file rewritten with CRLF as changed",
+  "type": "bug",
+  "status": "done",
+  "desc": "gitctx.lines_changed runs git diff --numstat without --ignore-cr-at-eol. In a repo without core.autocrlf, a session on Windows that rewrites a file with CRLF endings changes one line and is measured as changing all of them, so wb finish sends small work to the standard route as outgrown, and impl check reports a light plan as oversize. Seen recording the demo: a 2-line fix measured 66 lines.\n\nACCEPTANCE:\n- a CRLF rewrite of an LF file with one changed line measures as that line\n- regression test in tests/test_gitctx.py that fails without the fix",
+  "created": "2026-09-27T03:22:28Z",
+  "updated": "2026-09-27T03:31:03Z",
+  "comments": [],
+  "linked": [
+    {
+      "key": "WB-53",
+      "type": "relates"
+    }
+  ]
+}

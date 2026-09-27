@@ -290,7 +290,9 @@ def lines_changed(cwd: Path, base: str, paths: list[str], *, staged: bool = Fals
     """
     if not paths:
         return 0
-    args = ["diff", "--numstat", "--no-renames", "--no-color"]
+    # --ignore-cr-at-eol: a file rewritten with CRLF on Windows, in a repo that
+    # does not convert endings, is one changed line, not all of them (WB-59).
+    args = ["diff", "--numstat", "--no-renames", "--no-color", "--ignore-cr-at-eol"]
     if staged:
         args.append("--cached")
     output = _git_raw([*args, base or "HEAD", "--", *paths], cwd)

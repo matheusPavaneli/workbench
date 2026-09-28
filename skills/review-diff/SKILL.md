@@ -6,7 +6,7 @@ description: Reviews the current diff against the repo's quality preset, reporti
 # review-diff
 
 ```
-python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
+wb <args>    # wb not on PATH: python <this skill's directory>/../../lib/wb.py <args>
 ```
 
 ## Steps
@@ -18,7 +18,7 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
 2. **Read the diff itself**, then read the surrounding code. A diff shows what
    changed, not what it broke. For anything that changes a shared contract, ask
    the index who calls it:
-   `${CLAUDE_PLUGIN_ROOT}/shared/code-search.md`.
+   `../../shared/code-search.md`.
 
 3. **Settle the mechanical gates first.** `review gates` (add `--key <KEY>` so
    the bug-fix regression rule knows the ticket type). It reads the added lines

@@ -9,7 +9,7 @@ All tracker access goes through one command. Never construct JQL, WIQL, URLs or
 field lists — the provider builds them from the resolved context.
 
 ```
-python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
+wb <args>    # wb not on PATH: python <this skill's directory>/../../lib/wb.py <args>
 ```
 
 ## Steps

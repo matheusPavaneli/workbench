@@ -6,7 +6,7 @@ description: Writes a commit message in the repo's own convention, validated and
 # write-commit
 
 ```
-python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
+wb <args>    # wb not on PATH: python <this skill's directory>/../../lib/wb.py <args>
 ```
 
 This skill writes the message. Committing stays the user's call: the CLI prints

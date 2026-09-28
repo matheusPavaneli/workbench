@@ -6,7 +6,7 @@ description: Writes the non-technical note for a support ticket - symptom, cause
 # write-handover
 
 ```
-python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
+wb <args>    # wb not on PATH: python <this skill's directory>/../../lib/wb.py <args>
 ```
 
 The audience is not engineering. A QA lead has to validate this without reading

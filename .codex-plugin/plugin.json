@@ -1,0 +1,15 @@
+{
+  "name": "workbench",
+  "version": "1.2.0",
+  "description": "Ticket-to-PR development workflow: triage, plan with verified citations, implement inside the plan, review, commit, PR. Pluggable issue trackers (Jira, Azure DevOps, GitHub Issues) or a backlog in the repo, so it works with no tracker at all.",
+  "author": {
+    "name": "matheusPavaneli",
+    "url": "https://github.com/matheusPavaneli"
+  },
+  "homepage": "https://github.com/matheusPavaneli/workbench",
+  "repository": "https://github.com/matheusPavaneli/workbench",
+  "license": "MIT",
+  "keywords": ["codex", "codex-plugin", "ai-agents", "agentic-coding", "developer-tools", "workflow", "planning", "code-review"],
+  "skills": "./skills/",
+  "hooks": "./hooks/codex.json"
+}

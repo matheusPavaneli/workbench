@@ -1,5 +1,7 @@
 """WB-56: wb run drives a ticket headless and stops only for a person."""
 
+from __future__ import annotations
+
 import json
 import os
 import sys
@@ -179,6 +181,129 @@ class Adapter(unittest.TestCase):
         self.assertFalse(agent.Session(0, report={"is_error": True}).ok)
         self.assertFalse(agent.Session(124, timed_out=True).ok)
         self.assertTrue(agent.Session(0).ok)
+
+
+class Selection(Driven):
+    """WB-61: the agent is a choice, Claude Code by default."""
+
+    def drive(self, *args: str, config: dict | None = None):
+        chosen: list[str] = []
+
+        def session(adapter, prompt, root, timeout_s):
+            chosen.append(adapter.name)
+            return self.works()
+
+        patches = [mock.patch.object(kind, "session", autospec=True, side_effect=session) for kind in agent.AGENTS.values()]
+        patches += [mock.patch.object(kind, "missing", return_value=None) for kind in agent.AGENTS.values()]
+        if config is not None:
+            patches.append(mock.patch.object(run_cli, "_config", return_value=config))
+        for patch in patches:
+            patch.start()
+            self.addCleanup(patch.stop)
+        code, out, err = run("run", "ABC-1", "--until", "commit", *args)
+        return code, out + err, chosen
+
+    def test_claude_code_is_the_default(self) -> None:
+        code, output, chosen = self.drive()
+        self.assertEqual(0, code, output)
+        self.assertEqual(["claude-code"], chosen)
+        self.assertEqual("claude-code", self.record()["sessions"][0]["agent"])
+
+    def test_the_repo_config_picks_the_agent(self) -> None:
+        code, output, chosen = self.drive(config={"agent": "codex"})
+        self.assertEqual(0, code, output)
+        self.assertEqual(["codex"], chosen)
+
+    def test_the_flag_overrides_the_repo_config(self) -> None:
+        code, output, chosen = self.drive("--agent", "gemini", config={"agent": "codex"})
+        self.assertEqual(0, code, output)
+        self.assertEqual(["gemini"], chosen)
+
+    def test_an_unknown_agent_is_refused_naming_the_known_ones(self) -> None:
+        code, output, chosen = self.drive(config={"agent": "vim"})
+        self.assertNotEqual(0, code)
+        self.assertEqual([], chosen)
+        self.assertIn("unknown agent 'vim'", output)
+        for name in agent.AGENTS:
+            self.assertIn(name, output)
+
+    def test_a_missing_agent_names_its_own_install(self) -> None:
+        with mock.patch.object(agent.Codex, "missing", return_value="codex is not on PATH"):
+            code, _, err = run("run", "ABC-1", "--agent", "codex")
+        self.assertNotEqual(0, code)
+        self.assertIn("npm i -g @openai/codex", err)
+        self.assertNotIn("claude-code", err)
+
+
+class OtherAdapters(unittest.TestCase):
+    def test_select_hands_each_agent_only_the_settings_it_takes(self) -> None:
+        codex = agent.select("codex", model="m", permission_mode="acceptEdits", plugin_dir="/p")
+        self.assertEqual("m", codex.model)
+        self.assertFalse(hasattr(codex, "permission_mode"))
+        claude = agent.select("claude-code", permission_mode="bypassPermissions")
+        self.assertEqual("bypassPermissions", claude.permission_mode)
+        with self.assertRaises(ValueError):
+            agent.select("vim")
+
+    def test_the_codex_command_runs_exec_with_json_and_workspace_writes(self) -> None:
+        with mock.patch("shutil.which", return_value="/bin/codex"):
+            argv = agent.Codex(model="gpt-5").argv("go")
+            plain = agent.Codex().argv("go")
+        self.assertEqual(["/bin/codex", "exec", "--json"], argv[:3])
+        self.assertEqual("workspace-write", argv[argv.index("--sandbox") + 1])
+        self.assertEqual("gpt-5", argv[argv.index("--model") + 1])
+        self.assertEqual("go", argv[-1])
+        self.assertNotIn("--model", plain)
+
+    def test_the_codex_event_stream_becomes_the_same_report(self) -> None:
+        stream = chr(10).join([
+            '{"type":"thread.started","thread_id":"t-1"}',
+            "not json",
+            '{"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":4,"output_tokens":2}}',
+            "[1]",
+            '{"type":"turn.completed","usage":{"input_tokens":5,"output_tokens":1}}',
+        ])
+        report = agent.parse_codex(stream)
+        self.assertEqual("t-1", report["session_id"])
+        self.assertEqual(2, report["num_turns"])
+        self.assertEqual({"input_tokens": 15, "cached_input_tokens": 4, "output_tokens": 3}, report["usage"])
+        self.assertTrue(agent.Session(0, report=report).ok)
+
+    def test_a_failed_codex_turn_is_not_ok(self) -> None:
+        report = agent.parse_codex('{"type":"turn.failed","error":{"message":"stream ended"}}')
+        self.assertFalse(agent.Session(0, report=report).ok)
+        self.assertEqual({}, agent.parse_codex(""))
+
+    def test_the_gemini_command_is_headless_json_with_edits_approved(self) -> None:
+        with mock.patch("shutil.which", return_value="/bin/gemini"):
+            argv = agent.Gemini(model="gemini-3-pro").argv("go")
+        self.assertEqual(["/bin/gemini", "-p", "go", "--output-format", "json"], argv[:5])
+        self.assertEqual("auto_edit", argv[argv.index("--approval-mode") + 1])
+        self.assertEqual("gemini-3-pro", argv[argv.index("--model") + 1])
+
+    def test_gemini_token_counts_are_summed_over_its_models(self) -> None:
+        payload = {"response": "done", "stats": {"models": {
+            "a": {"tokens": {"prompt": 10, "candidates": 3, "cached": 2}},
+            "b": {"tokens": {"prompt": 1, "candidates": 1}},
+        }}}
+        report = agent.parse_gemini(json.dumps(payload))
+        self.assertEqual({"prompt": 11, "candidates": 4, "cached": 2}, report["usage"])
+        self.assertTrue(agent.Session(0, report=report).ok)
+        self.assertFalse(agent.Session(0, report=agent.parse_gemini('{"error": {"message": "quota"}}')).ok)
+        self.assertEqual({}, agent.parse_gemini("oops"))
+
+    def test_the_cursor_command_prints_json_and_may_write(self) -> None:
+        with mock.patch("shutil.which", return_value="/bin/agent"):
+            argv = agent.Cursor().argv("go", Path("/repo"))
+        self.assertEqual(["/bin/agent", "-p", "go", "--output-format", "json"], argv[:5])
+        self.assertIn("--force", argv)
+        self.assertEqual(str(Path("/repo")), argv[argv.index("--workspace") + 1])
+        self.assertNotIn("--model", argv)
+
+    def test_the_cursor_result_reads_like_claude_s(self) -> None:
+        report = agent.parse('{"type":"result","is_error":true,"session_id":"s-9","result":"x"}')
+        self.assertEqual("s-9", agent.Session(0, report=report).to_dict()["session_id"])
+        self.assertFalse(agent.Session(0, report=report).ok)
 
 
 if __name__ == "__main__":

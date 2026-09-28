@@ -1,0 +1,28 @@
+{
+  "description": "workbench for Codex: refuse edits outside the active ticket's audited plan, and report unverified work at stop",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "apply_patch|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${PLUGIN_ROOT}/lib/wb_hook.py\" --agent codex pre-tool-use",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${PLUGIN_ROOT}/lib/wb_hook.py\" --agent codex stop",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -138,13 +138,18 @@ class Skills(unittest.TestCase):
                 lines = len(path.read_text(encoding="utf-8").splitlines())
                 self.assertLessEqual(lines, MAX_SKILL_LINES, f"{path.parent.name} is {lines} lines")
 
-    def test_skills_invoke_the_cli_through_the_plugin_root(self) -> None:
-        """A hardcoded path works on the author's machine and nowhere else."""
+    def test_skills_invoke_the_cli_the_same_way_under_every_agent(self) -> None:
+        """A hardcoded path works on the author's machine and nowhere else, and
+        ``${CLAUDE_PLUGIN_ROOT}`` works in one agent and nowhere else. ``wb`` on
+        PATH works everywhere, and the fallback is relative to the skill."""
         for path in _skills():
             with self.subTest(skill=path.parent.name):
                 body = path.read_text(encoding="utf-8")
+                self.assertNotIn("CLAUDE_PLUGIN_ROOT", body)
                 if "wb.py" in body:
-                    self.assertIn("${CLAUDE_PLUGIN_ROOT}", body)
+                    self.assertIn("wb <args>", body)
+                    self.assertIn("../../lib/wb.py", body)
+                    self.assertTrue((path.parent / "../../lib/wb.py").resolve().is_file())
 
     def test_every_command_a_skill_names_exists(self) -> None:
         """A SKILL.md is an instruction an agent follows, not a document a
@@ -253,8 +258,26 @@ class Manifests(unittest.TestCase):
 
         plugin = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
         marketplace = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
+        codex = json.loads((ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
         self.assertEqual(__version__, plugin["version"])
         self.assertEqual(__version__, marketplace["metadata"]["version"])
+        self.assertEqual(__version__, codex["version"])
+
+    def test_the_codex_manifest_points_at_real_components(self) -> None:
+        """Codex loads hooks/hooks.json when a manifest names no hooks, and that
+        file is Claude Code's. Naming codex.json keeps each agent on its own."""
+        data = json.loads((ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        self.assertEqual("workbench", data["name"])
+        self.assertTrue((ROOT / data["skills"]).is_dir())
+        self.assertEqual("./hooks/codex.json", data["hooks"])
+        self.assertTrue((ROOT / data["hooks"]).is_file())
+
+    def test_the_codex_marketplace_points_at_a_real_plugin(self) -> None:
+        data = json.loads((ROOT / ".agents" / "plugins" / "marketplace.json").read_text(encoding="utf-8"))
+        self.assertTrue(data["plugins"])
+        for entry in data["plugins"]:
+            source = (ROOT / entry["source"]["path"]).resolve()
+            self.assertTrue((source / ".codex-plugin" / "plugin.json").is_file())
 
     def test_the_user_agent_carries_the_package_version(self) -> None:
         from workbench import __version__, http
@@ -295,11 +318,13 @@ class Manifests(unittest.TestCase):
         )
 
     def test_shared_references_exist_where_skills_point(self) -> None:
-        pattern = re.compile(r"\$\{CLAUDE_PLUGIN_ROOT\}/([\w./-]+\.md)")
+        """References are relative to the skill's own directory, the one
+        convention every agent that reads SKILL.md shares."""
+        pattern = re.compile(r"`(\.\./[\w./-]+\.md)`")
         for path in _skills():
             for reference in pattern.findall(path.read_text(encoding="utf-8")):
                 with self.subTest(skill=path.parent.name, reference=reference):
-                    self.assertTrue((ROOT / reference).is_file(), f"missing {reference}")
+                    self.assertTrue((path.parent / reference).resolve().is_file(), f"missing {reference}")
 
 
 if __name__ == "__main__":

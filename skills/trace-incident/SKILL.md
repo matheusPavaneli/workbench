@@ -6,7 +6,7 @@ description: Traces a production symptom to its cause and produces a minimal hot
 # trace-incident
 
 ```
-python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
+wb <args>    # wb not on PATH: python <this skill's directory>/../../lib/wb.py <args>
 ```
 
 The entry is a **symptom** — an error, an alert, a user report — not a ticket.
@@ -28,7 +28,7 @@ built on a guess extends the incident.
    effect. `route incident-<slug>` lists it as the `mitigate` step.
 
 3. **Trace it, do not guess it.** Follow the symptom to the code path with the
-   strongest search available: `${CLAUDE_PLUGIN_ROOT}/shared/code-search.md`.
+   strongest search available: `../../shared/code-search.md`.
    Then read the actual lines. Every step of the chain from symptom to cause
    needs a `file:line` you have read.
 
@@ -39,7 +39,7 @@ built on a guess extends the incident.
 
 5. **Plan the smallest fix.** `.workflow/incident-<slug>/sdd.json`, persona
    `incident-responder`, shape in
-   `${CLAUDE_PLUGIN_ROOT}/skills/plan-change/references/sdd.md`. Nothing tidied,
+   `../plan-change/references/sdd.md`. Nothing tidied,
    nothing renamed, nothing upgraded. `rollback` states the user-visible state
    during and after, not just "revert the commit".
 

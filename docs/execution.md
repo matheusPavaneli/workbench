@@ -234,9 +234,22 @@ time are appended to `.workflow/KEY/run.json`. At most `--max-sessions`
 (default 4) per call, each within `--timeout` seconds (default 1800).
 
 The agent sits behind one interface (`workbench.agent`): run a session on a
-prompt in a checkout, within a time limit, and report how it ended. Claude
-Code (`claude -p --output-format json`) is the only implementation; `--model`,
-`--permission-mode`, `--plugin-dir` and `--setting-sources` pass through to it. It is off by
+prompt in a checkout, within a time limit, and report how it ended.
+`--agent` (or `"run": {"agent": ...}`) picks the implementation, `claude-code`
+when neither is set:
+
+| Agent | Invocation | Report |
+|---|---|---|
+| `claude-code` | `claude -p --output-format json --permission-mode ...` | one JSON object |
+| `codex` | `codex exec --json --sandbox workspace-write` | JSON lines: `thread.started`, `turn.completed` usage, `turn.failed` |
+| `gemini` | `gemini -p --output-format json --approval-mode auto_edit` | one JSON object; tokens summed over `stats.models` |
+| `cursor` | `agent -p --output-format json --force --workspace <checkout>` | one JSON object |
+
+Each report is normalised to the same keys (`session_id`, `num_turns`,
+`usage`, `total_cost_usd`, `is_error`); one an agent does not report is absent,
+never guessed. `--model` goes to every agent; `--permission-mode`,
+`--plugin-dir` and `--setting-sources` are Claude Code's and are not passed to
+another. It is off by
 default: `"run": {"enabled": true}` in `.workflow/config.json`, or `WB_RUN=1`
 for one call. An autopilot over an expensive flow spends faster, and a headless
 session is where a stop nobody sees would hide.
@@ -341,10 +354,22 @@ Forward slashes work everywhere and are the simpler choice.
 
 ## Hooks
 
-`hooks/hooks.json` registers two Claude Code hooks. The decisions live in
-`lib/workbench/hooks.py`; `lib/wb_hook.py` only reads the event from stdin
-(1 MiB at most) and prints the answer. It is kept out of `wb` so that a hook
+Two hooks, one decision. `lib/workbench/hooks.py` decides (`guard_edit`,
+`check_stop`) in terms of paths and messages; `lib/workbench/hook_agents.py`
+reads each agent's payload and spells its answer; `lib/wb_hook.py
+[--agent NAME] <pre-tool-use|stop>` only reads the event from stdin (1 MiB at
+most) and prints the answer, Claude Code's when no agent is named. It is kept out of `wb` so that a hook
 firing on every edit does not fill the command history `--stats` reads.
+
+| Agent | Registered by | Edit tools | Refusal | Stop, strict |
+|---|---|---|---|---|
+| Claude Code | `hooks/hooks.json` | `Edit`, `Write`, `MultiEdit`, `NotebookEdit` | `hookSpecificOutput` deny | `decision: block`, once |
+| Codex | `hooks/codex.json` | `apply_patch` (paths read from the patch), `Edit`, `Write` | `hookSpecificOutput` deny | `decision: block`, once |
+| Gemini CLI | `wb hooks install gemini` | `write_file`, `replace` | `decision: deny` | `AfterAgent` deny, once |
+| Cursor | `wb hooks install cursor` | `Write` | `permission: deny` | one `followup_message`; Cursor's stop cannot block |
+
+Cursor refuses a tool call whose hook answer does not match its schema, so on
+an internal error the Cursor adapter prints nothing and reports on stderr.
 
 **The active ticket is the one the branch names**, among tickets with
 artifacts. `wb next` falls back to the most recently touched ticket; a hook

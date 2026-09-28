@@ -6,7 +6,7 @@ description: Turns a feature idea into a product decision - who, which metric, w
 # frame-product
 
 ```
-python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
+wb <args>    # wb not on PATH: python <this skill's directory>/../../lib/wb.py <args>
 ```
 
 The entry here is an **idea**, not a ticket. The output is a decision someone can
@@ -42,7 +42,7 @@ successful outcome.
 
 4. **Check it against the code.** Does something similar already exist? An idea
    that is a config change is not a project.
-   `${CLAUDE_PLUGIN_ROOT}/shared/code-search.md`.
+   `../../shared/code-search.md`.
 
 5. **Write `.workflow/idea-<slug>/frame.md`** with those answers, the chosen
    slice, and a recommendation: **build now**, **build later** (with what would

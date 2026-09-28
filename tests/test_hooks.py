@@ -296,6 +296,21 @@ class Manifest(unittest.TestCase):
                     with self.subTest(event=event):
                         self.assertEqual("command", hook["type"])
                         self.assertIn('"${CLAUDE_PLUGIN_ROOT}/lib/wb_hook.py"', hook["command"])
+                        self.assertNotIn("--agent", hook["command"], "Claude Code is the default; its command stays as it was")
+                        self.assertIn("timeout", hook)
+
+    def test_codex_calls_the_entry_point_through_its_own_plugin_root(self) -> None:
+        """WB-61: Codex substitutes ${PLUGIN_ROOT}, not ${CLAUDE_PLUGIN_ROOT}."""
+        config = json.loads((ROOT / "hooks" / "codex.json").read_text(encoding="utf-8"))["hooks"]
+        self.assertEqual({"PreToolUse", "Stop"}, set(config))
+        self.assertIn("apply_patch", config["PreToolUse"][0]["matcher"].split("|"))
+        expected = {"PreToolUse": "pre-tool-use", "Stop": "stop"}
+        for event, groups in config.items():
+            for group in groups:
+                for hook in group["hooks"]:
+                    with self.subTest(event=event):
+                        self.assertIn('"${PLUGIN_ROOT}/lib/wb_hook.py" --agent codex', hook["command"])
+                        self.assertTrue(hook["command"].endswith(f" {expected[event]}"))
                         self.assertIn("timeout", hook)
 
     def test_every_file_writing_tool_is_matched(self) -> None:

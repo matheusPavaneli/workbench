@@ -4,7 +4,7 @@ Ticket-to-PR development workflow skills for coding agents -- Claude Code,
 OpenAI Codex, Gemini CLI and Cursor -- with pluggable issue trackers (Jira
 Cloud, Azure DevOps, GitHub Issues, GitLab Issues, Linear, or a backlog in the repo).
 
-Ten skills, one CLI, two hooks, four agents, 1244 tests, no third-party dependencies.
+Ten skills, one CLI, two hooks, four agents, 1245 tests, no third-party dependencies.
 
 ## Quickstart
 

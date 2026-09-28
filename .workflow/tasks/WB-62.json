@@ -2,10 +2,10 @@
   "key": "WB-62",
   "title": "Make the Gemini CLI adapters work on a real session",
   "type": "bug",
-  "status": "open",
+  "status": "done",
   "desc": "Found testing WB-61 against Gemini CLI 0.61.0: (1) wb hooks install gemini writes \"python\" \"wb_hook.py\" ...; Gemini runs hooks through PowerShell on Windows, where a quoted command needs the & call operator, so the hook fails and the edit is allowed. (2) wb run --agent gemini exits 55 in a folder Gemini has not trusted, and in an untrusted folder Gemini ignores project hooks; GEMINI_CLI_TRUST_WORKSPACE=true fixes both. (3) headless Gemini throws on any tool that needs confirmation, and auto_edit leaves the shell needing it, so a session cannot run wb; allow exactly the wb invocation through a --policy file instead of yolo. (4) parse_gemini ignores the session_id Gemini reports.",
   "created": "2026-09-28T19:40:36Z",
-  "updated": "2026-09-28T19:40:36Z",
+  "updated": "2026-09-28T20:12:01Z",
   "comments": [],
   "linked": []
 }

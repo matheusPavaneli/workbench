@@ -1,0 +1,11 @@
+{
+  "key": "WB-61",
+  "title": "Make workbench agent-agnostic, not Claude Code only",
+  "type": "feature",
+  "status": "open",
+  "desc": "Decouple the edges from Claude Code so skills, hooks and wb run work with other coding agents (Codex, Cursor, Gemini CLI). Coupling today: (1) skills/*/SKILL.md call ${CLAUDE_PLUGIN_ROOT}/lib/wb.py and ${CLAUDE_PLUGIN_ROOT}/shared/*; (2) hooks/hooks.json + lib/wb_hook.py + lib/workbench/hooks.py speak only the Claude Code hook protocol; (3) lib/workbench/agent.py has claude -p as the only Agent, cli/run.py hardcodes --permission-mode and the claude install hint; (4) README/docs describe it as Claude Code only. Acceptance: skills resolve wb without CLAUDE_PLUGIN_ROOT (fallback to wb on PATH / WB_ROOT) and still work in Claude Code; hook logic behind an agent-neutral interface with Claude Code as one adapter; wb run selects an agent by config (run.agent), claude-code default, at least one second adapter or a documented seam; README install section per agent; all existing tests pass, new tests for path resolution and agent selection. Non-goals: dropping Claude Code support.",
+  "created": "2026-09-28T17:51:08Z",
+  "updated": "2026-09-28T17:51:08Z",
+  "comments": [],
+  "linked": []
+}

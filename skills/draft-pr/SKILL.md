@@ -6,7 +6,7 @@ description: Writes a PR title and description to .workflow/<KEY>/pr.md from the
 # draft-pr
 
 ```
-python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
+wb <args>    # wb not on PATH: python <this skill's directory>/../../lib/wb.py <args>
 ```
 
 This skill writes the description. Opening the PR is the user's call.

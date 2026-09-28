@@ -55,9 +55,14 @@ def register(subparsers: argparse._SubParsersAction) -> None:
     parser.add_argument("--until", choices=GOALS, default="pr", help="stop once committed, or once the PR is drafted")
     parser.add_argument("--max-sessions", type=int, default=MAX_SESSIONS, metavar="N")
     parser.add_argument("--timeout", type=int, default=agent.DEFAULT_TIMEOUT_S, metavar="S", help="seconds per session")
+    parser.add_argument(
+        "--agent", default="", choices=["", *agent.AGENTS], metavar="NAME",
+        help=f"the agent to drive: {', '.join(agent.AGENTS)}; run.agent in the repo config, else {agent.DEFAULT}",
+    )
     parser.add_argument("--model", default="", help="the agent's model; its own default when omitted")
     parser.add_argument(
-        "--permission-mode", default="", help="passed to claude; run.permission_mode in the repo config, else acceptEdits"
+        "--permission-mode", default="",
+        help="Claude Code only: run.permission_mode in the repo config, else acceptEdits",
     )
     parser.add_argument("--plugin-dir", default="", help="load workbench from this directory in each session")
     parser.add_argument(
@@ -83,15 +88,20 @@ def run(args: argparse.Namespace) -> int:
     if args.max_sessions < 1:
         raise UsageError("--max-sessions must be at least 1")
 
-    adapter = agent.ClaudeCode(
-        model=args.model,
-        permission_mode=args.permission_mode or _config(root).get("permission_mode") or "acceptEdits",
-        plugin_dir=args.plugin_dir,
-        setting_sources=args.setting_sources,
-    )
+    name = args.agent or str(_config(root).get("agent") or agent.DEFAULT)
+    try:
+        adapter = agent.select(
+            name,
+            model=args.model,
+            permission_mode=args.permission_mode or _config(root).get("permission_mode") or "acceptEdits",
+            plugin_dir=args.plugin_dir,
+            setting_sources=args.setting_sources,
+        )
+    except ValueError as exc:
+        raise ConfigError(f"wb run: {exc}", fix=[f'set "run": {{"agent": "{agent.DEFAULT}"}} in .workflow/config.json']) from exc
     missing = adapter.missing()
     if missing:
-        raise ConfigError(f"wb run cannot start an agent: {missing}", fix=["install Claude Code: npm i -g @anthropic-ai/claude-code"])
+        raise ConfigError(f"wb run cannot start an agent: {missing}", fix=[adapter.install])
 
     start_cli.run(argparse.Namespace(key=key, refresh=False))
     record = _load(key, root)

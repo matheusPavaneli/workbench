@@ -3,7 +3,8 @@
 
 Invoked as:
 
-    python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <group> <action> [flags]
+    wb <group> <action> [flags]              # bin/ on PATH
+    python "<plugin root>/lib/wb.py" <group> <action> [flags]
 
 The surface is deliberately closed. There is no free-text query flag -- no
 --jql, no --wiql, no --fields, no --url -- because a free-text flag is an
@@ -34,6 +35,7 @@ from workbench.cli import doctor as doctor_cli  # noqa: E402
 from workbench.cli import finish as finish_cli  # noqa: E402
 from workbench.cli import flow as flow_cli  # noqa: E402
 from workbench.cli import git as git_cli  # noqa: E402
+from workbench.cli import hooks as hooks_cli  # noqa: E402
 from workbench.cli import impl as impl_cli  # noqa: E402
 from workbench.cli import init as init_cli  # noqa: E402
 from workbench.cli import next as next_cli  # noqa: E402
@@ -57,6 +59,7 @@ GROUPS = {
     "finish": finish_cli,
     "approve": approve_cli,
     "run": run_cli,
+    "hooks": hooks_cli,
     "status": status_cli,
     "next": next_cli,
     "route": route_cli,

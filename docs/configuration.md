@@ -91,7 +91,7 @@ drops another.
 | `execute` | by hand | `false` refuses every `--execute`, standing |
 | `light_max_lines` | by hand | the most estimated lines changed a plan may have and stay on the light tier; 100 when absent |
 | `light_path` | by hand | `false` puts every ticket on the standard route: `wb start` stops offering the light path, and `wb finish` moves a ticket already on it to the standard route; on when absent |
-| `run` | by hand | `{"enabled": true}` turns `wb run` on for this repo (`WB_RUN=1` does for one call); `"permission_mode"` is passed to each `claude` session, `acceptEdits` when absent; off when absent |
+| `run` | by hand | `{"enabled": true}` turns `wb run` on for this repo (`WB_RUN=1` does for one call); `"agent"` picks the agent it drives (`claude-code`, `codex`, `gemini`, `cursor`; `claude-code` when absent, `--agent` overrides it); `"permission_mode"` is passed to each Claude Code session, `acceptEdits` when absent; off when absent |
 | `hooks` | by hand | `false` turns the plugin's hooks off; `"strict"` makes the stop hook block |
 | `field_map` | by hand | custom tracker fields this repo wants read, by destination |
 | `generated` | by hand | globs of generated code (`["src/gen/**"]`) that follow a planned change through the scope guard unlisted; none when absent |

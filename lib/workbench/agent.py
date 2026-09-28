@@ -2,10 +2,12 @@
 
 ``wb run`` needs exactly one thing from an agent: run one session on a prompt
 in a checkout, within a time limit, and say what it cost and how it ended.
-That is the whole seam. Claude Code is the first and only implementation; a
-second agent is its own ticket, written against this interface when someone
-needs it -- designing a plugin system for adapters nobody asked for would be
-the expensive part of this module and the unused one.
+That is the whole seam. Claude Code, Codex, Gemini CLI and Cursor implement
+it, each as one non-interactive invocation of its own CLI. Every adapter
+normalises its agent's report into the same keys -- ``session_id``,
+``num_turns``, ``usage``, ``total_cost_usd``, ``is_error`` -- so ``run.json``
+reads the same whichever agent wrote it, and a key the agent does not report
+is simply absent.
 
 This module starts a process, so it is one of the few that may (see
 ``tests/test_structure.py``): with no shell, an empty stdin and a timeout.
@@ -18,7 +20,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import Callable, Protocol
 
 DEFAULT_TIMEOUT_S = 1800
 
@@ -51,6 +53,7 @@ class Session:
 
 class Adapter(Protocol):
     name: str
+    install: str
 
     def missing(self) -> str | None:
         """Why this agent cannot run here, or ``None``."""
@@ -70,6 +73,7 @@ class ClaudeCode:
     plugin_dir: str = ""
     setting_sources: str = ""
     name: str = "claude-code"
+    install: str = "install Claude Code: npm i -g @anthropic-ai/claude-code"
 
     def missing(self) -> str | None:
         return None if shutil.which("claude") else "claude is not on PATH"
@@ -86,25 +90,113 @@ class ClaudeCode:
         return argv
 
     def session(self, prompt: str, root: Path, timeout_s: int) -> Session:
-        try:
-            done = subprocess.run(
-                self.argv(prompt),
-                cwd=str(root),
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                stdin=subprocess.DEVNULL,
-                timeout=timeout_s,
-                check=False,
-            )
-        except subprocess.TimeoutExpired:
-            return Session(exit_code=124, timed_out=True, error=f"timed out after {timeout_s}s")
-        except OSError as exc:
-            return Session(exit_code=126, error=f"could not start claude: {exc}")
-        report = parse(done.stdout)
-        error = "" if done.returncode == 0 else (done.stderr or "").strip()[-300:]
-        return Session(exit_code=done.returncode, report=report, error=error)
+        return _session("claude", self.argv(prompt), root, timeout_s, parse)
+
+
+@dataclass
+class Codex:
+    """``codex exec --json``: one non-interactive session, reported as JSON lines."""
+
+    model: str = ""
+    name: str = "codex"
+    install: str = "install Codex: npm i -g @openai/codex"
+
+    def missing(self) -> str | None:
+        return None if shutil.which("codex") else "codex is not on PATH"
+
+    def argv(self, prompt: str) -> list[str]:
+        codex = shutil.which("codex") or "codex"
+        argv = [codex, "exec", "--json", "--sandbox", "workspace-write"]
+        if self.model:
+            argv += ["--model", self.model]
+        return argv + [prompt]
+
+    def session(self, prompt: str, root: Path, timeout_s: int) -> Session:
+        return _session("codex", self.argv(prompt), root, timeout_s, parse_codex)
+
+
+@dataclass
+class Gemini:
+    """``gemini -p --output-format json``: one headless session, edits auto-approved."""
+
+    model: str = ""
+    name: str = "gemini"
+    install: str = "install Gemini CLI: npm i -g @google/gemini-cli"
+
+    def missing(self) -> str | None:
+        return None if shutil.which("gemini") else "gemini is not on PATH"
+
+    def argv(self, prompt: str) -> list[str]:
+        gemini = shutil.which("gemini") or "gemini"
+        argv = [gemini, "-p", prompt, "--output-format", "json", "--approval-mode", "auto_edit"]
+        if self.model:
+            argv += ["--model", self.model]
+        return argv
+
+    def session(self, prompt: str, root: Path, timeout_s: int) -> Session:
+        return _session("gemini", self.argv(prompt), root, timeout_s, parse_gemini)
+
+
+@dataclass
+class Cursor:
+    """Cursor's ``agent -p --output-format json --force``: one headless session."""
+
+    model: str = ""
+    name: str = "cursor"
+    install: str = "install the Cursor CLI: see https://cursor.com/docs/cli/using"
+
+    def missing(self) -> str | None:
+        return None if shutil.which("agent") else "agent (the Cursor CLI) is not on PATH"
+
+    def argv(self, prompt: str, root: Path) -> list[str]:
+        cursor = shutil.which("agent") or "agent"
+        argv = [cursor, "-p", prompt, "--output-format", "json", "--force", "--workspace", str(root)]
+        if self.model:
+            argv += ["--model", self.model]
+        return argv
+
+    def session(self, prompt: str, root: Path, timeout_s: int) -> Session:
+        return _session("agent", self.argv(prompt, root), root, timeout_s, parse)
+
+
+AGENTS: dict[str, type] = {"claude-code": ClaudeCode, "codex": Codex, "gemini": Gemini, "cursor": Cursor}
+DEFAULT = "claude-code"
+
+
+def select(name: str, **settings: str) -> Adapter:
+    """The adapter called ``name``, given only the settings it understands.
+
+    ``permission_mode``, ``plugin_dir`` and ``setting_sources`` are Claude
+    Code's; another agent is never handed a flag it would reject.
+    """
+    if name not in AGENTS:
+        raise ValueError(f"unknown agent {name!r}; expected one of: {', '.join(AGENTS)}")
+    kind = AGENTS[name]
+    accepted = set(getattr(kind, "__dataclass_fields__", {}))
+    adapter: Adapter = kind(**{key: value for key, value in settings.items() if key in accepted and value})
+    return adapter
+
+
+def _session(program: str, argv: list[str], root: Path, timeout_s: int, reader: Callable[[str], dict]) -> Session:
+    try:
+        done = subprocess.run(
+            argv,
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdin=subprocess.DEVNULL,
+            timeout=timeout_s,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return Session(exit_code=124, timed_out=True, error=f"timed out after {timeout_s}s")
+    except OSError as exc:
+        return Session(exit_code=126, error=f"could not start {program}: {exc}")
+    report = reader(done.stdout)
+    error = "" if done.returncode == 0 else (done.stderr or "").strip()[-300:]
+    return Session(exit_code=done.returncode, report=report, error=error)
 
 
 def parse(stdout: str) -> dict:
@@ -114,3 +206,68 @@ def parse(stdout: str) -> dict:
     except (TypeError, ValueError):
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def parse_codex(stdout: str) -> dict:
+    """The report in ``codex exec --json``'s event stream, or ``{}``.
+
+    One JSON object per line: ``thread.started`` carries the id, each
+    ``turn.completed`` its usage, and ``turn.failed`` or ``error`` a failure.
+    A line that is not an object is skipped, never raised on.
+    """
+    report: dict = {}
+    usage: dict = {}
+    turns = 0
+    for line in (stdout or "").splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        kind = event.get("type")
+        if kind == "thread.started" and event.get("thread_id"):
+            report["session_id"] = event["thread_id"]
+        elif kind == "turn.completed":
+            turns += 1
+            _add(usage, event.get("usage"))
+        elif kind in ("turn.failed", "error"):
+            report["is_error"] = True
+    if turns:
+        report["num_turns"] = turns
+    if usage:
+        report["usage"] = usage
+    return report
+
+
+def parse_gemini(stdout: str) -> dict:
+    """The report in ``gemini --output-format json``, or ``{}``.
+
+    Token counts are summed over every model in ``stats.models``; Gemini reports
+    no session id and no cost, so those keys stay absent.
+    """
+    payload = parse(stdout)
+    if not payload:
+        return {}
+    report: dict = {}
+    if payload.get("error"):
+        report["is_error"] = True
+    usage: dict = {}
+    stats = payload.get("stats")
+    models = stats.get("models") if isinstance(stats, dict) else None
+    if isinstance(models, dict):
+        for model in models.values():
+            if isinstance(model, dict):
+                _add(usage, model.get("tokens"))
+    if usage:
+        report["usage"] = usage
+    return report
+
+
+def _add(total: dict, counts: object) -> None:
+    """Add every whole-number count in ``counts`` into ``total``."""
+    if not isinstance(counts, dict):
+        return
+    for key, value in counts.items():
+        if isinstance(value, int) and not isinstance(value, bool):
+            total[key] = total.get(key, 0) + value

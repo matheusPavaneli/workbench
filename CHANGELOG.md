@@ -11,6 +11,35 @@ command's own output, and one that removes it. A `--json` payload that loses or
 renames a key raises its `schema` number in the same release, and
 `contract.VERSIONS` is asserted against the real output so it cannot drift.
 
+## Unreleased
+
+workbench runs under Claude Code, OpenAI Codex, Gemini CLI and Cursor: the
+same skills, the same scope guard and the same headless runner.
+
+### Added
+
+- **`wb run --agent claude-code|codex|gemini|cursor`**, or `"run": {"agent":
+  ...}` in the repo config. Each agent's report is normalised to the same
+  `run.json` keys; one it does not report is absent. **Upgrade cost:** none,
+  `claude-code` is the default.
+- **`wb hooks install gemini|cursor [--write]`** proposes the scope guard's
+  entries for `.gemini/settings.json` or `.cursor/hooks.json` and, with
+  `--write`, merges them in, keeping every key it did not write. **Upgrade
+  cost:** none.
+- **A Codex plugin**: `.codex-plugin/plugin.json`, `.agents/plugins/marketplace.json`
+  and `hooks/codex.json`, whose `PreToolUse` reads the paths out of an
+  `apply_patch`. **Upgrade cost:** none.
+- `lib/wb_hook.py --agent NAME`; with no agent it answers as Claude Code, as
+  before.
+
+### Changed
+
+- **Skills call `wb`**, falling back to `../../lib/wb.py` relative to the
+  skill, instead of `${CLAUDE_PLUGIN_ROOT}/lib/wb.py`, which only Claude Code
+  substitutes. Shared references are relative to the skill too. **Upgrade
+  cost:** none in Claude Code, which puts the plugin's `bin/` on its shell's
+  PATH; elsewhere, put `bin/` on PATH.
+
 ## 1.2.0
 
 Work in a critical zone is planned from the start, not after a finished fix,

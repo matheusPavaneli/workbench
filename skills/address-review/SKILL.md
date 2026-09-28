@@ -6,7 +6,7 @@ description: Turns PR review comments into a triaged change list, applies the ac
 # address-review
 
 ```
-python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
+wb <args>    # wb not on PATH: python <this skill's directory>/../../lib/wb.py <args>
 ```
 
 ## Steps
@@ -27,7 +27,7 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
 
 3. **Verify before agreeing.** A reviewer can be wrong about this codebase. Read
    the code the comment refers to before accepting it —
-   `${CLAUDE_PLUGIN_ROOT}/shared/code-search.md` — and quote the line in the
+   `../../shared/code-search.md` — and quote the line in the
    reply when you disagree.
 
 4. **Apply the accepted changes.** Same discipline as `implement-change`:

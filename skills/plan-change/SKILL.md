@@ -6,7 +6,7 @@ description: Turns .workflow/<KEY>/triage.json and the code into an audited impl
 # plan-change
 
 ```
-python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
+wb <args>    # wb not on PATH: python <this skill's directory>/../../lib/wb.py <args>
 ```
 
 ## Steps
@@ -33,7 +33,7 @@ python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
    codebase needs a `file:line` and the text of that line, because the audit in
    step 7 reopens each one. A claim you cannot cite is a question, not a fact —
    put it in `questions`. Search with the strongest tool available and quote
-   only lines you actually read: `${CLAUDE_PLUGIN_ROOT}/shared/code-search.md`.
+   only lines you actually read: `../../shared/code-search.md`.
 
 5. **Find the raised bar.** `repo zones <path>...` with every file you plan to
    touch. Billing, auth, user data, migrations and secrets are held to a higher

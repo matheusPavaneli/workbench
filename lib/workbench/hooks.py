@@ -1,4 +1,4 @@
-"""Claude Code hooks: the scope guard at the moment of the edit.
+"""Agent hooks: the scope guard at the moment of the edit.
 
 ``wb impl check`` reports scope when somebody runs it, and the skill asks the
 agent to run it "after each step or two". A check that depends on being
@@ -21,6 +21,10 @@ then it guards nothing.
 
 The active ticket is the one the **branch** names, never the most recently
 touched one: ``wb next`` may guess, a hook that refuses edits may not.
+
+The decisions (``guard_edit``, ``check_stop``) speak no agent's protocol: they
+take paths and return a reason or a message. ``pre_tool_use`` and ``stop`` are
+the Claude Code wrappers; every other agent's wrapper is in ``hook_agents``.
 """
 
 from __future__ import annotations
@@ -64,20 +68,20 @@ def active(root: Path) -> str | None:
     return status.key_from_branch(status.keys(root), root)
 
 
-def pre_tool_use(payload: dict, root: Path) -> dict | None:
-    """The answer to one edit: a deny, or ``None`` to stay out of the way."""
+def guard_edit(paths: list[str], root: Path) -> str | None:
+    """Why an edit to ``paths`` is refused, or ``None`` to let it through."""
     if mode(root) == OFF:
         return None
 
-    field = PATH_FIELDS.get(str(payload.get("tool_name", "")))
-    tool_input = payload.get("tool_input")
-    if not field or not isinstance(tool_input, dict) or not tool_input.get(field):
-        return None
-
-    relative = _relative(root, str(tool_input[field]))
-    if relative is None or relative.split("/", 1)[0].casefold() == artifacts.WORKFLOW_DIR:
-        # Outside the repo is not this tool's business, and the plan itself
-        # has to be writable or it could never be corrected.
+    relatives = []
+    for raw in paths:
+        relative = _relative(root, raw)
+        if relative is None or relative.split("/", 1)[0].casefold() == artifacts.WORKFLOW_DIR:
+            # Outside the repo is not this tool's business, and the plan itself
+            # has to be writable or it could never be corrected.
+            continue
+        relatives.append(relative)
+    if not relatives:
         return None
 
     key = active(root)
@@ -91,28 +95,28 @@ def pre_tool_use(payload: dict, root: Path) -> dict | None:
 
     why = audit.standing(report, plan)
     if why is not None:
-        return _deny(
-            f"{key}: the plan {why}, so no edit is covered by it. "
-            f"Re-run: wb sdd audit {key} -- then retry this edit."
-        )
+        return f"{key}: the plan {why}, so no edit is covered by it. Re-run: wb sdd audit {key} -- then retry this edit."
 
     planned = _planned(plan)
-    if relative in planned or relative in scope.claims(key, root):
-        return None
-    if companions.reason(relative, planned, companions.generated_globs(root)):
-        # The same tie impl check accepts: a test, declaration, lockfile or
-        # generated file following a planned one.
-        return None
+    claimed = scope.claims(key, root)
+    generated = companions.generated_globs(root)
+    for relative in relatives:
+        if relative in planned or relative in claimed:
+            continue
+        if companions.reason(relative, planned, generated):
+            # The same tie impl check accepts: a test, declaration, lockfile or
+            # generated file following a planned one.
+            continue
+        return (
+            f"{relative} is not in the audited plan for {key}. "
+            "Either leave it alone, or say why the plan was wrong and add it: "
+            f'wb sdd amend {key} {relative} --why "<reason>" (--new for a file to create)'
+        )
+    return None
 
-    return _deny(
-        f"{relative} is not in the audited plan for {key}. "
-        "Either leave it alone, or say why the plan was wrong and add it: "
-        f'wb sdd amend {key} {relative} --why "<reason>" (--new for a file to create)'
-    )
 
-
-def stop(payload: dict, root: Path) -> dict | None:
-    """A report on unverified work, or ``None`` when there is nothing to say."""
+def check_stop(root: Path) -> tuple[str, bool] | None:
+    """``(message, strict)`` about unverified work, or ``None`` when there is nothing to say."""
     setting = mode(root)
     if setting == OFF:
         return None
@@ -132,9 +136,30 @@ def stop(payload: dict, root: Path) -> dict | None:
     why = verify.standing(evidence, audit.digest(plan), gitctx.tree(root))
     if why is None:
         return None
+    return f"{key}: planned files changed but the verification {why}. Run: wb impl verify {key}", setting == STRICT
 
-    message = f"{key}: planned files changed but the verification {why}. Run: wb impl verify {key}"
-    if setting == STRICT and not payload.get("stop_hook_active"):
+
+def pre_tool_use(payload: dict, root: Path) -> dict | None:
+    """Claude Code's answer to one edit: a deny, or ``None`` to stay out of the way."""
+    if mode(root) == OFF:
+        return None
+
+    field = PATH_FIELDS.get(str(payload.get("tool_name", "")))
+    tool_input = payload.get("tool_input")
+    if not field or not isinstance(tool_input, dict) or not tool_input.get(field):
+        return None
+
+    reason = guard_edit([str(tool_input[field])], root)
+    return None if reason is None else _deny(reason)
+
+
+def stop(payload: dict, root: Path) -> dict | None:
+    """Claude Code's report on unverified work, or ``None`` when there is nothing to say."""
+    found = check_stop(root)
+    if found is None:
+        return None
+    message, strict = found
+    if strict and not payload.get("stop_hook_active"):
         # stop_hook_active means this stop already follows a block: blocking
         # again would loop, so the second time it only reports.
         return {"decision": "block", "reason": message}

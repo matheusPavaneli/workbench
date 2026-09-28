@@ -6,7 +6,7 @@ description: Executes an audited plan from .workflow/<KEY>/sdd.json, holding the
 # implement-change
 
 ```
-python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py" <args>
+wb <args>    # wb not on PATH: python <this skill's directory>/../../lib/wb.py <args>
 ```
 
 ## Steps

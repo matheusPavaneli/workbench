@@ -1,9 +1,10 @@
 # workbench
 
-Ticket-to-PR development workflow skills for Claude Code, with pluggable issue
-trackers (Jira Cloud, Azure DevOps, GitHub Issues, GitLab Issues, Linear, or a backlog in the repo).
+Ticket-to-PR development workflow skills for coding agents -- Claude Code,
+OpenAI Codex, Gemini CLI and Cursor -- with pluggable issue trackers (Jira
+Cloud, Azure DevOps, GitHub Issues, GitLab Issues, Linear, or a backlog in the repo).
 
-Ten skills, one CLI, two hooks, 1206 tests, no third-party dependencies.
+Ten skills, one CLI, two hooks, four agents, 1244 tests, no third-party dependencies.
 
 ## Quickstart
 
@@ -16,7 +17,7 @@ wb next                                # the one command to run now
 wb status                              # everything in flight
 ```
 
-In a Claude Code session the skills call `wb` themselves. In a terminal, put
+In an agent session the skills call `wb` themselves. In a terminal, put
 the plugin's `bin/` on your PATH first (see [Install](#install)).
 
 ## Two design rules
@@ -41,22 +42,52 @@ off standing.
 
 ## Install
 
+Requires Python 3.9+. The same skills, CLI and scope guard serve every agent;
+what differs is how each one loads them.
+
+| Agent | Skills | Scope guard (hooks) | `wb run` |
+|---|---|---|---|
+| Claude Code | plugin | plugin (`hooks/hooks.json`) | `--agent claude-code` (default) |
+| Codex | plugin | plugin (`hooks/codex.json`) | `--agent codex` |
+| Gemini CLI | `.agents/skills/` | `wb hooks install gemini --write` | `--agent gemini` |
+| Cursor | `.agents/skills/` | `wb hooks install cursor --write` | `--agent cursor` |
+
+**Claude Code**
+
 ```
 /plugin marketplace add matheusPavaneli/workbench
 /plugin install workbench@workbench
 ```
 
-`wb` is `python "${CLAUDE_PLUGIN_ROOT}/lib/wb.py"`. Requires Python 3.9+.
+**Codex** reads the repo's `.agents/plugins/marketplace.json` and the
+`.codex-plugin/plugin.json` manifest: add this repo as a plugin marketplace
+in Codex and install `workbench` from it. Its hooks are `hooks/codex.json`, so
+Codex never loads the Claude-format `hooks/hooks.json`.
 
-Skills call it by that path. To type `wb` in a terminal, put the plugin's `bin/`
-directory on PATH: it holds `wb` (sh) and `wb.cmd` (Windows), both running the
-same `lib/wb.py`. From a clone:
+**Gemini CLI and Cursor** load skills from `.agents/skills/` (one repo) or
+`~/.agents/skills/` (every repo), and hooks from the project. From a clone:
+
+```sh
+cp -r skills/* ~/.agents/skills/       # or link them, to follow upgrades
+wb hooks install gemini --write        # or: cursor -- merges into .gemini/settings.json / .cursor/hooks.json
+```
+
+`wb hooks install` proposes first and writes only with `--write`; it keeps every
+key it did not write, and a rerun replaces its own entries. The command it
+writes names this clone's `lib/wb_hook.py`, so run it again after moving the
+clone. Cursor's stop hook cannot block, so `"hooks": "strict"` there submits one
+follow-up message instead.
+
+**`wb` on PATH.** Skills call `wb`, falling back to `lib/wb.py` relative to the
+skill's own directory. Put the plugin's `bin/` directory on PATH: it holds `wb`
+(sh) and `wb.cmd` (Windows), both running the same `lib/wb.py`. Claude Code puts
+it there for its shell tool on its own. From a clone:
 
 ```sh
 export PATH="$PWD/bin:$PATH"           # PowerShell: $env:Path = "$PWD\bin;$env:Path"
 ```
 
-For the installed plugin, use the directory Claude Code installed it into.
+For an installed plugin, use the directory the agent installed it into.
 
 ### One pass to a working setup
 
@@ -384,6 +415,11 @@ being written, both stay silent.
 `"hooks": "strict"` makes `Stop` block instead of report. `WB_NO_HOOKS=1` or
 `"hooks": false` turns both off.
 
+The decision is made once, in `lib/workbench/hooks.py`; each agent's protocol
+-- which tool writes a file, how a refusal is spelled -- is an adapter in
+`lib/workbench/hook_agents.py`. Codex's `apply_patch` is held to the plan path
+by path, and a patch touching one unplanned file is refused whole.
+
 ## Quality presets
 
 The preset sets the bar a plan must clear. It never lowers the floor: a unit test
@@ -453,7 +489,8 @@ wb doctor  everything that has to be true, in one pass
 wb start  KEY [--refresh]      read the ticket, branch for it, route it: one command to pick up work
 wb finish KEY -m MESSAGE [--commit]   light path: every check against the real change, then the commit (or its command)
 wb approve [KEY] [TOKEN]       show the one decision waiting on you, or approve exactly it by its token
-wb run    KEY [--until commit|pr]   drive it headless through Claude Code, stopping at every decision (off by default)
+wb run    KEY [--until commit|pr] [--agent NAME]   drive it headless, stopping at every decision (off by default)
+wb hooks   install gemini|cursor [--write]   put the scope guard into an agent's project config
 wb route   [KEY]               the steps this change actually needs
 wb next    [KEY]               the single command to run now
 wb status  [KEY] | --stats     where work stands, and what to run next

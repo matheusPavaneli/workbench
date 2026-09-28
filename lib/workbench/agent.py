@@ -16,6 +16,7 @@ This module starts a process, so it is one of the few that may (see
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -104,37 +105,78 @@ class Codex:
     def missing(self) -> str | None:
         return None if shutil.which("codex") else "codex is not on PATH"
 
-    def argv(self, prompt: str) -> list[str]:
+    def argv(self) -> list[str]:
+        """The prompt is read from stdin (``-``); see ``_session``."""
         codex = shutil.which("codex") or "codex"
         argv = [codex, "exec", "--json", "--sandbox", "workspace-write"]
         if self.model:
             argv += ["--model", self.model]
-        return argv + [prompt]
+        return argv + ["-"]
 
     def session(self, prompt: str, root: Path, timeout_s: int) -> Session:
-        return _session("codex", self.argv(prompt), root, timeout_s, parse_codex)
+        return _session("codex", self.argv(), root, timeout_s, parse_codex, prompt=prompt)
 
 
 @dataclass
 class Gemini:
-    """``gemini -p --output-format json``: one headless session, edits auto-approved."""
+    """``gemini -p --output-format json``: one headless session, edits auto-approved.
+
+    Headless Gemini refuses any tool that would ask for confirmation, and
+    ``auto_edit`` leaves the shell asking -- so a session could edit files but
+    never run ``wb``. A policy file allows exactly the ``wb`` invocation the
+    prompt names, rather than ``yolo``, which would allow every command. Gemini
+    also runs headless only in a folder it trusts, and loads project hooks only
+    there; the session is told to trust the checkout ``wb run`` was started in.
+    """
 
     model: str = ""
+    # The ``python "<path>/wb.py"`` prefix the session prompt tells the agent to use.
+    wb: str = ""
     name: str = "gemini"
     install: str = "install Gemini CLI: npm i -g @google/gemini-cli"
 
     def missing(self) -> str | None:
         return None if shutil.which("gemini") else "gemini is not on PATH"
 
-    def argv(self, prompt: str) -> list[str]:
+    def argv(self, policy: Path | None = None) -> list[str]:
+        """The prompt is read from stdin, and ``-p`` is appended to it; see ``_session``."""
         gemini = shutil.which("gemini") or "gemini"
-        argv = [gemini, "-p", prompt, "--output-format", "json", "--approval-mode", "auto_edit"]
+        argv = [gemini, "-p", GEMINI_FOLLOW, "--output-format", "json", "--approval-mode", "auto_edit"]
+        if policy is not None:
+            argv += ["--policy", str(policy)]
         if self.model:
             argv += ["--model", self.model]
         return argv
 
     def session(self, prompt: str, root: Path, timeout_s: int) -> Session:
-        return _session("gemini", self.argv(prompt), root, timeout_s, parse_gemini)
+        policy = None
+        if self.wb:
+            policy = root / ".workflow" / GEMINI_POLICY
+            policy.parent.mkdir(parents=True, exist_ok=True)
+            policy.write_text(gemini_policy(self.wb), encoding="utf-8")
+        env = {**os.environ, "GEMINI_CLI_TRUST_WORKSPACE": "true"}
+        return _session("gemini", self.argv(policy), root, timeout_s, parse_gemini, env, prompt=prompt)
+
+
+GEMINI_POLICY = "gemini-policy.toml"
+# Gemini appends -p to what stdin carries; -p also keeps the run headless.
+GEMINI_FOLLOW = "Follow the instructions above."
+
+
+def gemini_policy(wb: str) -> str:
+    """A Gemini policy allowing the shell to run ``wb`` and nothing else.
+
+    Gemini checks each command of a chain on its own, so ``wb ... && rm -rf`` is
+    still refused at ``rm``.
+    """
+    return (
+        "# Written by wb run for each Gemini session: the shell may run workbench's CLI.\n"
+        "[[rule]]\n"
+        'toolName = "run_shell_command"\n'
+        f"commandPrefix = {json.dumps(wb)}\n"
+        'decision = "allow"\n'
+        "priority = 100\n"
+    )
 
 
 @dataclass
@@ -177,16 +219,29 @@ def select(name: str, **settings: str) -> Adapter:
     return adapter
 
 
-def _session(program: str, argv: list[str], root: Path, timeout_s: int, reader: Callable[[str], dict]) -> Session:
+def _session(
+    program: str,
+    argv: list[str],
+    root: Path,
+    timeout_s: int,
+    reader: Callable[[str], dict],
+    env: dict | None = None,
+    prompt: str = "",
+) -> Session:
+    """Run one session. ``prompt``, when given, goes on stdin: on Windows npm
+    installs gemini and codex as ``.cmd`` shims, and cmd.exe cuts an argument
+    at its first newline, so a multi-line prompt in argv reaches the agent
+    truncated. Otherwise stdin is empty, never the caller's."""
     try:
         done = subprocess.run(
             argv,
             cwd=str(root),
+            env=env,
             capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
-            stdin=subprocess.DEVNULL,
+            input=prompt,
             timeout=timeout_s,
             check=False,
         )
@@ -244,12 +299,14 @@ def parse_gemini(stdout: str) -> dict:
     """The report in ``gemini --output-format json``, or ``{}``.
 
     Token counts are summed over every model in ``stats.models``; Gemini reports
-    no session id and no cost, so those keys stay absent.
+    no cost, so that key stays absent.
     """
     payload = parse(stdout)
     if not payload:
         return {}
     report: dict = {}
+    if payload.get("session_id"):
+        report["session_id"] = payload["session_id"]
     if payload.get("error"):
         report["is_error"] = True
     usage: dict = {}

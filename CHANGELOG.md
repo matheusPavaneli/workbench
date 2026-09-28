@@ -40,6 +40,25 @@ same skills, the same scope guard and the same headless runner.
   cost:** none in Claude Code, which puts the plugin's `bin/` on its shell's
   PATH; elsewhere, put `bin/` on PATH.
 
+### Fixed
+
+Found running the Gemini adapters against Gemini CLI 0.61.0 (WB-62).
+
+- **`wb hooks install gemini` on Windows** writes the command with
+  PowerShell's `&` call operator. Gemini runs Windows hooks in PowerShell,
+  where a quoted program is a string, so the guard never ran and every edit
+  went through. **Upgrade cost:** rerun `wb hooks install gemini --write`.
+- **`wb run --agent gemini` runs at all.** It exited 55 in any folder Gemini
+  had not trusted; the session now runs with `GEMINI_CLI_TRUST_WORKSPACE=true`.
+  **Upgrade cost:** none.
+- **A Gemini session can run `wb`.** Headless Gemini refuses a tool that would
+  ask, and `auto_edit` leaves the shell asking; a policy file now allows the
+  `wb` invocation and nothing else. **Upgrade cost:** none.
+- **A multi-line prompt reaches Gemini and Codex whole on Windows.** It now
+  goes on stdin; as an argument, cmd.exe cut it at the first newline.
+  **Upgrade cost:** none.
+- The Gemini report carries its `session_id`.
+
 ## 1.2.0
 
 Work in a critical zone is planned from the start, not after a finished fix,

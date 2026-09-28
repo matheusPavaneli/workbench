@@ -96,6 +96,7 @@ def run(args: argparse.Namespace) -> int:
             permission_mode=args.permission_mode or _config(root).get("permission_mode") or "acceptEdits",
             plugin_dir=args.plugin_dir,
             setting_sources=args.setting_sources,
+            wb=f'python "{WB}"',
         )
     except ValueError as exc:
         raise ConfigError(f"wb run: {exc}", fix=[f'set "run": {{"agent": "{agent.DEFAULT}"}} in .workflow/config.json']) from exc

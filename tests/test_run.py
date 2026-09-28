@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -247,13 +249,31 @@ class OtherAdapters(unittest.TestCase):
 
     def test_the_codex_command_runs_exec_with_json_and_workspace_writes(self) -> None:
         with mock.patch("shutil.which", return_value="/bin/codex"):
-            argv = agent.Codex(model="gpt-5").argv("go")
-            plain = agent.Codex().argv("go")
+            argv = agent.Codex(model="gpt-5").argv()
+            plain = agent.Codex().argv()
         self.assertEqual(["/bin/codex", "exec", "--json"], argv[:3])
         self.assertEqual("workspace-write", argv[argv.index("--sandbox") + 1])
         self.assertEqual("gpt-5", argv[argv.index("--model") + 1])
-        self.assertEqual("go", argv[-1])
+        self.assertEqual("-", argv[-1], "the prompt comes on stdin")
         self.assertNotIn("--model", plain)
+
+    def test_a_multi_line_prompt_reaches_gemini_and_codex_on_stdin_not_argv(self) -> None:
+        """WB-62: npm installs both as .cmd shims on Windows, and cmd.exe cuts an
+        argument at its first newline -- the real run got no JSON back."""
+        prompt = "Pick up ticket ABC-1." + chr(10) + chr(10) + "Do not push."
+        done = subprocess.CompletedProcess([], 0, stdout="{}", stderr="")
+        for adapter in (agent.Gemini(), agent.Codex()):
+            with self.subTest(agent=adapter.name), tempfile.TemporaryDirectory() as tmp,                     mock.patch("shutil.which", return_value="/bin/x"),                     mock.patch("subprocess.run", return_value=done) as started:
+                adapter.session(prompt, Path(tmp), 5)
+                self.assertEqual(prompt, started.call_args.kwargs["input"])
+                self.assertFalse(any(chr(10) in part for part in started.call_args.args[0]))
+
+    def test_the_other_agents_get_an_empty_stdin_never_the_caller_s(self) -> None:
+        done = subprocess.CompletedProcess([], 0, stdout="{}", stderr="")
+        for adapter in (agent.ClaudeCode(), agent.Cursor()):
+            with self.subTest(agent=adapter.name), tempfile.TemporaryDirectory() as tmp,                     mock.patch("shutil.which", return_value="/bin/x"),                     mock.patch("subprocess.run", return_value=done) as started:
+                adapter.session("go", Path(tmp), 5)
+                self.assertEqual("", started.call_args.kwargs["input"])
 
     def test_the_codex_event_stream_becomes_the_same_report(self) -> None:
         stream = chr(10).join([
@@ -276,8 +296,8 @@ class OtherAdapters(unittest.TestCase):
 
     def test_the_gemini_command_is_headless_json_with_edits_approved(self) -> None:
         with mock.patch("shutil.which", return_value="/bin/gemini"):
-            argv = agent.Gemini(model="gemini-3-pro").argv("go")
-        self.assertEqual(["/bin/gemini", "-p", "go", "--output-format", "json"], argv[:5])
+            argv = agent.Gemini(model="gemini-3-pro").argv()
+        self.assertEqual(["/bin/gemini", "-p", agent.GEMINI_FOLLOW, "--output-format", "json"], argv[:5])
         self.assertEqual("auto_edit", argv[argv.index("--approval-mode") + 1])
         self.assertEqual("gemini-3-pro", argv[argv.index("--model") + 1])
 
@@ -291,6 +311,31 @@ class OtherAdapters(unittest.TestCase):
         self.assertTrue(agent.Session(0, report=report).ok)
         self.assertFalse(agent.Session(0, report=agent.parse_gemini('{"error": {"message": "quota"}}')).ok)
         self.assertEqual({}, agent.parse_gemini("oops"))
+
+    def test_a_gemini_session_trusts_the_checkout_and_may_run_only_wb(self) -> None:
+        """WB-62: untrusted, Gemini exits 55 and ignores project hooks; with
+        auto_edit alone, headless Gemini refuses the shell, so wb never runs."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            done = subprocess.CompletedProcess([], 0, stdout='{"session_id": "g-1", "response": "ok"}', stderr="")
+            with mock.patch("shutil.which", return_value="/bin/gemini"),                     mock.patch("subprocess.run", return_value=done) as started:
+                session = agent.select("gemini", wb='python "/w/lib/wb.py"').session("go", root, 5)
+            argv = started.call_args.args[0]
+            env = started.call_args.kwargs["env"]
+            policy = root / ".workflow" / agent.GEMINI_POLICY
+            self.assertEqual("true", env["GEMINI_CLI_TRUST_WORKSPACE"])
+            self.assertEqual(str(policy), argv[argv.index("--policy") + 1])
+            self.assertEqual("auto_edit", argv[argv.index("--approval-mode") + 1])
+            self.assertNotIn("yolo", argv)
+            text = policy.read_text(encoding="utf-8")
+            self.assertIn('toolName = "run_shell_command"', text)
+            self.assertIn('commandPrefix = "python \\"/w/lib/wb.py\\""', text)
+            self.assertIn('decision = "allow"', text)
+            self.assertEqual("g-1", session.report["session_id"])
+
+    def test_only_gemini_is_handed_the_wb_prefix(self) -> None:
+        self.assertEqual('python "/w"', agent.select("gemini", wb='python "/w"').wb)
+        self.assertFalse(hasattr(agent.select("codex", wb='python "/w"'), "wb"))
 
     def test_the_cursor_command_prints_json_and_may_write(self) -> None:
         with mock.patch("shutil.which", return_value="/bin/agent"):

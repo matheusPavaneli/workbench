@@ -241,8 +241,17 @@ when neither is set:
 | Agent | Invocation | Report |
 |---|---|---|
 | `claude-code` | `claude -p --output-format json --permission-mode ...` | one JSON object |
-| `codex` | `codex exec --json --sandbox workspace-write` | JSON lines: `thread.started`, `turn.completed` usage, `turn.failed` |
-| `gemini` | `gemini -p --output-format json --approval-mode auto_edit` | one JSON object; tokens summed over `stats.models` |
+| `codex` | `codex exec --json --sandbox workspace-write -`, prompt on stdin | JSON lines: `thread.started`, `turn.completed` usage, `turn.failed` |
+| `gemini` | `gemini -p ... --output-format json --approval-mode auto_edit --policy <file>`, prompt on stdin | one JSON object: `session_id`; tokens summed over `stats.models` |
+
+Codex and Gemini get the prompt on stdin: npm installs both as `.cmd` shims on
+Windows, and cmd.exe cuts an argument at its first newline. A Gemini session
+runs with `GEMINI_CLI_TRUST_WORKSPACE=true`, without which headless Gemini
+exits 55 and ignores project hooks, and with a policy
+(`.workflow/gemini-policy.toml`) that allows the shell to run the session's
+`python "<wb.py>"` and nothing else: headless Gemini refuses any tool that would
+ask, and `auto_edit` leaves the shell asking. `yolo` would allow every command.
+
 | `cursor` | `agent -p --output-format json --force --workspace <checkout>` | one JSON object |
 
 Each report is normalised to the same keys (`session_id`, `num_turns`,

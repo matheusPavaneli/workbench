@@ -83,6 +83,13 @@ class Install(unittest.TestCase):
         self.assertIn("not valid JSON", err)
         self.assertEqual("{not json", target.read_text(encoding="utf-8"))
 
+    def test_gemini_on_windows_calls_the_hook_through_powershell_s_call_operator(self) -> None:
+        """WB-62: Gemini runs Windows hooks in PowerShell, where a bare quoted
+        program is a string and the hook never runs."""
+        self.assertTrue(hooks_cli.command("gemini", "stop", windows=True).startswith('& "'))
+        self.assertTrue(hooks_cli.command("gemini", "stop", windows=False).startswith('"'))
+        self.assertTrue(hooks_cli.command("cursor", "stop", windows=True).startswith('"'))
+
 
 if __name__ == "__main__":
     unittest.main()

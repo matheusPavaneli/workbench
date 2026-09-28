@@ -76,7 +76,10 @@ wb hooks install gemini --write        # or: cursor -- merges into .gemini/setti
 key it did not write, and a rerun replaces its own entries. The command it
 writes names this clone's `lib/wb_hook.py`, so run it again after moving the
 clone. Cursor's stop hook cannot block, so `"hooks": "strict"` there submits one
-follow-up message instead.
+follow-up message instead. Gemini loads project hooks only in a folder it
+trusts: trust the repo once in an interactive `gemini`, or set
+`GEMINI_CLI_TRUST_WORKSPACE=true`. On Windows it runs them through PowerShell,
+so the command is written with the `&` call operator.
 
 **`wb` on PATH.** Skills call `wb`, falling back to `lib/wb.py` relative to the
 skill's own directory. Put the plugin's `bin/` directory on PATH: it holds `wb`

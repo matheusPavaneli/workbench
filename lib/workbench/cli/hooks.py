@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -47,8 +48,11 @@ def run(args: argparse.Namespace) -> int:
     return _install(args)
 
 
-def command(agent: str, event: str) -> str:
-    return f'"{Path(sys.executable).as_posix()}" "{ENTRY.as_posix()}" --agent {agent} {event}'
+def command(agent: str, event: str, windows: bool = os.name == "nt") -> str:
+    line = f'"{Path(sys.executable).as_posix()}" "{ENTRY.as_posix()}" --agent {agent} {event}'
+    # Gemini runs hooks through PowerShell on Windows, where a quoted program
+    # is a string, not a command, until the call operator runs it.
+    return f"& {line}" if agent == "gemini" and windows else line
 
 
 def entries(agent: str) -> dict[str, list[dict]]:
